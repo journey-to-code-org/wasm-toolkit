@@ -8,7 +8,7 @@ EXPORTS := wtk_init wtk_input wtk_step wtk_screen wtk_palette
 
 all: web/$(GAME).wasm
 
-web/$(GAME).wasm: $(TOOLKIT) toolkit/wtk.h games/$(GAME)/*.c
+web/$(GAME).wasm: $(TOOLKIT) toolkit/wtk.h games/$(GAME)/*.c $(wildcard games/$(GAME)/*.h)
 	$(CC) --target=wasm32 -O2 -nostdlib -ffreestanding $(WARN) \
 	  -Wl,--no-entry -Wl,--allow-undefined -Wl,--strip-all $(foreach e,$(EXPORTS),-Wl,--export=$(e)) \
 	  -o $@ $(TOOLKIT) games/$(GAME)/*.c

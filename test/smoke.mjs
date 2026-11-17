@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 
 const [path, flag, dir] = process.argv.slice(2);
 const W = 320, H = 240;
-const A = 16, B = 32, UP = 1, LEFT = 4, RIGHT = 8;
+const A = 16, B = 32, UP = 1, LEFT = 4, RIGHT = 8, X = 64;
 let fails = 0;
 const check = (ok, what) => { if (!ok) { console.log("FAIL", what); fails++; } };
 
@@ -45,7 +45,22 @@ async function play(shots) {
   shot("6-later");
   run(1, B); run(2, 0);
   const back = screen();
-  return { title, garage, hood, parked, moving, later, back, tones, colours };
+  // The strip: pick the calendar, stage, hold the throttle, go on the green, and shift four times.
+  run(1, 0, 110, 40); run(1, A, 110, 40); run(2, 0, 110, 40);
+  const staged = screen();
+  shot("7-staged");
+  run(1, A); run(50, UP);
+  const green = screen();
+  shot("8-green");
+  run(1, UP | X);
+  for (const wait of [43, 54, 103]) { run(wait, UP); run(1, UP | X); }
+  run(60, UP);
+  const running = screen();
+  shot("9-running");
+  run(200, UP);
+  const slip = screen();
+  shot("10-slip");
+  return { title, garage, hood, parked, moving, later, back, staged, green, running, slip, tones, colours };
 }
 
 const one = await play(flag === "--shots" ? dir : null);
@@ -53,7 +68,7 @@ const two = await play(null);
 const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const differ = (a, b) => a.reduce((n, v, i) => n + (v !== b[i]), 0);
 
-for (const k of ["title", "garage", "hood", "parked", "moving", "later", "back"]) check(same(one[k], two[k]), `${k} is the same both times`);
+for (const k of ["title", "garage", "hood", "parked", "moving", "later", "back", "staged", "green", "running", "slip"]) check(same(one[k], two[k]), `${k} is the same both times`);
 check(one.colours(one.title) >= 4, "the title has something on it");
 check(differ(one.title, one.garage) > 20000, "Enter leaves the title for the garage");
 check(differ(one.garage, one.hood) > 200 && differ(one.garage, one.hood) < 12000, "picking the hood opens it, and only it");
@@ -63,6 +78,10 @@ check(one.colours(one.moving) >= 40, "there is a city to look at, in a good many
 check(one.tones.some((hz) => hz > 60), "the engine makes a noise");
 check(one.tones.includes(70), "driving in circles ends at a wall");
 check(differ(one.back, one.hood) < 9000 && differ(one.back, one.later) > 20000, "Escape is the garage again, as it was left");
+check(differ(one.back, one.staged) > 20000, "the calendar goes to the strip");
+check(differ(one.staged, one.green) > 100, "the tree comes down");
+check(differ(one.green, one.running) > 3000, "the car leaves the line");
+check(differ(one.running, one.slip) > 5000, "there is a timeslip at the other end");
 check(Math.max(...one.later) < 1024 && Math.max(...one.title) < 1024, "nothing is drawn outside the palette");
 
 console.log(fails ? `${fails} FAILED` : "smoke test passes");

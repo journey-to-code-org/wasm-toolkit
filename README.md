@@ -23,6 +23,7 @@ make test     # the toolkit's tests, natively, and the game played by a script
 `python3 tools/bundle.py` writes `build/shootout.html`: the whole game in one file that opens from disk.
 
 Keys: arrows or WASD, Enter or Space to pick, Escape to go back. The mouse moves the pointer.
+At the strip: hold W to build boost, E into first on the green, E to shift up, Q to shift down.
 
 ## Layout
 
@@ -32,7 +33,7 @@ Keys: arrows or WASD, Enter or Space to pick, Escape to go back. The mouse moves
 | `toolkit/wtk.c` | The screen, drawing, fixed-point maths, 3D, and the door to the host |
 | `toolkit/font.c` | The 8x8 font (public domain, from Daniel Hepper's font8x8) |
 | `web/wtk.js` | The host: loads the `.wasm`, shows the screen, reads keys and pointer, makes the tones |
-| `games/shootout/` | The game |
+| `games/shootout/` | The game. `logo.h` is the DSM mark by Mikey Nichols, from `mnichols08/dsm-legacy`, made by `tools/logo.py` |
 | `test/` | `test_native.c` checks the toolkit; `smoke.mjs` plays the built game twice and compares |
 
 ## Writing a game on it

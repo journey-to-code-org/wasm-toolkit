@@ -35,6 +35,10 @@ A body is a table of cross-sections (`games/shootout/main.c`), so a new car is a
 - [x] Cars as lit 3D models from cross-sections: a coupe, a sedan, a wagon and a pickup so far.
 - [x] A city that goes on for ever from a seed: streets, blocks, buildings, parks.
 - [x] Driving it from the seat: dash, wheel, traffic, walls that dent the car.
+- [x] The strip at night, from the seat: staging, the tree, red lights, a launch that needs boost,
+      five gears and a redline, and a timeslip. The torque curve is read off a real dyno sheet
+      (Rix Racing: 314 lb-ft, 292 hp at the wheels). Alone against the clock for now.
+- [x] The DSM mark, on the garage wall and the timeslip.
 
 ## Next, in order
 
@@ -57,7 +61,7 @@ They are whole-number and deterministic, so they port to C line for line. Port, 
 
 - [ ] The drive-in: cars pull through one at a time; look one over, wave it on or challenge it.
 - [ ] The bet: for fun, for cash, or for the car.
-- [ ] The drag: the tree, the shift, the tach, missed shifts and blown engines.
+- [ ] The drag against someone: the other lane, and blown engines.
 - [ ] The road race out of town, with the law.
 - [ ] The one to beat, at the end.
 
@@ -95,5 +99,5 @@ They are whole-number and deterministic, so they port to C line for line. Port, 
 
 - Polygons are sorted by their middles, so a long wall can be painted over a nearer short one at
   some angles. The fix is to sort by block, not by polygon.
-- The engine is a placeholder: it changes gear by itself and the tach only follows speed.
+- In town the engine is still a placeholder: it changes gear by itself. The strip has the real one.
 - Other cars drive straight for ever and through each other.
