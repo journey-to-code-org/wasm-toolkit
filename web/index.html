@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Road to the Shootout</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  body { display: grid; place-items: center; }
+  /* 320x200 was shown on a 4:3 tube, so the pixels were taller than wide: 320x240 on the glass. */
+  canvas { width: min(100vw, 133.33vh); aspect-ratio: 4 / 3; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Road to the Shootout"></canvas>
+<script type="module">
+  import { boot } from "./wtk.js";
+  boot(document.getElementById("screen"), "shootout.wasm");
+</script>
+</body>
+</html>
