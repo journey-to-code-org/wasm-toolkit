@@ -8,8 +8,9 @@
  * are lit polygons. Everything on the screen is drawn here; there are no picture files.
  */
 #include "../../toolkit/wtk.h"
+#include "logo.h"
 
-enum { TITLE, GARAGE, DRIVE };
+enum { TITLE, GARAGE, DRIVE, STRIP };
 static int screen;
 static u32 ticks, rng;
 
@@ -144,10 +145,12 @@ static void car_mesh(const body *b, fx x, fx z, int yaw, int paint, int hood_up)
   }
 }
 
+static void logo(int x, int y, col black, col red);
+
 /* ---- The pointer, and the things it can be on ------------------------------------------------ */
 
 typedef struct { i16 x, y, w, h; const char *name; int does; } spot;
-enum { DO_NOTHING, DO_DRIVE, DO_HOOD };
+enum { DO_NOTHING, DO_DRIVE, DO_HOOD, DO_STRIP };
 static int px = 160, py = 100, hood_up;
 
 static void pointer_move(void) {
@@ -217,9 +220,10 @@ static void title_draw(void) {
 /* ---- The garage ------------------------------------------------------------------------------- */
 
 static const spot GARAGE_SPOTS[] = {
-  {196, 20, 112, 120, "THE GARAGE DOOR: DRIVE OUT", DO_DRIVE},
+  {196, 20, 112, 120, "THE GARAGE DOOR: DRIVE INTO TOWN", DO_DRIVE},
   {18, 26, 64, 52, "A WINDOW. IT IS DAYLIGHT.", DO_NOTHING},
-  {96, 24, 30, 38, "THE CALENDAR", DO_NOTHING},
+  {96, 24, 30, 38, "TONIGHT: TEST AND TUNE AT THE STRIP", DO_STRIP},
+  {92, 68, 100, 28, "A BANNER", DO_NOTHING},
   {14, 98, 70, 42, "THE BENCH. NOTHING ON IT YET.", DO_NOTHING},
   {34, 114, 150, 70, "THE CAR: GET IN AND DRIVE", DO_DRIVE},
   {184, 128, 76, 56, "THE HOOD", DO_HOOD},
@@ -252,6 +256,10 @@ static void garage_draw(void) {
   wtk_rect(96, 24, 30, 9, wtk_shade(R_RED, 22));
   wtk_text(99, 25, "DAY", WHITE);
   wtk_text_big(103, 38, "1", wtk_shade(R_RUBBER, 6), 2);
+  /* A banner, pinned up. */
+  wtk_rect(93, 71, 100, 26, wtk_shade(R_WOOD, 5));
+  wtk_vgrad(92, 70, 100, 26, R_WHITE, 27, 22);
+  logo(94, 72, wtk_shade(R_RUBBER, 3), wtk_shade(R_RED, 24));
   /* A pegboard, and a bench under it with a vice. */
   wtk_vgrad(14, 86, 70, 16, R_TAN, 14, 18);
   for (int x = 18; x < 82; x += 6) wtk_pset(x, 92, wtk_shade(R_TAN, 6));
@@ -544,6 +552,267 @@ static void drive_draw(void) {
   }
 }
 
+/* ---- The logo --------------------------------------------------------------------------------- */
+
+static void logo(int x, int y, col black, col red) {
+  for (int j = 0; j < LOGO_H; j++)
+    for (int i = 0; i < LOGO_W; i++) {
+      int v = LOGO[j * LOGO_W + i];
+      if (v) wtk_pset(x + i, y + j, v == 1 ? black : red);
+    }
+}
+
+/* ---- The strip, at night ----------------------------------------------------------------------
+ * A quarter mile from behind the wheel. Hold the throttle to bring the revs and the boost up
+ * against the limiter, shift into first on the green, and shift up before the redline.
+ *
+ * The engine is a turbo two-litre, and its torque at each engine speed is read off a real dyno
+ * sheet (Rix Racing, Masontown WV: 314 lb-ft at the wheels, 292 hp), at full boost. */
+
+enum { S_STAGE, S_TREE, S_RUN, S_SLIP };
+#define QUARTER 402
+#define REDLINE 7200
+#define TREE_STEP 15
+static int s_phase, s_gear, s_rpm, s_launch, s_shift, s_clock, s_tree, s_red, s_rt, s_sixty, s_et, s_mph;
+static fx s_pos, s_v, s_boost;
+
+static const i16 TORQUE[][2] = {
+  {800, 60}, {2000, 105}, {3000, 146}, {3400, 190}, {3800, 250}, {4200, 305}, {4400, 314}, {4600, 310},
+  {5000, 300}, {5400, 285}, {5800, 270}, {6200, 250}, {6450, 240}, {7200, 205}, {8000, 150},
+};
+static const i16 GEARS[6] = {0, 310, 185, 125, 92, 72}; /* in hundredths, over a 4.2 final drive */
+
+static int torque_at(int rpm) {
+  int n = (int)(sizeof TORQUE / sizeof TORQUE[0]);
+  if (rpm <= TORQUE[0][0]) return TORQUE[0][1];
+  for (int i = 1; i < n; i++)
+    if (rpm <= TORQUE[i][0])
+      return TORQUE[i - 1][1] + (TORQUE[i][1] - TORQUE[i - 1][1]) * (rpm - TORQUE[i - 1][0]) / (TORQUE[i][0] - TORQUE[i - 1][0]);
+  return TORQUE[n - 1][1];
+}
+
+static void strip_start(void) {
+  s_phase = S_STAGE; s_gear = 0; s_rpm = 900; s_launch = 0; s_shift = 0; s_clock = 0; s_tree = 0; s_red = 0;
+  s_rt = 0; s_sixty = 0; s_et = 0; s_mph = 0; s_pos = 0; s_v = 0; s_boost = 0;
+}
+
+static void strip_tick(void) {
+  if (wtk_hit & KEY_B) { screen = GARAGE; wtk_tone(0, 0); return; }
+  if (s_phase == S_SLIP) {
+    /* Past the line: off the throttle and on the brakes. */
+    s_v -= FX(8) / WTK_HZ;
+    if (s_v < 0) s_v = 0;
+    s_pos += s_v / WTK_HZ;
+    s_rpm += (900 - s_rpm) / 8;
+    wtk_tone(s_v > 0 ? s_rpm / 40 : 0, 60);
+    if (wtk_hit & KEY_A) screen = GARAGE;
+    return;
+  }
+  if (s_phase == S_STAGE && (wtk_hit & KEY_A)) { s_phase = S_TREE; s_tree = 0; wtk_tone(660, 60); }
+  else if (s_phase == S_TREE) s_tree++;
+  int green = s_phase == S_TREE && s_tree >= TREE_STEP * 3;
+  if (s_phase == S_RUN || green) s_clock++;
+
+  int throttle = (wtk_keys & KEY_UP) != 0;
+  if (wtk_hit & KEY_X) {
+    if (s_gear == 0 && s_phase != S_STAGE) {
+      /* Into first: that is the launch, and before the green it is a red light. */
+      s_gear = 1;
+      s_launch = s_rpm;
+      s_red = !green;
+      s_rt = green ? (s_tree - TREE_STEP * 3) * 1000 / WTK_HZ : 0;
+      s_phase = S_RUN;
+      if (s_red) s_clock = 0;
+    } else if (s_gear > 0 && s_gear < 5) { s_gear++; s_shift = 5; }
+  }
+  if ((wtk_hit & KEY_Y) && s_gear > 1) { s_gear--; s_shift = 5; }
+
+  if (s_gear == 0) {
+    /* In neutral the revs go where your foot puts them, up to the launch limiter. */
+    int want = throttle ? 5600 : 900;
+    s_rpm += (want - s_rpm) / 4;
+  } else {
+    int road = (int)(((i64)s_v * GEARS[s_gear] * 1337 / 1000) >> 16);
+    /* The clutch slips the revs down to meet the road, and a hard launch keeps them up on the boost. */
+    int hold = s_launch * 3 / 4 > 1500 ? s_launch * 3 / 4 : 1500;
+    int slip = s_gear == 1 && throttle ? (s_rpm - 60 > hold ? s_rpm - 60 : hold) : 900;
+    s_rpm = road > slip ? road : slip;
+  }
+  fx want = throttle ? FX(s_rpm < 2200 ? 0 : s_rpm > 4400 ? 20 : (s_rpm - 2200) / 110) : 0;
+  s_boost += (want - s_boost) / 6;
+
+  if (s_gear > 0) {
+    int t = torque_at(s_rpm);
+    fx push = 0;
+    if (s_shift > 0) s_shift--;
+    else if (throttle && s_rpm < REDLINE) {
+      /* Off boost it makes under half of what it makes on it. */
+      fx part = FX(45) / 100 + fx_mul(FX(55) / 100, s_boost / 20);
+      push = fx_mul((fx)((i64)t * GEARS[s_gear] * 858 / 100), part);
+      if (push > FX(12)) push = FX(12); /* all four tyres, and no more than they will take */
+    } else push = -FX(1);
+    push -= fx_mul(fx_mul(s_v, s_v), 19) + FX(15) / 100;
+    s_v += push / WTK_HZ;
+    if (s_v < 0) s_v = 0;
+    fx before = s_pos;
+    s_pos += s_v / WTK_HZ;
+    int now = s_clock * 1000 / WTK_HZ;
+    if (!s_sixty && s_pos >= FX(183) / 10) s_sixty = now;
+    if (before < FX(QUARTER) && s_pos >= FX(QUARTER)) {
+      s_et = now - (s_v > 0 ? (int)(((i64)(s_pos - FX(QUARTER)) * 1000) / s_v) : 0);
+      s_mph = (int)(((i64)s_v * 2237 / 1000) >> 16);
+      s_phase = S_SLIP;
+      wtk_tone(990, 200);
+      return;
+    }
+  }
+  wtk_tone(s_rpm / 40, 60);
+}
+
+static void ms(int x, int y, int t, col c) {
+  x = wtk_num(x, y, t / 1000, c);
+  x = wtk_text(x, y, ".", c);
+  x = wtk_num(x, y, t / 100 % 10, c);
+  x = wtk_num(x, y, t / 10 % 10, c);
+  wtk_num(x, y, t % 10, c);
+}
+
+/* A dial lit from behind in red, with numbers round it. */
+static void night_dial(int cx, int cy, int r, int value, int top, int marks, int each, int red_from, const char *label) {
+  wtk_disc(cx, cy, r + 1, wtk_shade(R_RUBBER, 9));
+  wtk_disc(cx, cy, r, wtk_shade(R_MAROON, 3));
+  for (int i = 0; i <= marks * 2; i++) {
+    int a = -400 + i * 800 / (marks * 2), in = (i & 1) ? r - 3 : r - 6;
+    col c = i / 2 >= red_from ? wtk_shade(R_RED, 27) : wtk_shade(R_ORANGE, 26);
+    wtk_line(cx + FX_INT(fx_sin(a) * in), cy - FX_INT(fx_cos(a) * in), cx + FX_INT(fx_sin(a) * (r - 1)), cy - FX_INT(fx_cos(a) * (r - 1)), c);
+    if (!(i & 3) && each) wtk_num(cx + FX_INT(fx_sin(a) * (r - 13)) - (i / 2 * each > 9 ? 8 : 4), cy - FX_INT(fx_cos(a) * (r - 13)) - 4, i / 2 * each, c);
+  }
+  if (value > top) value = top;
+  int a = -400 + value * 800 / top;
+  for (int k = -1; k <= 1; k++)
+    wtk_line(cx + k, cy, cx + k + FX_INT(fx_sin(a) * (r - 4)), cy - FX_INT(fx_cos(a) * (r - 4)), wtk_shade(R_RED, 28 - (k != 0) * 6));
+  wtk_disc(cx, cy, 3, wtk_shade(R_RUBBER, 10));
+  wtk_text(cx - wtk_strlen(label) * 4, cy + r - 11, label, wtk_shade(R_ORANGE, 20));
+}
+
+static void strip_draw(void) {
+  int horizon = 80;
+  wtk_vgrad(0, 0, WTK_W, horizon, R_NAVY, 1, 7);
+  wtk_vgrad(0, horizon, WTK_W, VIEW_H - horizon, R_ASPHALT, 5, 10);
+  wtk_clip(0, 0, WTK_W, VIEW_H);
+  wtk_cam cam = {{-FX(3), FX(1) + FX(1) / 8, s_pos}, 0, 0, 200, WTK_W / 2, horizon};
+  eye = cam.pos;
+  wtk3_begin(&cam);
+
+  int here = FX_INT(s_pos) / 20 * 20;
+  for (int z = here - 20; z < here + 440; z += 20) {
+    /* Two lanes with a dark groove of rubber down each, a wall either side, and the stands behind. */
+    int lit = z < 80 ? 13 : 10;
+    for (int k = -1; k <= 1; k += 2) {
+      v3 lane[4] = {at(k * 6, 0, z), at(0, 0, z), at(0, 0, z + 20), at(k * 6, 0, z + 20)};
+      wtk3_poly(lane, 4, wtk_shade(R_ASPHALT, lit), wtk_shade(R_ASPHALT, lit + 1), -4000);
+      v3 groove[4] = {at(k * 4, 0, z), at(k * 2, 0, z), at(k * 2, 0, z + 20), at(k * 4, 0, z + 20)};
+      wtk3_poly(groove, 4, wtk_shade(R_RUBBER, lit - 3), wtk_shade(R_ASPHALT, lit - 3), -3900);
+      v3 wall[4] = {at(k * 7, 0, z), at(k * 7, 1, z), at(k * 7, 1, z + 20), at(k * 7, 0, z + 20)};
+      int board = (z / 20) & 3;
+      int ramp = board == 0 ? R_BLUE : board == 2 ? R_RED : R_CONCRETE;
+      wtk3_poly(wall, 4, wtk_shade(ramp, 12), wtk_shade(ramp, 13), -3000);
+      if (z >= 0 && z < 200 && (z / 20) % 2 == 0) {
+        v3 stand[4] = {at(k * 14, 0, z), at(k * 26, 9, z), at(k * 26, 9, z + 40), at(k * 14, 0, z + 40)};
+        wtk3_poly(stand, 4, wtk_shade(R_CHROME, 5), wtk_shade(R_CHROME, 7), -3500);
+      }
+    }
+    v3 mid[4] = {at(0, 0, z), at(0, 0, z + 20), at(0, 0, z + 20), at(0, 0, z)};
+    mid[0].x -= FX(1) / 8; mid[1].x -= FX(1) / 8; mid[2].x += FX(1) / 8; mid[3].x += FX(1) / 8;
+    wtk3_poly(mid, 4, wtk_shade(R_WHITE, 20), wtk_shade(R_WHITE, 20), -3800);
+  }
+  for (int i = 0; i < 2; i++) {
+    /* The start line and the finish line. */
+    int z = i ? QUARTER : 0;
+    v3 line[4] = {at(-6, 0, z), at(6, 0, z), at(6, 0, z), at(-6, 0, z)};
+    line[2].z += FX(1) / 2; line[3].z += FX(1) / 2;
+    wtk3_poly(line, 4, wtk_shade(R_WHITE, 26), wtk_shade(R_WHITE, 26), -3700);
+  }
+  wtk3_end();
+
+  /* The floodlights: a pole, a hot spot, and the flare it makes on a dirty windscreen. */
+  for (int z = 20; z <= 440; z += 60)
+    for (int k = -1; k <= 1; k += 2) {
+      int bx, by, tx, ty;
+      fx depth;
+      if (!wtk3_point(at(k * 11, 0, z), &bx, &by, &depth) || !wtk3_point(at(k * 11, 15, z), &tx, &ty, 0)) continue;
+      int r = (int)(((i64)200 * 45000) / depth);
+      wtk_line(bx, by, tx, ty, wtk_shade(R_CHROME, 6));
+      for (int f = 1; f <= 3; f++) {
+        int len = r * 3 + 3 - f;
+        wtk_line(tx - len, ty, tx + len, ty, wtk_shade(R_WHITE, 12 + f * 3));
+        wtk_line(tx, ty - len, tx, ty + len, wtk_shade(R_WHITE, 12 + f * 3));
+      }
+      wtk_disc(tx, ty, r + 1, wtk_shade(R_CREAM, 28));
+      wtk_disc(tx, ty, r, wtk_shade(R_WHITE, 31));
+    }
+
+  /* The tree, between the lanes just past the line. */
+  int sx, sy, ex, ey;
+  fx depth;
+  if (wtk3_point(at(0, 0, 12), &sx, &sy, &depth) && wtk3_point(at(0, 3, 12), &ex, &ey, 0)) {
+    int unit = (int)(((i64)200 * 65536) / depth); /* pixels to the metre, there */
+    int r = unit * 12 / 100 + 1;
+    wtk_rect(sx - 1, ey, 3, sy - ey, wtk_shade(R_CHROME, 8));
+    wtk_rect(sx - unit * 45 / 100, ey, unit * 90 / 100 + 1, unit * 2, wtk_shade(R_RUBBER, 3));
+    int step = s_phase == S_TREE ? s_tree / TREE_STEP : s_phase >= S_RUN ? 3 : -1;
+    for (int row = 0; row < 6; row++) {
+      int y = ey + unit * (15 + row * 30) / 100;
+      int on = row == 0 ? s_phase != S_STAGE : row <= 3 ? step == row - 1 : row == 4 ? step >= 3 && !s_red : s_red;
+      int ramp = row == 0 ? R_YELLOW : row <= 3 ? R_ORANGE : row == 4 ? R_LIME : R_RED;
+      for (int k = -1; k <= 1; k += 2) wtk_disc(sx + k * unit * 22 / 100, y, row == 0 ? (r + 1) / 2 : r, wtk_shade(ramp, on ? 29 : 5));
+    }
+  }
+  wtk_clip_off();
+
+  /* From the seat, in the dark: the hood, the pillars, a boost gauge on the left one, and a dash lit red. */
+  for (int k = 0; k < 6; k++) {
+    int y0 = 140 + k * 5, w0 = 70 + k * 14, w1 = 84 + k * 14;
+    int hood[] = {160 - w0, y0, 160 + w0, y0, 160 + w1, y0 + 5, 160 - w1, y0 + 5};
+    wtk_poly(hood, 4, wtk_shade(R_BLUE, 9 - k), wtk_shade(R_BLUE, 8 - k));
+  }
+  int lp[] = {0, 0, 22, 0, 6, VIEW_H, 0, VIEW_H}, rp[] = {298, 0, 319, 0, 319, VIEW_H, 313, VIEW_H};
+  wtk_poly(lp, 4, wtk_shade(R_RUBBER, 2), wtk_shade(R_RUBBER, 2));
+  wtk_poly(rp, 4, wtk_shade(R_RUBBER, 2), wtk_shade(R_RUBBER, 2));
+  wtk_rect(0, 0, WTK_W, 6, wtk_shade(R_RUBBER, 2));
+  wtk_vgrad(0, VIEW_H, WTK_W, WTK_H - VIEW_H, R_RUBBER, 5, 1);
+  wtk_disc(27, 141, 21, wtk_shade(R_RUBBER, 6));
+  night_dial(27, 141, 18, FX_INT(s_boost) + 0, 25, 5, 0, 4, "PSI");
+  night_dial(104, 204, 31, s_rpm / 10, 900, 9, 1, 7, "RPM");
+  night_dial(216, 204, 31, (int)(((i64)s_v * 2237 / 1000) >> 16), 160, 8, 20, 99, "MPH");
+  /* The shift light, and the gear you are in. */
+  wtk_disc(160, 180, 5, wtk_shade(R_RED, s_rpm > 6500 ? 30 : 4));
+  wtk_rect(150, 192, 20, 14, BLACK);
+  wtk_box(149, 191, 22, 16, wtk_shade(R_MAROON, 12));
+  if (s_gear) wtk_num(156, 195, s_gear, wtk_shade(R_ORANGE, 27));
+  else wtk_text(156, 195, "N", wtk_shade(R_ORANGE, 27));
+  for (int a = -150; a <= 150; a += 5) wtk_disc(160 + FX_INT(fx_sin(a) * 96), 324 - FX_INT(fx_cos(a) * 96), 4, wtk_shade(R_RUBBER, 7));
+
+  const char *say = s_phase == S_STAGE ? "ENTER TO STAGE" : s_phase == S_TREE && s_gear == 0 ? "HOLD W FOR BOOST - E ON GREEN" : s_red ? "RED LIGHT" : "";
+  wtk_text_sh(160 - wtk_strlen(say) * 4, 12, say, s_red ? wtk_shade(R_RED, 28) : WHITE, BLACK);
+
+  if (s_phase == S_SLIP) {
+    /* The timeslip. */
+    wtk_rect(93, 31, 136, 112, wtk_shade(R_RUBBER, 2));
+    wtk_vgrad(90, 28, 136, 112, R_CREAM, 27, 23);
+    logo(110, 34, wtk_shade(R_RUBBER, 3), wtk_shade(R_RED, 24));
+    wtk_hline(96, 219, 60, wtk_shade(R_BROWN, 12));
+    col ink = wtk_shade(R_RUBBER, 4);
+    wtk_text(98, 66, "LEFT LANE", ink);
+    wtk_text(98, 80, "R/T", ink);
+    if (s_red) wtk_text(162, 80, "RED", wtk_shade(R_RED, 22)); else ms(162, 80, s_rt, ink);
+    wtk_text(98, 91, "60 FT", ink); ms(162, 91, s_sixty, ink);
+    wtk_text(98, 102, "1/4 ET", ink); ms(162, 102, s_et, ink);
+    wtk_text(98, 113, "MPH", ink); wtk_num(162, 113, s_mph, ink);
+    wtk_text(98, 128, "ENTER: GO HOME", wtk_shade(R_BROWN, 14));
+  }
+}
+
 /* ---- The game --------------------------------------------------------------------------------- */
 
 void game_init(u32 seed) {
@@ -564,10 +833,12 @@ void game_tick(void) {
     const spot *s = spot_under(GARAGE_SPOTS, N_GARAGE);
     if ((wtk_hit & KEY_A) && s) {
       if (s->does == DO_DRIVE) { screen = DRIVE; drive_start(); }
+      if (s->does == DO_STRIP) { screen = STRIP; strip_start(); }
       if (s->does == DO_HOOD) { hood_up = !hood_up; wtk_tone(hood_up ? 330 : 220, 60); }
     }
     if (wtk_hit & KEY_B) screen = TITLE;
-  } else drive_tick();
+  } else if (screen == STRIP) strip_tick();
+  else drive_tick();
 }
 
 void game_draw(void) {
@@ -577,5 +848,6 @@ void game_draw(void) {
     const spot *s = spot_under(GARAGE_SPOTS, N_GARAGE);
     panel("YOUR CAR", s ? s->name : "LOOK ROUND.", s && s->does == DO_HOOD ? (hood_up ? "ENTER SHUTS IT" : "ENTER OPENS IT") : "ARROWS OR MOUSE, ENTER TO PICK");
     pointer_draw();
-  } else drive_draw();
+  } else if (screen == STRIP) strip_draw();
+  else drive_draw();
 }
