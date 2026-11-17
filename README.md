@@ -37,6 +37,7 @@ click a part on the floor to pick it up, and click where it goes to set it down.
 | `toolkit/wtk.h` | The whole interface, with what each call does |
 | `toolkit/wtk.c` | The screen, drawing, fixed-point maths, 3D, and the door to the host |
 | `toolkit/font.c` | The 8x8 font (public domain, from Daniel Hepper's font8x8) |
+| `art/` | Pictures brought in as they are: `engine-bay.png` is Mikey Nichols's picture of his own engine bay |
 | `tools/paint.py` | Paints the pictures at four times their size, brings them down to 320x240 and the palette with a dither, and writes them as C |
 | `web/wtk.js` | The host: loads the `.wasm`, shows the screen, reads keys and pointer, makes the tones |
 | `games/shootout/` | The game, a file a screen: `garage.c` (the room, under the hood, the paper), `town.c`, `strip.c`, with `cars.c` and `cockpit.c` shared. `logo.h` is the DSM mark by Mikey Nichols, from `mnichols08/dsm-legacy`, made by `tools/logo.py` |

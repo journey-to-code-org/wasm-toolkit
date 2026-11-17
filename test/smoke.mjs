@@ -41,8 +41,8 @@ async function play(shots) {
   click(200, 138);
   const hood = screen();
   shot("04-hood");
-  for (const [bx, by] of [[217, 81], [250, 81], [250, 124], [217, 124]]) click(bx, by);
-  click(234, 103);
+  for (const [bx, by] of [[61, 103], [92, 103], [92, 144], [61, 144]]) click(bx, by);
+  click(77, 123);
   const stripped = screen();
   shot("05-intake-off");
   run(1, B); run(2, 0);
@@ -62,8 +62,8 @@ async function play(shots) {
   // Pick it up off the floor, set it on, and do up the bolts.
   click(200, 138);
   click(120, 183);
-  click(234, 103);
-  for (const [bx, by] of [[217, 81], [250, 81], [250, 124], [217, 124]]) click(bx, by);
+  click(77, 123);
+  for (const [bx, by] of [[61, 103], [92, 103], [92, 144], [61, 144]]) click(bx, by);
   const fitted = screen();
   shot("08-fitted");
   run(1, B); run(2, 0);

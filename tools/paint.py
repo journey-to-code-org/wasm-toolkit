@@ -370,14 +370,22 @@ def mask_shape_round(pts, radius):
     return draw
 
 
+def picture(path, box, size):
+    """A picture someone painted, cut to `box` and brought down to `size`. It is dithered already, so it
+    is averaged down and matched to the palette with only a little more."""
+    return Image.open(path).convert("RGBA").crop(box).resize(size, Image.BOX)
+
+
 def main():
     save = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--png" else None
     base, night, rim = finish(cockpit()), finish(cockpit(True)), finish(wheel())
+    # Under the hood: Mikey Nichols's picture of his own engine bay, cut to the screen above the floor.
+    bay = picture("art/engine-bay.png", (0, 230, 1448, 1026), (320, 176))
     dark = np.asarray(rim, dtype=np.float32).copy()
     dark[..., :3] = dark[..., :3] * np.array([0.26, 0.28, 0.36]) + np.array([1, 2, 5])
     rim_night = Image.fromarray(np.clip(dark, 0, 255).astype(np.uint8), "RGBA")
     if save:
-        for name, im in (("cockpit", base), ("cockpit-night", night), ("wheel", rim)):
+        for name, im in (("cockpit", base), ("cockpit-night", night), ("wheel", rim), ("bay", bay)):
             im.save(f"{save}/{name}.png")
     ib, inn, iw = to_indices(base), to_indices(night, dither=9), to_indices(rim, dither=10)
     out = [
@@ -389,6 +397,7 @@ def main():
         f"#define ART_BOOST_X {BOOST[0]}\n#define ART_BOOST_Y {BOOST[1]}\n#define ART_BOOST_R {BOOST[2]}",
         f"#define ART_WHEEL_X {WHEEL[0]}\n#define ART_WHEEL_Y {WHEEL[1]}\n#define ART_WHEEL_SIZE {iw.shape[0]}",
         f"#define ART_GATE_X {GATE[0]}\n#define ART_GATE_Y {GATE[1]}",
+        c_array("ART_BAY", rle(to_indices(bay, dither=5))),
         c_array("ART_COCKPIT", rle(ib)),
         c_array("ART_COCKPIT_NIGHT", rle(inn)),
         c_array("ART_WHEEL", [int(v) for v in iw.reshape(-1)]),

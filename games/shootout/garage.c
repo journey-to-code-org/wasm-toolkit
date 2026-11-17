@@ -5,6 +5,7 @@
  * car will not start. Parts come out of the paper on the bench, for cash. What is on the car is
  * what the engine makes at the strip. */
 #include "game.h"
+#include "art.h"
 
 /* ---- The parts -------------------------------------------------------------------------------- */
 
@@ -12,10 +13,10 @@ enum { INTAKE, TURBO, EXHAUST, COOLER, N_SLOTS };
 /* A place on the engine, the stock part and the better one that go there, and where it is under the hood. */
 typedef struct { const char *slot, *name[2], *chip[2], *pitch, *missing, *undone; int price; i16 x, y, w, h; } part;
 static const part PARTS[N_SLOTS] = {
-  {"THE INTAKE", {"STOCK AIRBOX", "CONE FILTER KIT"}, {"AIRBOX", "CONE FLTR"}, "BREATHES UP TOP", "THE INTAKE IS OFF. IT WILL NOT RUN.", "THE INTAKE IS NOT BOLTED DOWN.", 180, 212, 76, 44, 54},
-  {"THE TURBO", {"SMALL TURBO", "BIG TURBO"}, {"SM TURBO", "BIG TURBO"}, "27 PSI. HITS LATE", "THE TURBO IS OFF. IT WILL NOT RUN.", "THE TURBO IS NOT BOLTED DOWN.", 900, 128, 34, 48, 34},
-  {"THE EXHAUST", {"CAST MANIFOLD", "TUBULAR HEADER"}, {"MANIFOLD", "HEADER"}, "LETS IT ALL OUT", "THE MANIFOLD IS OFF. IT WILL NOT RUN.", "THE MANIFOLD IS NOT BOLTED DOWN.", 420, 182, 34, 48, 34},
-  {"THE INTERCOOLER", {"SIDE INTERCOOLER", "FRONT INTERCOOLER"}, {"SM COOLER", "BIG COOLR"}, "COLD, DENSE AIR", "THE INTERCOOLER IS OFF. IT WILL NOT RUN.", "THE INTERCOOLER IS NOT BOLTED DOWN.", 350, 66, 36, 52, 40},
+  {"THE INTAKE", {"STOCK AIRBOX", "CONE FILTER KIT"}, {"AIRBOX", "CONE FLTR"}, "BREATHES UP TOP", "THE INTAKE IS OFF. IT WILL NOT RUN.", "THE INTAKE IS NOT BOLTED DOWN.", 180, 56, 98, 42, 52},
+  {"THE TURBO", {"SMALL TURBO", "BIG TURBO"}, {"SM TURBO", "BIG TURBO"}, "27 PSI. HITS LATE", "THE TURBO IS OFF. IT WILL NOT RUN.", "THE TURBO IS NOT BOLTED DOWN.", 900, 138, 128, 28, 30},
+  {"THE EXHAUST", {"CAST MANIFOLD", "TUBULAR HEADER"}, {"MANIFOLD", "HEADER"}, "LETS IT ALL OUT", "THE MANIFOLD IS OFF. IT WILL NOT RUN.", "THE MANIFOLD IS NOT BOLTED DOWN.", 420, 168, 112, 62, 36},
+  {"THE INTERCOOLER PIPE", {"SIDE INTERCOOLER", "FRONT INTERCOOLER"}, {"SM COOLER", "BIG COOLR"}, "COLD, DENSE AIR", "THE INTERCOOLER IS OFF. IT WILL NOT RUN.", "THE INTERCOOLER IS NOT BOLTED DOWN.", 350, 100, 100, 28, 56},
 };
 
 int cash, lamps_up;
@@ -263,62 +264,6 @@ static void hood_tick(void) {
   else note = "THERE IS ONE ON THERE ALREADY.";
 }
 
-static void fins(int x, int y, int w, int h, int ramp) {
-  wtk_vgrad(x, y, w, h, ramp, 24, 14);
-  for (int i = 2; i < w; i += 3) wtk_vline(x + i, y + 1, y + h - 2, wtk_shade(ramp, 8));
-  wtk_box(x, y, w, h, wtk_shade(R_RUBBER, 3));
-}
-
-/* A part, as it looks bolted to the engine. */
-static void part_draw(int s, int which) {
-  const part *p = &PARTS[s];
-  int x = p->x, y = p->y;
-  if (s == INTAKE) {
-    if (!which) {
-      wtk_vgrad(x + 16, y + 2, 12, 12, R_RUBBER, 12, 6);
-      wtk_vgrad(x + 4, y + 12, 36, 38, R_RUBBER, 13, 5);
-      for (int i = 0; i < 5; i++) wtk_hline(x + 7, x + 36, y + 18 + i * 6, wtk_shade(R_RUBBER, 3));
-      wtk_box(x + 4, y + 12, 36, 38, wtk_shade(R_RUBBER, 2));
-    } else {
-      wtk_vgrad(x + 15, y + 2, 14, 24, R_CHROME, 29, 14);
-      wtk_rect(x + 14, y + 10, 16, 4, wtk_shade(R_BLUE, 20));
-      int cone[] = {x + 13, y + 26, x + 31, y + 26, x + 40, y + 50, x + 4, y + 50};
-      wtk_poly(cone, 4, wtk_shade(R_RED, 22), wtk_shade(R_RED, 20));
-      for (int i = 0; i < 6; i++) wtk_line(x + 15 + i * 3, y + 27, x + 7 + i * 6, y + 49, wtk_shade(R_RED, 11));
-      wtk_hline(x + 4, x + 40, y + 50, wtk_shade(R_CHROME, 26));
-    }
-  } else if (s == TURBO) {
-    int r = which ? 14 : 11;
-    wtk_vgrad(x + 30, y + 13, 16, 8, which ? R_BLUE : R_RUBBER, 22, 10);
-    wtk_disc(x + 22, y + 17, r, wtk_shade(which ? R_CHROME : R_GREY, which ? 25 : 17));
-    wtk_disc(x + 21, y + 16, r - 2, wtk_shade(which ? R_CHROME : R_GREY, which ? 30 : 22));
-    wtk_disc(x + 22, y + 17, r - 5, wtk_shade(R_RUBBER, 4));
-    for (int a = 0; a < WTK_TURN; a += 128) wtk_line(x + 22, y + 17, x + 22 + FX_INT(fx_sin(a) * (r - 6)), y + 17 - FX_INT(fx_cos(a) * (r - 6)), wtk_shade(R_CHROME, 20));
-    wtk_disc(x + 22, y + 17, 2, wtk_shade(R_CHROME, 28));
-  } else if (s == EXHAUST) {
-    if (!which) {
-      wtk_vgrad(x + 5, y + 6, 38, 22, R_TAN, 20, 9);
-      wtk_box(x + 5, y + 6, 38, 22, wtk_shade(R_BROWN, 6));
-      for (int i = 0; i < 4; i++) wtk_hline(x + 9, x + 38, y + 10 + i * 4, wtk_shade(R_BROWN, 10));
-    } else {
-      for (int i = 0; i < 4; i++) {
-        wtk_vgrad(x + 6 + i * 9, y + 5, 6, 18, R_CHROME, 30, 13);
-        wtk_line(x + 9 + i * 9, y + 23, x + 24, y + 29, wtk_shade(R_CHROME, 20));
-      }
-      wtk_vgrad(x + 18, y + 25, 12, 6, R_GOLD, 26, 14);
-    }
-  } else {
-    if (!which) {
-      fins(x + 8, y + 9, 22, 22, R_GREY);
-      wtk_vgrad(x + 30, y + 16, 18, 7, R_RUBBER, 13, 5);
-    } else {
-      fins(x + 6, y + 6, 40, 28, R_SILVER);
-      wtk_rect(x + 2, y + 14, 5, 10, wtk_shade(R_BLUE, 20));
-      wtk_rect(x + 45, y + 14, 5, 10, wtk_shade(R_BLUE, 20));
-    }
-  }
-}
-
 static void chip(int x, int y, int which, const char *name) {
   wtk_rect(x, y, 76, 10, wtk_shade(which ? R_GOLD : R_GREY, which ? 20 : 12));
   wtk_box(x, y, 76, 10, wtk_shade(R_RUBBER, 2));
@@ -326,67 +271,24 @@ static void chip(int x, int y, int which, const char *name) {
 }
 
 static void hood_draw(void) {
-  /* Looking straight down into it from the nose: the wings either side, the slam panel and the
-     radiator nearest you, the firewall furthest away. */
-  wtk_vgrad(0, 0, 58, 176, PLAYER_PAINT, 27, 15);
-  wtk_vgrad(262, 0, 58, 176, PLAYER_PAINT, 25, 13);
-  wtk_vline(57, 0, 175, wtk_shade(PLAYER_PAINT, 6));
-  wtk_vline(262, 0, 175, wtk_shade(PLAYER_PAINT, 6));
-  /* The bay is painted like the rest of it, and darker the deeper you look. */
-  wtk_vgrad(58, 0, 204, 176, PLAYER_PAINT, 11, 5);
-  wtk_vgrad(96, 60, 128, 96, PLAYER_PAINT, 5, 3);
-  for (int i = 0; i < 9; i++) wtk_hline(62, 257, 30 + i * 16, wtk_shade(PLAYER_PAINT, 8));
-  for (int k = 0; k < 2; k++) wtk_vgrad(k ? 246 : 60, 30, 14, 100, PLAYER_PAINT, 14, 8);
-  wtk_vgrad(58, 0, 204, 10, PLAYER_PAINT, 16, 10);
-  fins(84, 14, 152, 12, R_CHROME);
-  wtk_vgrad(58, 164, 204, 12, R_RUBBER, 12, 6);
-  for (int k = 0; k < 2; k++) {
-    int cx = k ? 242 : 78;
-    wtk_disc(cx, 152, 13, wtk_shade(PLAYER_PAINT, 9));
-    wtk_disc(cx, 151, 11, wtk_shade(PLAYER_PAINT, 15));
-    for (int a = 0; a < WTK_TURN; a += 341) wtk_disc(cx + FX_INT(fx_sin(a) * 6), 151 - FX_INT(fx_cos(a) * 6), 1, wtk_shade(R_CHROME, 26));
-  }
-  /* The engine, across the car: the cam cover with its four plug wires, the timing cover on the
-     end of it, and the inlet runners behind. */
-  wtk_vgrad(104, 72, 12, 52, R_GREY, 14, 8);
-  wtk_vgrad(116, 72, 92, 50, R_MAROON, 26, 14);
-  wtk_box(116, 72, 92, 50, wtk_shade(R_RUBBER, 2));
-  for (int i = 0; i < 6; i++) wtk_hline(124, 200, 80 + i * 7, wtk_shade(R_MAROON, 9));
-  wtk_disc(132, 86, 6, wtk_shade(R_RUBBER, 3));
-  wtk_disc(132, 85, 4, wtk_shade(R_RUBBER, 12));
-  for (int i = 0; i < 4; i++) {
-    wtk_line(150 + i * 14, 97, 192 + i * 2, 132, wtk_shade(R_BLUE, 18));
-    wtk_disc(150 + i * 14, 97, 2, wtk_shade(R_RUBBER, 3));
-  }
-  for (int i = 0; i < 4; i++) wtk_vgrad(122 + i * 22, 124, 16, 16, R_SILVER, 26, 13);
-  wtk_vgrad(116, 140, 92, 6, R_SILVER, 22, 12);
-  /* The battery, the washer bottle, the fuse box, and the plumbing. */
-  wtk_vgrad(66, 122, 34, 26, R_RUBBER, 12, 5);
-  wtk_disc(73, 128, 2, wtk_shade(R_RED, 24));
-  wtk_disc(93, 128, 2, wtk_shade(R_CHROME, 22));
-  wtk_vgrad(66, 86, 22, 26, R_CREAM, 25, 16);
-  wtk_disc(77, 92, 3, wtk_shade(R_BLUE, 20));
-  wtk_vgrad(216, 138, 36, 22, R_RUBBER, 11, 5);
-  wtk_box(216, 138, 36, 22, wtk_shade(R_RUBBER, 2));
-  for (int t = -1; t <= 1; t++) {
-    wtk_line(118, 56 + t, 128, 50 + t, wtk_shade(R_RUBBER, 9));
-    wtk_line(92, 76 + t, 116, 132 + t, wtk_shade(R_RUBBER, 9));
-    wtk_line(176, 52 + t, 182, 52 + t, wtk_shade(R_BROWN, 12));
-    wtk_line(234, 76 + t, 208, 128 + t, wtk_shade(R_RUBBER, 9));
-  }
-  wtk_line(214, 100, 222, 112, wtk_shade(R_YELLOW, 24));
-  wtk_disc(222, 112, 2, wtk_shade(R_YELLOW, 26));
+  /* The engine bay is a picture (art/engine-bay.png, by Mikey Nichols, of his own); the parts
+     you can work on are places on it. */
+  wtk_rle(ART_BAY, 0, 0, 0);
 
   int over = py < 176 ? slot_under() : -1;
   for (int s = 0; s < N_SLOTS; s++) {
     const part *p = &PARTS[s];
-    if (fitted[s] >= 0) part_draw(s, fitted[s]);
-    else {
-      /* Where it goes, with nothing on it. */
-      for (int i = 0; i < p->w; i += 4) { wtk_pset(p->x + i, p->y, wtk_shade(R_CHROME, 16)); wtk_pset(p->x + i, p->y + p->h - 1, wtk_shade(R_CHROME, 16)); }
-      for (int i = 0; i < p->h; i += 4) { wtk_pset(p->x, p->y + i, wtk_shade(R_CHROME, 16)); wtk_pset(p->x + p->w - 1, p->y + i, wtk_shade(R_CHROME, 16)); }
+    if (fitted[s] < 0) {
+      /* Off the car: a dark hole where it was. */
+      wtk_dither(p->x, p->y, p->w, p->h, wtk_shade(R_RUBBER, 1), wtk_shade(R_NAVY, 4));
+      wtk_box(p->x, p->y, p->w, p->h, wtk_shade(R_CHROME, 12));
+    } else if (fitted[s] == 1) {
+      /* The better part is on: a tag on it says so. */
+      wtk_rect(p->x + p->w / 2 - 9, p->y + p->h / 2 - 5, 19, 10, wtk_shade(R_GOLD, 24));
+      wtk_box(p->x + p->w / 2 - 9, p->y + p->h / 2 - 5, 19, 10, wtk_shade(R_RUBBER, 2));
+      wtk_text(p->x + p->w / 2 - 7, p->y + p->h / 2 - 4, "+1", wtk_shade(R_RUBBER, 2));
     }
-    if (s == over) wtk_box(p->x - 1, p->y - 1, p->w + 2, p->h + 2, wtk_shade(R_GOLD, 26));
+    if (s == over) { wtk_box(p->x - 1, p->y - 1, p->w + 2, p->h + 2, wtk_shade(R_GOLD, 28)); wtk_box(p->x - 2, p->y - 2, p->w + 4, p->h + 4, wtk_shade(R_RUBBER, 1)); }
     for (int b = 0; b < 4; b++) {
       int x, y;
       bolt_at(s, b, &x, &y);
