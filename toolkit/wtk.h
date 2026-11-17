@@ -80,6 +80,13 @@ void wtk_poly(const int *xy, int n, col a, col b);
 /** A picture of palette indices; pixels of colour `key` are left out (pass -1 to draw them all). */
 void wtk_blit(const col *src, int w, int h, int x, int y, int key);
 
+/** A painted picture, run-length: width, height, then (count, colour) pairs, with 0xFFFF for clear.
+    `dim` takes that many shades off every colour: the same picture, at night. */
+void wtk_rle(const u16 *data, int x, int y, int dim);
+/** A square picture of `size` by `size` colours (0xFFFF clear), turned by `angle` about its middle
+    and drawn with its middle at (cx, cy). */
+void wtk_spin(const col *px, int size, int cx, int cy, int angle, int dim);
+
 /** Text in the 8x8 font. Returns the x after the last character. */
 int wtk_text(int x, int y, const char *s, col c);
 int wtk_num(int x, int y, int n, col c);

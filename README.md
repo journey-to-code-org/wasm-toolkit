@@ -20,6 +20,9 @@ make serve    # then open http://localhost:8080
 make test     # the toolkit's tests, natively, and the game played by a script
 ```
 
+The painted pictures are made by `tools/paint.py` (it needs Pillow and numpy) and kept in the repo as
+`games/shootout/art.h`, so building the game does not need them. `make art` paints them again.
+
 `python3 tools/bundle.py` writes `build/shootout.html`: the whole game in one file that opens from disk.
 
 Keys: arrows or WASD, Enter or Space to pick, Escape to go back. The mouse moves the pointer.
@@ -34,6 +37,7 @@ click a part on the floor to pick it up, and click where it goes to set it down.
 | `toolkit/wtk.h` | The whole interface, with what each call does |
 | `toolkit/wtk.c` | The screen, drawing, fixed-point maths, 3D, and the door to the host |
 | `toolkit/font.c` | The 8x8 font (public domain, from Daniel Hepper's font8x8) |
+| `tools/paint.py` | Paints the pictures at four times their size, brings them down to 320x240 and the palette with a dither, and writes them as C |
 | `web/wtk.js` | The host: loads the `.wasm`, shows the screen, reads keys and pointer, makes the tones |
 | `games/shootout/` | The game, a file a screen: `garage.c` (the room, under the hood, the paper), `town.c`, `strip.c`, with `cars.c` and `cockpit.c` shared. `logo.h` is the DSM mark by Mikey Nichols, from `mnichols08/dsm-legacy`, made by `tools/logo.py` |
 | `test/` | `test_native.c` checks the toolkit; `smoke.mjs` plays the built game twice and compares |

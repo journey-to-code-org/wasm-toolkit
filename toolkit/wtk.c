@@ -186,6 +186,37 @@ void wtk_blit(const col *src, int w, int h, int x, int y, int key) {
     }
 }
 
+static col dimmed(col c, int dim) {
+  if (!dim || c < WTK_SHADES) return c;
+  int s = (c & (WTK_SHADES - 1)) - dim;
+  return (col)((c & ~(WTK_SHADES - 1)) | (s < 0 ? 0 : s));
+}
+
+void wtk_rle(const u16 *data, int x, int y, int dim) {
+  int w = data[0], h = data[1], i = 0, n = w * h;
+  for (const u16 *p = data + 2; i < n; p += 2) {
+    int count = p[0];
+    if (p[1] != 0xFFFF) {
+      col c = dimmed(p[1], dim);
+      for (int k = 0; k < count; k++) wtk_pset(x + (i + k) % w, y + (i + k) / w, c);
+    }
+    i += count;
+  }
+}
+
+void wtk_spin(const col *px, int size, int cx, int cy, int angle, int dim) {
+  fx s = fx_sin(angle), c = fx_cos(angle);
+  int half = size / 2;
+  for (int dy = -half; dy < half; dy++)
+    for (int dx = -half; dx < half; dx++) {
+      /* Where this pixel came from, before the turn. */
+      int sx = half + FX_INT(dx * c + dy * s + 32768), sy = half + FX_INT(dy * c - dx * s + 32768);
+      if (sx < 0 || sy < 0 || sx >= size || sy >= size) continue;
+      col v = px[sy * size + sx];
+      if (v != 0xFFFF) wtk_pset(cx + dx, cy + dy, dimmed(v, dim));
+    }
+}
+
 int wtk_strlen(const char *s) { int n = 0; while (s[n]) n++; return n; }
 
 int wtk_text(int x, int y, const char *s, col c) {
