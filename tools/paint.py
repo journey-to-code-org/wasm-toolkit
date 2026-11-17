@@ -376,16 +376,186 @@ def picture(path, box, size):
     return Image.open(path).convert("RGBA").crop(box).resize(size, Image.BOX)
 
 
+# ---- The garage, and the car in it, side on ------------------------------------------------------
+
+def stops(t, pairs):
+    """A value for each t in 0..1, read off a list of (t, value) stops."""
+    xs, ys = zip(*pairs)
+    return np.interp(t, xs, ys)
+
+
+def garage():
+    """The room: plank walls, a window with the day outside, a bench and a board of tools, a calendar,
+    the big door, and a concrete floor with a lamp's light on it. The floor line is at y = 120."""
+    img = canvas(W, 200)
+    # Walls: planks, each a little different, darker up in the rafters.
+    for i in range(20):
+        tone = 0.86 + 0.14 * math.sin(i * 12.9898) ** 2
+        fill(img, poly([(i * 16, 0), (i * 16 + 16, 0), (i * 16 + 16, 120), (i * 16, 120)]), tuple(int(c * tone) for c in (96, 62, 34)), tuple(int(c * tone) for c in (156, 104, 58)), grain=5)
+        line(img, [(i * 16, 8), (i * 16, 120)], (48, 30, 16), 0.9)
+        line(img, [(i * 16 + 1, 8), (i * 16 + 1, 120)], (176, 122, 70), 0.4)
+    for kx, ky in ((44, 96), (148, 78), (212, 100), (296, 60), (116, 110)):
+        fill(img, disc(kx, ky, 1.6), (58, 36, 18))
+    fill(img, poly([(0, 0), (320, 0), (320, 10), (0, 10)]), (40, 26, 14), (70, 46, 24), grain=3)
+    shade(img, poly([(0, 10), (320, 10), (320, 30), (0, 30)]), (0, 0, 0), 0.45, 8)
+    # The floor, with the door's daylight across it and stains where cars have stood.
+    fill(img, poly([(0, 120), (320, 120), (320, 200), (0, 200)]), (120, 118, 112), (176, 172, 164), grain=5)
+    shade(img, poly([(0, 120), (320, 120), (320, 126), (0, 126)]), (0, 0, 0), 0.5, 3)
+    shade(img, poly([(226, 122), (312, 122), (320, 200), (190, 200)]), (255, 250, 230), 0.18, 10)
+    for sx, sy, sr in ((120, 176, 16), (196, 182, 10), (70, 168, 7)):
+        shade(img, lambda d, sx=sx, sy=sy, sr=sr: d.ellipse([(sx - sr) * S, (sy - sr * 0.3) * S, (sx + sr) * S, (sy + sr * 0.3) * S], fill=255), (40, 36, 32), 0.35, 2)
+    for i in range(1, 5):
+        line(img, [(i * 64, 122), (i * 80 - 40, 200)], (104, 102, 96), 0.5)
+
+    # The window, and the light it throws.
+    fill(img, rrect(16, 24, 68, 56, 1), (232, 230, 222), (190, 188, 180))
+    fill(img, rrect(20, 28, 60, 48, 0.5), (120, 176, 236), (196, 222, 244))
+    fill(img, poly([(20, 60), (80, 56), (80, 76), (20, 76)]), (88, 142, 70), (58, 104, 48), grain=6)
+    fill(img, disc(62, 54, 9), (70, 118, 56), (48, 90, 40), grain=6)
+    fill(img, poly([(48.5, 28), (51.5, 28), (51.5, 76), (48.5, 76)]), (224, 222, 214))
+    fill(img, poly([(20, 50.5), (80, 50.5), (80, 53.5), (20, 53.5)]), (224, 222, 214))
+    shade(img, poly([(16, 80), (84, 80), (84, 84), (16, 84)]), (0, 0, 0), 0.5, 2)
+    shade(img, poly([(24, 122), (96, 122), (150, 200), (40, 200)]), (255, 252, 236), 0.16, 8)
+
+    # A board of tools over the bench, the bench, a vice, and the paper folded on it.
+    fill(img, rrect(8, 86, 84, 20, 1), (196, 168, 122), (160, 132, 92), grain=4)
+    for bx in range(12, 90, 5):
+        for by in (90, 95, 100):
+            fill(img, disc(bx, by, 0.5), (98, 78, 50))
+    for tx in (18, 28, 38):
+        line(img, [(tx, 89), (tx, 102)], (188, 194, 204), 1.6)
+        fill(img, disc(tx, 89.5, 2.2), (200, 206, 216), (120, 124, 134))
+    line(img, [(52, 90), (52, 103)], (150, 100, 56), 2)
+    fill(img, rrect(47, 88, 10, 4.5, 0.6), (90, 92, 100), (50, 52, 58))
+    line(img, [(66, 90), (78, 102)], (200, 60, 50), 1.6)
+    shade(img, poly([(4, 108), (98, 108), (98, 124), (4, 124)]), (0, 0, 0), 0.35, 4, 0, 3)
+    fill(img, poly([(4, 106), (98, 106), (96, 113), (6, 113)]), (190, 140, 84), (140, 98, 56), grain=4)
+    line(img, [(4, 106), (98, 106)], (226, 180, 120), 0.7)
+    for lx in (10, 88):
+        fill(img, poly([(lx, 113), (lx + 5, 113), (lx + 5, 146), (lx, 146)]), (120, 82, 46), (70, 46, 24), grain=3)
+    fill(img, rrect(72, 96, 15, 10, 1), (150, 156, 168), (70, 74, 84))
+    fill(img, rrect(76, 91, 6, 6, 1), (176, 182, 194), (96, 100, 110))
+    line(img, [(70, 101), (64, 101)], (190, 196, 206), 1)
+    fill(img, poly([(20, 106), (27, 98), (58, 98), (55, 106)]), (238, 232, 212), (214, 206, 184))
+    line(img, [(30, 100), (54, 100)], (40, 40, 44), 1)
+    for ly in (102, 103.6):
+        line(img, [(28, ly), (54, ly)], (130, 126, 116), 0.4)
+
+    # The calendar, and a nail above the place where the banner hangs.
+    shade(img, rrect(102, 24, 30, 38, 0.5), (0, 0, 0), 0.4, 2, 1, 2)
+    fill(img, rrect(100, 22, 30, 38, 0.5), (244, 238, 220), (222, 214, 194))
+    fill(img, poly([(100, 22), (130, 22), (130, 31), (100, 31)]), (196, 44, 40), (160, 30, 30))
+    text(img, 115, 26.6, "DAY", 5, (250, 244, 232))
+    text(img, 115, 46, "1", 20, (36, 34, 34))
+
+    # The big door: four panels with a row of glass, in a dark frame.
+    fill(img, poly([(232, 14), (316, 14), (316, 122), (232, 122)]), (30, 28, 30))
+    for i in range(4):
+        y = 18 + i * 26
+        fill(img, poly([(236, y), (312, y), (312, y + 24), (236, y + 24)]), (206, 210, 218), (140, 144, 154), grain=3)
+        line(img, [(236, y + 0.5), (312, y + 0.5)], (244, 246, 250), 0.6)
+        line(img, [(236, y + 23.5), (312, y + 23.5)], (90, 94, 104), 0.6)
+    for i in range(4):
+        fill(img, rrect(240 + i * 18, 48, 15, 14, 1), (44, 46, 52))
+        fill(img, rrect(241.5 + i * 18, 49.5, 12, 11, 0.5), (130, 184, 238), (206, 228, 246))
+    fill(img, rrect(266, 108, 16, 4, 1), (220, 224, 232), (110, 114, 124))
+    # A lamp under the rafters and the pool of light under it.
+    fill(img, poly([(150, 10), (170, 10), (176, 17), (144, 17)]), (60, 62, 68), (30, 30, 34))
+    fill(img, poly([(146, 17), (174, 17), (174, 19), (146, 19)]), (255, 250, 220))
+    shade(img, poly([(146, 19), (174, 19), (230, 120), (90, 120)]), (255, 244, 200), 0.10, 10)
+    return img
+
+
+# The wedge coupe, side on, in metres from the back bumper and up from the road: the outline of the
+# body, and of the glass in it.
+BODY = [(0.00, 0.34), (0.02, 0.78), (0.06, 0.93), (0.02, 0.99), (0.32, 0.985), (0.36, 0.95), (1.20, 1.14), (1.88, 1.25), (2.34, 1.21),
+        (2.96, 0.88), (3.50, 0.80), (4.04, 0.68), (4.30, 0.60), (4.36, 0.52), (4.36, 0.36), (4.28, 0.25), (0.14, 0.25)]
+GLASS = [(0.52, 0.965), (1.22, 1.115), (1.86, 1.215), (2.32, 1.18), (2.86, 0.895), (1.6, 0.93)]
+PPM, CAR_W, CAR_H, CAR_GROUND = 54, 244, 78, 74
+AXLES = (0.80, 3.54)
+
+
+def car_side(lamps):
+    img = canvas(CAR_W, CAR_H)
+    ox = 4
+
+    def at(x, y):
+        return ox + x * PPM, CAR_GROUND - y * PPM
+
+    def shape(pts, r=2.5):
+        return mask_shape_round([at(x, y) for x, y in pts], r)
+
+    # The shadow it stands in.
+    shade(img, lambda d: d.ellipse([at(-0.1, 0)[0] * S, (CAR_GROUND - 3) * S, at(4.46, 0)[0] * S, (CAR_GROUND + 3) * S], fill=255), (0, 0, 0), 0.75, 1.5)
+    # The body: paint that is light on top, bright along the shoulder, dark down the door, and picks
+    # the floor back up along the sill.
+    m = mask_of(img.size, shape(BODY))
+    h, w = img.size[1], img.size[0]
+    top, bottom = at(0, 1.25)[1] * S, at(0, 0.25)[1] * S
+    t = np.clip((np.arange(h) - top) / (bottom - top), 0, 1)
+    lum = stops(t, [(0, 1.05), (0.22, 0.9), (0.36, 1.0), (0.43, 1.75), (0.47, 1.2), (0.56, 0.78), (0.78, 0.5), (0.9, 0.62), (1, 0.4)])
+    across = 0.94 + 0.12 * np.sin(np.arange(w) / w * math.pi)
+    base = np.array([38, 82, 196], dtype=np.float32)
+    col = lum[:, None, None] * across[None, :, None] * base[None, None, :]
+    col = col + (np.clip(lum - 1.2, 0, 1) * 150)[:, None, None]
+    col = col + rng.normal(0, 3, (h // S + 1, w // S + 1)).repeat(S, 0).repeat(S, 1)[:h, :w, None]
+    img.paste(Image.fromarray(np.clip(col, 0, 255).astype(np.uint8), "RGB").convert("RGBA"), (0, 0), m)
+    # The glass, with the sky in it, and the pillar between the door and the hatch.
+    fill(img, shape(GLASS, 1.5), (30, 40, 58), (10, 14, 22))
+    gx0, gy0 = at(1.0, 1.1)
+    shade(img, poly([(gx0, gy0 - 3), (gx0 + 20, gy0 - 9), (gx0 + 44, gy0 + 10), (gx0 + 16, gy0 + 10)]), (170, 200, 236), 0.28, 1.5)
+    px0 = at(1.52, 0)[0]
+    fill(img, poly([(px0, at(0, 1.2)[1]), (px0 + 6, at(0, 1.21)[1]), (px0 + 8, at(0, 0.93)[1]), (px0 + 1, at(0, 0.93)[1])]), (14, 16, 22))
+    # The door, its handle, a mirror, and the seams of the hood and the bumpers.
+    seam = (12, 24, 70)
+    dx0, dx1 = at(1.62, 0)[0], at(2.92, 0)[0]
+    line(img, [(dx0, at(0, 0.93)[1]), (dx0 - 1, at(0, 0.33)[1])], seam, 0.6)
+    line(img, [(dx1, at(0, 0.88)[1]), (dx1 + 3, at(0, 0.62)[1]), (dx1 + 1, at(0, 0.33)[1])], seam, 0.6)
+    line(img, [(dx0, at(0, 0.33)[1]), (dx1 + 1, at(0, 0.33)[1])], seam, 0.5)
+    fill(img, rrect(dx0 + 5, at(0, 0.80)[1], 9, 2.4, 1), (16, 30, 84), (60, 100, 200))
+    mx, my = at(2.80, 0.95)
+    fill(img, mask_shape_round([(mx, my - 1), (mx + 9, my - 3), (mx + 10, my + 4), (mx + 1, my + 5)], 1.2), (64, 110, 220), (20, 46, 130))
+    line(img, [at(0.0, 0.50), at(0.62, 0.50)], seam, 0.5)
+    line(img, [at(3.86, 0.50), at(4.36, 0.50)], seam, 0.5)
+    line(img, [at(0.06, 0.40), at(4.30, 0.40)], (20, 40, 110), 0.5)
+    # Lamps: a bar of red round the tail, an amber marker at each end, and the headlamp folded flat.
+    fill(img, mask_shape_round([at(0.02, 0.80), at(0.30, 0.82), at(0.30, 0.68), (at(0.02, 0.66))], 1), (236, 60, 50), (150, 24, 28))
+    fill(img, rrect(at(0.34, 0.62)[0], at(0.34, 0.62)[1], 6, 2.2, 0.6), (240, 120, 40), (190, 80, 20))
+    fill(img, rrect(at(4.12, 0.56)[0], at(4.12, 0.56)[1], 8, 2.2, 0.6), (250, 170, 60), (210, 110, 30))
+    if lamps:
+        lx, ly = at(3.88, 0.83)
+        fill(img, poly([(lx, ly), (lx + 13, ly + 1), (lx + 14, ly + 8), (lx - 1, ly + 7)]), (56, 104, 220), (26, 60, 150))
+        fill(img, poly([(lx + 12, ly + 1.5), (lx + 15, ly + 2), (lx + 15.5, ly + 7.5), (lx + 12.5, ly + 7)]), (255, 252, 226))
+        shade(img, disc(lx + 17, ly + 4.5, 3), (255, 250, 200), 0.6, 1.5)
+    else:
+        line(img, [at(3.86, 0.70), at(4.14, 0.645)], seam, 0.5)
+    # The wheels in their arches: a tyre, a rim with five spokes, and a bright lip.
+    for ax in AXLES:
+        cx, cy = at(ax, 0.31)
+        fill(img, disc(cx, cy, 0.385 * PPM), (6, 8, 14))
+        fill(img, disc(cx, cy, 0.31 * PPM), (38, 38, 42), (14, 14, 16))
+        fill(img, disc(cx, cy, 0.215 * PPM), (214, 218, 226), (120, 124, 134))
+        fill(img, disc(cx, cy, 0.19 * PPM), (40, 42, 48), (18, 18, 22))
+        for k in range(5):
+            a = k / 5 + 0.03
+            p1, p2, p3 = polar(cx, cy, 0.19 * PPM, a - 0.035), polar(cx, cy, 0.19 * PPM, a + 0.035), polar(cx, cy, 0.03 * PPM, a)
+            fill(img, poly([p1, p2, p3]), (226, 230, 238), (150, 154, 164))
+        fill(img, disc(cx, cy, 0.05 * PPM), (190, 194, 204), (90, 94, 104))
+        shade(img, lambda d, cx=cx, cy=cy: d.pieslice([(cx - 17) * S, (cy - 17) * S, (cx + 17) * S, (cy + 17) * S], 200, 300, fill=255), (255, 255, 255), 0.12, 1)
+    return img
+
+
 def main():
     save = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--png" else None
     base, night, rim = finish(cockpit()), finish(cockpit(True)), finish(wheel())
     # Under the hood: Mikey Nichols's picture of his own engine bay, cut to the screen above the floor.
     bay = picture("art/engine-bay.png", (0, 230, 1448, 1026), (320, 176))
+    room, car, car_lit = finish(garage()), finish(car_side(False)), finish(car_side(True))
     dark = np.asarray(rim, dtype=np.float32).copy()
     dark[..., :3] = dark[..., :3] * np.array([0.26, 0.28, 0.36]) + np.array([1, 2, 5])
     rim_night = Image.fromarray(np.clip(dark, 0, 255).astype(np.uint8), "RGBA")
     if save:
-        for name, im in (("cockpit", base), ("cockpit-night", night), ("wheel", rim), ("bay", bay)):
+        for name, im in (("cockpit", base), ("cockpit-night", night), ("wheel", rim), ("bay", bay), ("garage", room), ("car", car), ("car-lamps", car_lit)):
             im.save(f"{save}/{name}.png")
     ib, inn, iw = to_indices(base), to_indices(night, dither=9), to_indices(rim, dither=10)
     out = [
@@ -398,6 +568,10 @@ def main():
         f"#define ART_WHEEL_X {WHEEL[0]}\n#define ART_WHEEL_Y {WHEEL[1]}\n#define ART_WHEEL_SIZE {iw.shape[0]}",
         f"#define ART_GATE_X {GATE[0]}\n#define ART_GATE_Y {GATE[1]}",
         c_array("ART_BAY", rle(to_indices(bay, dither=5))),
+        c_array("ART_GARAGE", rle(to_indices(room, dither=12))),
+        c_array("ART_CAR", rle(to_indices(car, dither=10))),
+        c_array("ART_CAR_LAMPS", rle(to_indices(car_lit, dither=10))),
+        f"#define ART_CAR_W {CAR_W}\n#define ART_CAR_GROUND {CAR_GROUND}",
         c_array("ART_COCKPIT", rle(ib)),
         c_array("ART_COCKPIT_NIGHT", rle(inn)),
         c_array("ART_WHEEL", [int(v) for v in iw.reshape(-1)]),

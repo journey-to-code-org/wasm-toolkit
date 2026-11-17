@@ -92,81 +92,25 @@ static void cash_line(int x, int y, col c) {
 /* ---- The room --------------------------------------------------------------------------------- */
 
 static const spot GARAGE_SPOTS[] = {
-  {196, 20, 112, 120, "THE GARAGE DOOR: DRIVE INTO TOWN", DO_DRIVE},
-  {18, 26, 64, 52, "A WINDOW. IT IS DAYLIGHT.", DO_NOTHING},
-  {96, 24, 30, 38, "TONIGHT: TEST AND TUNE AT THE STRIP", DO_STRIP},
-  {92, 68, 100, 28, "A BANNER", DO_NOTHING},
-  {12, 86, 76, 54, "THE PAPER ON THE BENCH: PARTS FOR SALE", DO_PAPER},
-  {92, 112, 80, 70, "THE CAR: GET IN AND DRIVE", DO_DRIVE},
-  {170, 122, 62, 34, "THE HOOD: GET UNDER IT", DO_HOOD},
-  {214, 156, 60, 36, "THE HEADLAMPS", DO_LAMPS},
+  {232, 14, 84, 108, "THE GARAGE DOOR: DRIVE INTO TOWN", DO_DRIVE},
+  {16, 24, 68, 56, "A WINDOW. IT IS DAYLIGHT.", DO_NOTHING},
+  {100, 22, 30, 38, "TONIGHT: TEST AND TUNE AT THE STRIP", DO_STRIP},
+  {132, 30, 100, 26, "A BANNER", DO_NOTHING},
+  {6, 86, 92, 34, "THE PAPER ON THE BENCH: PARTS FOR SALE", DO_PAPER},
+  {128, 118, 76, 44, "THE DOOR: GET IN AND DRIVE", DO_DRIVE},
+  {204, 126, 54, 24, "THE HOOD: GET UNDER IT", DO_HOOD},
+  {256, 134, 28, 26, "THE HEADLAMPS", DO_LAMPS},
 };
 #define N_GARAGE (int)(sizeof GARAGE_SPOTS / sizeof GARAGE_SPOTS[0])
 
 static void room_draw(void) {
-  /* Plank walls in shadow at the top, a beam, and a concrete floor that is brightest by the door. */
-  wtk_vgrad(0, 0, WTK_W, 140, R_WOOD, 9, 19);
-  for (int x = 0; x < WTK_W; x += 16) {
-    wtk_vline(x, 10, 139, wtk_shade(R_WOOD, 5));
-    wtk_vline(x + 1, 10, 139, wtk_shade(R_WOOD, 22));
-  }
-  for (int x = 8; x < WTK_W; x += 32) wtk_disc(x + (x * 5) % 9, 40 + (x * 7) % 80, 1, wtk_shade(R_WOOD, 4));
-  wtk_vgrad(0, 0, WTK_W, 10, R_WOOD, 3, 8);
-  wtk_hline(0, WTK_W - 1, 10, wtk_shade(R_WOOD, 2));
-  wtk_vgrad(0, 140, WTK_W, 60, R_CONCRETE, 13, 23);
-  wtk_hline(0, WTK_W - 1, 140, wtk_shade(R_CONCRETE, 5));
-  wtk_hline(0, WTK_W - 1, 141, wtk_shade(R_CONCRETE, 9));
-  /* The window, with the day outside it and the light it throws on the floor. */
-  wtk_rect(18, 26, 64, 52, wtk_shade(R_WHITE, 22));
-  wtk_vgrad(21, 29, 58, 32, R_SKY, 20, 29);
-  wtk_vgrad(21, 61, 58, 14, R_GRASS, 24, 15);
-  wtk_rect(49, 26, 2, 52, wtk_shade(R_WHITE, 24));
-  wtk_rect(18, 50, 64, 2, wtk_shade(R_WHITE, 24));
-  wtk_hline(18, 81, 78, wtk_shade(R_WOOD, 4));
-  /* The calendar. */
-  wtk_rect(97, 25, 30, 38, wtk_shade(R_WOOD, 5));
-  wtk_rect(96, 24, 30, 38, wtk_shade(R_CREAM, 25));
-  wtk_rect(96, 24, 30, 9, wtk_shade(R_RED, 22));
-  wtk_text(99, 25, "DAY", WHITE);
-  wtk_text_big(103, 38, "1", wtk_shade(R_RUBBER, 6), 2);
+  /* The room is a painting, and so is the car in it, side on, the way the old garages were. */
+  wtk_rle(ART_GARAGE, 0, 0, 0);
   /* A banner, pinned up. */
-  wtk_rect(93, 71, 100, 26, wtk_shade(R_WOOD, 5));
-  wtk_vgrad(92, 70, 100, 26, R_WHITE, 27, 22);
-  logo(94, 72, wtk_shade(R_RUBBER, 3), wtk_shade(R_RED, 24));
-  /* A pegboard, and a bench under it with a vice. */
-  wtk_vgrad(14, 86, 70, 16, R_TAN, 14, 18);
-  for (int x = 18; x < 82; x += 6) wtk_pset(x, 92, wtk_shade(R_TAN, 6));
-  wtk_vgrad(12, 102, 74, 6, R_WOOD, 26, 20);
-  wtk_hline(12, 85, 108, wtk_shade(R_WOOD, 4));
-  wtk_vgrad(16, 109, 5, 31, R_WOOD, 10, 6);
-  wtk_vgrad(78, 109, 5, 31, R_WOOD, 10, 6);
-  wtk_vgrad(62, 92, 14, 10, R_CHROME, 24, 10);
-  wtk_rect(66, 87, 5, 5, wtk_shade(R_CHROME, 26));
-  /* The paper, folded on the bench. */
-  int paper[] = {24, 101, 30, 94, 56, 94, 54, 101};
-  wtk_poly(paper, 4, wtk_shade(R_CREAM, 27), wtk_shade(R_CREAM, 26));
-  wtk_hline(32, 50, 96, wtk_shade(R_RUBBER, 4));
-  wtk_hline(30, 52, 98, wtk_shade(R_RUBBER, 12));
-  /* The door: four panels that catch the light from above, and a row of glass. */
-  wtk_rect(194, 18, 116, 123, wtk_shade(R_RUBBER, 4));
-  for (int i = 0; i < 4; i++) {
-    wtk_vgrad(198, 22 + i * 30, 108, 28, R_SILVER, 25, 15);
-    wtk_hline(198, 305, 22 + i * 30, wtk_shade(R_WHITE, 28));
-  }
-  for (int i = 0; i < 4; i++) {
-    wtk_rect(203 + i * 26, 56, 22, 16, wtk_shade(R_RUBBER, 8));
-    wtk_vgrad(205 + i * 26, 58, 18, 12, R_SKY, 22, 29);
-  }
-  wtk_vgrad(244, 128, 16, 4, R_CHROME, 28, 10);
-
-  /* The car, three-quarters on. */
-  wtk_clip(0, 0, WTK_W, 200);
-  wtk_cam cam = {{-FX(1) / 2, FX(2) - FX(1) / 4, -FX(8)}, 0, 0, 400, 140, 90};
-  eye = cam.pos;
-  wtk3_begin(&cam);
-  car_mesh(&BODIES[B_WEDGE], 0, 0, 256 + 58, PLAYER_PAINT, lamps_up);
-  wtk3_end();
-  wtk_clip_off();
+  wtk_rect(133, 31, 100, 26, wtk_shade(R_WOOD, 5));
+  wtk_vgrad(132, 30, 100, 26, R_WHITE, 27, 22);
+  logo(134, 32, wtk_shade(R_RUBBER, 3), wtk_shade(R_RED, 24));
+  wtk_rle(lamps_up ? ART_CAR_LAMPS : ART_CAR, 40, 182 - ART_CAR_GROUND, 0);
 }
 
 static void panel(const char *a, const char *b, const char *c) {

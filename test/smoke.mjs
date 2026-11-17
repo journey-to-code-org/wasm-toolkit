@@ -33,12 +33,12 @@ async function play(shots) {
   run(2, 0); run(1, A); run(2, 0);
   const garage = screen();
   shot("02-garage");
-  click(244, 174);
+  click(268, 146);
   const lamps = screen();
   shot("03-lamps");
 
   // Under the hood: undo the four bolts on the intake and lift it off.
-  click(200, 138);
+  click(225, 136);
   const hood = screen();
   shot("04-hood");
   for (const [bx, by] of [[61, 103], [92, 103], [92, 144], [61, 144]]) click(bx, by);
@@ -52,7 +52,7 @@ async function play(shots) {
   shot("06-wont-start");
 
   // The paper on the bench: buy the better intake.
-  click(28, 98);
+  click(30, 100);
   const paper = screen();
   click(84, 90);
   const bought = screen();
@@ -60,7 +60,7 @@ async function play(shots) {
   run(1, B); run(2, 0);
 
   // Pick it up off the floor, set it on, and do up the bolts.
-  click(200, 138);
+  click(225, 136);
   click(120, 183);
   click(77, 123);
   for (const [bx, by] of [[61, 103], [92, 103], [92, 144], [61, 144]]) click(bx, by);
@@ -69,7 +69,7 @@ async function play(shots) {
   run(1, B); run(2, 0);
 
   // Into town.
-  click(250, 60);
+  click(270, 60);
   const parked = screen();
   shot("09-street");
   run(90, UP); run(20, UP | RIGHT); run(60, UP);
