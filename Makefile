@@ -27,4 +27,7 @@ serve: all
 clean:
 	rm -rf build web/*.wasm
 
-.PHONY: all test serve clean
+art:
+	python3 tools/paint.py
+
+.PHONY: all test serve clean art

@@ -192,8 +192,8 @@ void drive_draw(void) {
   int v = FX_INT(speed * 10);
   cockpit_look look = {0, PLAYER_PAINT, speed > 0 ? 1500 + (v % 110) * 50 : 900, (int)(((i64)speed * 2237 / 1000) >> 16), speed > FX(8) ? 6 : 0, speed > 0 ? v / 110 + 1 : 0, FX_INT(steer * 256), 0, lamps_up};
   cockpit(&look);
-  wtk_text(60, 204, "DENTS", wtk_shade(R_CHROME, 14));
-  wtk_num(104, 204, dents, dents ? wtk_shade(R_RED, 26) : wtk_shade(R_CHROME, 14));
+  wtk_text_sh(44, 18, "DENTS", wtk_shade(R_WHITE, 26), BLACK);
+  wtk_num(88, 18, dents, dents ? wtk_shade(R_RED, 27) : wtk_shade(R_WHITE, 26));
 
   if (crash_ticks > 0) {
     wtk_vgrad(108, 50, 104, 22, R_RED, 26, 16);

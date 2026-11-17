@@ -130,6 +130,24 @@ int main(void) {
   wtk3_end();
   CHECK(at(160, 70) < lit_wall && at(160, 70) >= wtk_shade(R_GREY, 0));
 
+  /* A painted picture: run-length, with clear left alone, and the same picture a few shades darker. */
+  static const u16 pic[] = {4, 2, 3, R_RED * 32 + 20, 2, 0xFFFF, 3, R_BLUE * 32 + 10};
+  wtk_clear(WHITE);
+  wtk_rle(pic, 10, 10, 0);
+  CHECK(at(10, 10) == wtk_shade(R_RED, 20) && at(12, 10) == wtk_shade(R_RED, 20) && at(13, 10) == WHITE && at(10, 11) == WHITE && at(11, 11) == wtk_shade(R_BLUE, 10) && at(13, 11) == wtk_shade(R_BLUE, 10));
+  wtk_rle(pic, 10, 10, 15);
+  CHECK(at(10, 10) == wtk_shade(R_RED, 5) && at(11, 11) == wtk_shade(R_BLUE, 0));
+  /* Turned a quarter, what was at the top of a picture is at its right. */
+  static col tile[16 * 16];
+  for (int i = 0; i < 256; i++) tile[i] = 0xFFFF;
+  tile[2 * 16 + 8] = RED;
+  wtk_clear(BLACK);
+  wtk_spin(tile, 16, 100, 100, 0, 0);
+  CHECK(at(100, 94) == RED && count(RED) == 1);
+  wtk_clear(BLACK);
+  wtk_spin(tile, 16, 100, 100, 256, 0);
+  CHECK(count(RED) >= 1 && (at(105, 100) == RED || at(106, 100) == RED || at(105, 99) == RED || at(106, 99) == RED || at(105, 101) == RED));
+
   printf(failed ? "%d FAILED\n" : "native tests pass\n", failed);
   return failed ? 1 : 0;
 }

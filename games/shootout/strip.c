@@ -201,7 +201,7 @@ void strip_draw(void) {
   cockpit(&look);
 
   const char *say = s_phase == S_STAGE ? "ENTER TO STAGE" : s_phase == S_TREE && s_gear == 0 ? "HOLD W FOR BOOST - E ON GREEN" : s_red ? "RED LIGHT" : "";
-  wtk_text_sh(160 - wtk_strlen(say) * 4, 12, say, s_red ? wtk_shade(R_RED, 28) : WHITE, BLACK);
+  wtk_text_sh(160 - wtk_strlen(say) * 4, 36, say, s_red ? wtk_shade(R_RED, 28) : WHITE, BLACK);
 
   if (s_phase == S_SLIP) {
     /* The timeslip. */
