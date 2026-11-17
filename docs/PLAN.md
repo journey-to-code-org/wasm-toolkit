@@ -57,7 +57,7 @@ A body is a table of cross-sections (`games/shootout/cars.c`), so a new car is a
 
 The cockpit is painted; these are still drawn from boxes at run time and look it.
 
-- [ ] The garage as a painting, with the car in it rendered large and smooth, not as a model.
+- [x] The garage is a painting, and the car in it a flat picture, side on, as Street Rod had it.
 - [x] Under the hood is a picture (`art/engine-bay.png`), with the parts as places on it.
 - [ ] Each part its own picture that lifts off, in place of a dark hole and a tag.
 - [ ] The paper, the title, the timeslip.
