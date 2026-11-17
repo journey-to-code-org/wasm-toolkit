@@ -2,8 +2,8 @@
 
 A toolkit for games that look and run like 1989, and the first game built on it.
 
-`wtk` is one 320x200 screen of palette indices, drawn by the game in plain C: boxes, lines, dithers,
-an 8x8 font, and flat-shaded polygons sorted far to near. No libc, no floats, no allocation. It
+`wtk` is one 320x240 screen of palette indices, 1,024 colours in 32 ramps of 32 shades, drawn by the
+game in plain C: boxes, lines, dithered gradients, an 8x8 font, and lit polygons sorted far to near. No libc, no floats, no allocation. It
 builds to WebAssembly with clang and nothing else, and a small page shows the screen, scaled up in
 whole pixels, and plays the PC speaker.
 
@@ -44,7 +44,7 @@ A game is three functions, and the toolkit calls them thirty times a second:
 
 void game_init(u32 seed) {}
 void game_tick(void) {}                       /* wtk_keys, wtk_hit, wtk_mx, wtk_my */
-void game_draw(void) { wtk_clear(BLUE); wtk_text(8, 8, "HELLO", WHITE); }
+void game_draw(void) { wtk_vgrad(0, 0, WTK_W, WTK_H, R_SKY, 8, 28); wtk_text(8, 8, "HELLO", WHITE); }
 ```
 
 Put it in `games/<name>/` and build it with `make GAME=<name>`.

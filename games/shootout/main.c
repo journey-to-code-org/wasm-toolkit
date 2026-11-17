@@ -1,10 +1,11 @@
-/* Road to the Shootout, the 1989 way: a first slice.
+/* Road to the Shootout, the old way: a first slice.
  *
  * Three screens. A title. A garage you look round with a pointer, where the thing under the
  * pointer is named on the bottom lines and Enter picks it. And a city of blocks to drive through
  * from behind the wheel, with traffic to miss and walls not to hit.
  *
- * Everything on the screen is drawn here from boxes, polygons and the sixteen EGA colours.
+ * 320x240 in 1,024 colours: rooms are painted in dithered gradients, and the cars and the city
+ * are lit polygons. Everything on the screen is drawn here; there are no picture files.
  */
 #include "../../toolkit/wtk.h"
 
@@ -12,45 +13,134 @@ enum { TITLE, GARAGE, DRIVE };
 static int screen;
 static u32 ticks, rng;
 
-/* ---- Shapes given in centimetres, drawn at so many pixels a metre ---------------------------- */
+/* ---- Cars ------------------------------------------------------------------------------------
+ * A body is a row of cross-sections from the back bumper to the nose, in centimetres. Each has a
+ * half-width, a sill height, a beltline, and, where there is a cabin over it, the roof's
+ * half-width and height. The skin between two sections is paint, or glass where a cabin begins,
+ * ends or runs. */
 
-static void shape(const i16 *cm, int n, int ox, int ground, int ppm, u8 a, u8 b) {
-  int xy[16];
-  for (int i = 0; i < n; i++) {
-    xy[i * 2] = ox + cm[i * 2] * ppm / 100;
-    xy[i * 2 + 1] = ground - cm[i * 2 + 1] * ppm / 100;
-  }
-  wtk_poly(xy, n, a, b);
+typedef struct { i16 x, w, sill, belt, roof_w, roof; } section;
+typedef struct { const char *name; const section *sec; u8 n, cowl; } body;
+
+static const section COUPE[] = {
+  {0, 70, 40, 80, 0, 0}, {18, 82, 27, 88, 0, 0}, {72, 86, 22, 92, 0, 0}, {128, 87, 22, 94, 57, 119}, {180, 87, 22, 95, 61, 128},
+  {238, 87, 22, 94, 59, 124}, {292, 86, 22, 89, 0, 0}, {362, 84, 22, 81, 0, 0}, {418, 80, 27, 71, 0, 0}, {440, 68, 37, 63, 0, 0},
+};
+static const section SEDAN[] = {
+  {0, 74, 40, 88, 0, 0}, {18, 84, 27, 95, 0, 0}, {96, 87, 22, 97, 0, 0}, {142, 87, 22, 97, 59, 137}, {252, 87, 22, 96, 61, 139},
+  {304, 86, 22, 93, 0, 0}, {382, 84, 22, 87, 0, 0}, {442, 80, 27, 79, 0, 0}, {462, 70, 37, 71, 0, 0},
+};
+static const section WAGON[] = {
+  {0, 78, 38, 97, 58, 135}, {12, 85, 27, 97, 61, 141}, {272, 87, 22, 96, 61, 141}, {324, 86, 22, 93, 0, 0}, {402, 84, 22, 87, 0, 0},
+  {452, 80, 27, 79, 0, 0}, {472, 70, 37, 71, 0, 0},
+};
+static const section PICKUP[] = {
+  {0, 80, 42, 97, 0, 0}, {202, 82, 36, 97, 0, 0}, {206, 82, 36, 99, 63, 151}, {292, 82, 36, 99, 63, 151}, {338, 82, 36, 97, 0, 0},
+  {422, 80, 36, 93, 0, 0}, {456, 76, 42, 85, 0, 0}, {462, 70, 48, 79, 0, 0},
+};
+static const body BODIES[] = {
+  {"COUPE", COUPE, 10, 6}, {"SEDAN", SEDAN, 9, 5}, {"WAGON", WAGON, 7, 3}, {"PICKUP", PICKUP, 8, 4},
+};
+
+/* Where the car being drawn stands, and which way it points. */
+static fx m_x, m_z, m_sin, m_cos;
+/* Where the car is being looked at from: the wheels on the far side are behind the body. */
+static v3 eye;
+static int m_half;
+
+static v3 M(int lx, int ly, int lz) {
+  fx f = (lx - m_half) * 655, u = ly * 655, r = lz * 655;
+  v3 p = {m_x + fx_mul(f, m_sin) + fx_mul(r, m_cos), u, m_z + fx_mul(f, m_cos) - fx_mul(r, m_sin)};
+  return p;
 }
 
-/* The Bexley Sparrow, a hatchback, from the side: back bumper at x = 0, nose to the right. */
-static const i16 SPARROW_BODY[] = {0, 25, 0, 95, 255, 98, 360, 86, 370, 50, 370, 25};
-static const i16 SPARROW_TOP[] = {0, 95, 28, 138, 190, 142, 255, 98};
-static const i16 SPARROW_GLASS[] = {45, 98, 60, 133, 185, 136, 235, 100};
-static const i16 SPARROW_HOOD_UP[] = {255, 98, 262, 104, 330, 168, 324, 172};
+/* The three points down one side of a section: the sill, the beltline, and the edge of the top. */
+static void side_of(const section *s, int k, v3 out[3]) {
+  int top_w = s->roof ? s->roof_w : s->w * 4 / 5, top = s->roof ? s->roof : s->belt + 3;
+  out[0] = M(s->x, s->sill, k * s->w);
+  out[1] = M(s->x, s->belt, k * s->w);
+  out[2] = M(s->x, top, k * top_w);
+}
 
-static void sparrow(int ox, int ground, int ppm, u8 paint, int hood_up) {
-  int r = 31 * ppm / 100;
-  shape(SPARROW_TOP, 4, ox, ground, ppm, paint, paint);
-  shape(SPARROW_GLASS, 4, ox, ground, ppm, CYAN, BLUE);
-  if (hood_up) {
-    /* The engine, where the hood was. */
-    wtk_rect(ox + 262 * ppm / 100, ground - 96 * ppm / 100, 96 * ppm / 100, 12 * ppm / 100, BLACK);
-    wtk_rect(ox + 276 * ppm / 100, ground - 104 * ppm / 100, 50 * ppm / 100, 14 * ppm / 100, LGRAY);
-    wtk_rect(ox + 284 * ppm / 100, ground - 110 * ppm / 100, 30 * ppm / 100, 6 * ppm / 100, RED);
-    shape(SPARROW_HOOD_UP, 4, ox, ground, ppm, paint, paint);
+static void wheel(int x, int z, int k, int near) {
+  enum { R = 31 };
+  int bias = near ? 1 : -1;
+  v3 face[8], hub[8];
+  for (int i = 0; i < 8; i++) {
+    int c = FX_INT(fx_cos(i * 128 + 64) * R), s = FX_INT(fx_sin(i * 128 + 64) * R);
+    face[i] = M(x + c, R + s, k * (z + 5));
+    hub[i] = M(x + c * 6 / 10, R + s * 6 / 10, k * (z + 6));
   }
-  shape(SPARROW_BODY, 6, ox, ground, ppm, paint, paint);
-  wtk_hline(ox + 2, ox + 368 * ppm / 100, ground - 55 * ppm / 100, BLACK);
-  wtk_vline(ox + 150 * ppm / 100, ground - 95 * ppm / 100, ground - 30 * ppm / 100, BLACK);
-  wtk_rect(ox + 362 * ppm / 100, ground - 74 * ppm / 100, 4, 5, YELLOW);
-  wtk_rect(ox, ground - 78 * ppm / 100, 3, 6, LRED);
-  for (int i = 0; i < 2; i++) {
-    int wx = ox + (i ? 292 : 78) * ppm / 100;
-    wtk_disc(wx, ground - r, r + 2, BLACK);
-    wtk_disc(wx, ground - r, r, DGRAY);
-    wtk_disc(wx, ground - r, r * 6 / 10, LGRAY);
-    wtk_disc(wx, ground - r, 2, BLACK);
+  for (int i = 0; i < 8; i++) {
+    int j = (i + 1) & 7;
+    int c = FX_INT(fx_cos(i * 128 + 64) * R), s = FX_INT(fx_sin(i * 128 + 64) * R);
+    int c2 = FX_INT(fx_cos(j * 128 + 64) * R), s2 = FX_INT(fx_sin(j * 128 + 64) * R);
+    v3 tread[4] = {face[i], face[j], M(x + c2, R + s2, k * (z - 16)), M(x + c, R + s, k * (z - 16))};
+    wtk3_lit(tread, 4, R_RUBBER, bias);
+  }
+  if (!near) return;
+  wtk3_lit(face, 8, R_RUBBER, 1);
+  wtk3_lit(hub, 8, R_CHROME, 2);
+}
+
+static void car_mesh(const body *b, fx x, fx z, int yaw, int paint, int hood_up) {
+  const section *s = b->sec;
+  int last = b->n - 1;
+  m_x = x; m_z = z; m_sin = fx_sin(yaw); m_cos = fx_cos(yaw); m_half = s[last].x / 2;
+
+  /* What it stands on: a shadow. */
+  v3 shadow[4] = {M(-10, 1, -95), M(s[last].x + 10, 1, -95), M(s[last].x + 10, 1, 95), M(-10, 1, 95)};
+  wtk3_poly(shadow, 4, wtk_shade(R_ASPHALT, 3), wtk_shade(R_ASPHALT, 5), -3);
+
+  for (int i = 0; i < last; i++) {
+    int cabin = (s[i].roof != 0) + (s[i + 1].roof != 0);
+    v3 al[3], ar[3], bl[3], br[3];
+    side_of(&s[i], -1, al); side_of(&s[i], 1, ar); side_of(&s[i + 1], -1, bl); side_of(&s[i + 1], 1, br);
+    v3 low_l[4] = {al[0], bl[0], bl[1], al[1]}, low_r[4] = {ar[0], br[0], br[1], ar[1]};
+    v3 up_l[4] = {al[1], bl[1], bl[2], al[2]}, up_r[4] = {ar[1], br[1], br[2], ar[2]};
+    v3 top[4] = {al[2], ar[2], br[2], bl[2]};
+    wtk3_lit(low_l, 4, paint, 0);
+    wtk3_lit(low_r, 4, paint, 0);
+    wtk3_lit(up_l, 4, cabin ? R_GLASS : paint, 0);
+    wtk3_lit(up_r, 4, cabin ? R_GLASS : paint, 0);
+    if (hood_up && i >= b->cowl) continue;
+    wtk3_lit(top, 4, cabin == 1 ? R_GLASS : paint, 0);
+  }
+  /* The two ends, each with a bumper across the bottom of it. */
+  for (int e = 0; e < 2; e++) {
+    const section *q = &s[e ? last : 0];
+    int out = e ? 1 : -1;
+    v3 l[3], r[3];
+    side_of(q, -1, l); side_of(q, 1, r);
+    v3 cap[6] = {l[0], l[1], l[2], r[2], r[1], r[0]};
+    wtk3_lit(cap, 6, paint, 0);
+    v3 bumper[4] = {M(q->x + out, q->sill, -q->w), M(q->x + out, q->sill + 15, -q->w), M(q->x + out, q->sill + 15, q->w), M(q->x + out, q->sill, q->w)};
+    wtk3_lit(bumper, 4, R_RUBBER, 1);
+    for (int k = -1; k <= 1; k += 2) {
+      /* Lamps: white at the front, red at the back. */
+      int in = q->w * 45 / 100;
+      v3 lamp[4] = {M(q->x + out * 2, q->belt - 17, k * in), M(q->x + out * 2, q->belt - 6, k * in), M(q->x + out * 2, q->belt - 6, k * (q->w - 4)), M(q->x + out * 2, q->belt - 17, k * (q->w - 4))};
+      col c = e ? wtk_shade(R_CREAM, 29) : wtk_shade(R_RED, 23);
+      wtk3_poly(lamp, 4, c, c, 2);
+    }
+  }
+  if (hood_up) {
+    const section *c = &s[b->cowl], *n = &s[last - 1];
+    int w = c->w * 4 / 5;
+    v3 bay[4] = {M(c->x, c->belt - 10, -w), M(n->x, n->belt - 8, -w), M(n->x, n->belt - 8, w), M(c->x, c->belt - 10, w)};
+    wtk3_poly(bay, 4, wtk_shade(R_RUBBER, 6), wtk_shade(R_RUBBER, 8), 0);
+    int ex = (c->x + n->x) / 2;
+    v3 block[4] = {M(ex - 26, c->belt - 4, -34), M(ex + 26, c->belt - 4, -34), M(ex + 26, c->belt - 4, 34), M(ex - 26, c->belt - 4, 34)};
+    wtk3_lit(block, 4, R_GREY, 1);
+    v3 cover[4] = {M(ex - 10, c->belt - 2, -30), M(ex + 10, c->belt - 2, -30), M(ex + 10, c->belt - 2, 30), M(ex - 10, c->belt - 2, 30)};
+    wtk3_lit(cover, 4, R_RED, 2);
+    v3 hood[4] = {M(c->x, c->belt + 3, -w), M(c->x + 56, c->belt + 84, -w), M(c->x + 56, c->belt + 84, w), M(c->x, c->belt + 3, w)};
+    wtk3_lit(hood, 4, paint, 3);
+  }
+  fx right = fx_mul(eye.x - x, m_cos) - fx_mul(eye.z - z, m_sin);
+  for (int k = -1; k <= 1; k += 2) {
+    wheel(78, s[2].w, k, (k > 0) == (right > 0));
+    wheel(s[last].x - 80, s[last - 2].w, k, (k > 0) == (right > 0));
   }
 }
 
@@ -70,7 +160,7 @@ static void pointer_move(void) {
   if (px < 0) px = 0;
   if (px > WTK_W - 1) px = WTK_W - 1;
   if (py < 0) py = 0;
-  if (py > 158) py = 158;
+  if (py > 198) py = 198;
 }
 
 static void pointer_draw(void) {
@@ -97,85 +187,109 @@ static const spot *spot_under(const spot *all, int n) {
 /* ---- The title -------------------------------------------------------------------------------- */
 
 static void title_draw(void) {
-  wtk_clear(BLACK);
-  wtk_dither(0, 0, WTK_W, 96, BLUE, BLACK);
-  wtk_rect(0, 96, WTK_W, 2, YELLOW);
-  wtk_dither(0, 98, WTK_W, 102, DGRAY, BLACK);
-  /* A road going away. */
-  int road[] = {110, 199, 210, 199, 166, 98, 154, 98};
-  wtk_poly(road, 4, DGRAY, DGRAY);
-  for (int i = 0; i < 6; i++) {
-    int y = 104 + i * i * 3, h = 2 + i * 2;
-    wtk_rect(159 - i / 2, y, 2 + i, h, YELLOW);
+  wtk_vgrad(0, 0, WTK_W, 150, R_NAVY, 3, 20);
+  wtk_vgrad(0, 150, WTK_W, 90, R_ASPHALT, 16, 4);
+  for (int i = 0; i < 40; i++) {
+    u32 h = (u32)i * 2654435761u;
+    wtk_pset((int)(h % 320), (int)((h >> 9) % 110), wtk_shade(R_WHITE, 12 + (int)((h >> 20) % 16)));
   }
-  wtk_text_big(64, 22, "ROAD TO THE", LRED, 2);
-  wtk_text_big(64, 21, "ROAD TO THE", YELLOW, 2);
-  wtk_text_big(41, 47, "SHOOTOUT", LRED, 4);
-  wtk_text_big(40, 45, "SHOOTOUT", WHITE, 4);
-  if ((ticks / 15) & 1) wtk_text_sh(96, 170, "PRESS ENTER", WHITE, BLACK);
-  wtk_text(4, 190, "A SLICE", DGRAY);
+  /* The car, turning under a light. */
+  wtk_cam cam = {{0, FX(2) + FX(1) / 4, -FX(9)}, 0, 0, 380, WTK_W / 2, 104};
+  eye = cam.pos;
+  wtk3_begin(&cam);
+  v3 pool[8];
+  for (int i = 0; i < 8; i++) { pool[i].x = fx_cos(i * 128) * 7 / 2; pool[i].y = 0; pool[i].z = fx_sin(i * 128) * 7 / 2; }
+  wtk3_poly(pool, 8, wtk_shade(R_ASPHALT, 20), wtk_shade(R_ASPHALT, 22), -9);
+  car_mesh(&BODIES[0], 0, 0, (int)ticks * 3, R_RED, 0);
+  wtk3_end();
+
+  wtk_text_big(65, 19, "ROAD TO THE", wtk_shade(R_RED, 12), 2);
+  wtk_text_big(64, 18, "ROAD TO THE", wtk_shade(R_GOLD, 26), 2);
+  wtk_text_big(42, 44, "SHOOTOUT", wtk_shade(R_RED, 14), 4);
+  for (int j = 0; j < 4; j++) {
+    wtk_clip(0, 42 + j * 8, WTK_W, 8);
+    wtk_text_big(40, 42, "SHOOTOUT", wtk_shade(R_GOLD, 31 - j * 3), 4);
+  }
+  wtk_clip_off();
+  if ((ticks / 15) & 1) wtk_text_sh(116, 222, "PRESS ENTER", WHITE, BLACK);
 }
 
 /* ---- The garage ------------------------------------------------------------------------------- */
 
 static const spot GARAGE_SPOTS[] = {
-  {192, 16, 116, 104, "THE GARAGE DOOR: DRIVE OUT", DO_DRIVE},
-  {20, 24, 60, 44, "A WINDOW. IT IS DAYLIGHT.", DO_NOTHING},
-  {96, 20, 30, 36, "THE CALENDAR", DO_NOTHING},
-  {22, 82, 70, 34, "THE BENCH. NOTHING ON IT YET.", DO_NOTHING},
-  {60, 84, 100, 56, "THE SPARROW: GET IN AND DRIVE", DO_DRIVE},
-  {160, 96, 58, 30, "THE HOOD", DO_HOOD},
+  {196, 20, 112, 120, "THE GARAGE DOOR: DRIVE OUT", DO_DRIVE},
+  {18, 26, 64, 52, "A WINDOW. IT IS DAYLIGHT.", DO_NOTHING},
+  {96, 24, 30, 38, "THE CALENDAR", DO_NOTHING},
+  {14, 98, 70, 42, "THE BENCH. NOTHING ON IT YET.", DO_NOTHING},
+  {34, 114, 150, 70, "THE CAR: GET IN AND DRIVE", DO_DRIVE},
+  {184, 128, 76, 56, "THE HOOD", DO_HOOD},
 };
 #define N_GARAGE (int)(sizeof GARAGE_SPOTS / sizeof GARAGE_SPOTS[0])
 
 static void garage_draw(void) {
-  /* Plank walls, a beam along the top, a concrete floor. */
-  wtk_rect(0, 0, WTK_W, 120, BROWN);
-  for (int x = 0; x < WTK_W; x += 16) wtk_vline(x, 8, 119, BLACK);
-  for (int x = 8; x < WTK_W; x += 32) wtk_dither(x - 6, 30 + (x * 7) % 60, 12, 3, BROWN, BLACK);
-  wtk_rect(0, 0, WTK_W, 8, BLACK);
-  wtk_dither(0, 2, WTK_W, 4, BROWN, BLACK);
-  wtk_dither(0, 120, WTK_W, 40, LGRAY, DGRAY);
-  wtk_hline(0, WTK_W - 1, 120, BLACK);
-  /* The window. */
-  wtk_rect(20, 24, 60, 44, WHITE);
-  wtk_dither(23, 27, 54, 38, LCYAN, LBLUE);
-  wtk_rect(23, 52, 54, 13, GREEN);
-  wtk_vline(50, 24, 67, WHITE);
-  wtk_hline(20, 79, 45, WHITE);
-  /* The calendar. */
-  wtk_rect(96, 20, 30, 36, WHITE);
-  wtk_rect(96, 20, 30, 9, RED);
-  wtk_text(99, 21, "DAY", WHITE);
-  wtk_text_big(103, 33, "1", BLACK, 2);
-  /* The bench, with a vice on it. */
-  wtk_rect(22, 96, 70, 5, YELLOW);
-  wtk_hline(22, 91, 101, BLACK);
-  wtk_rect(26, 102, 4, 24, BLACK);
-  wtk_rect(84, 102, 4, 24, BLACK);
-  wtk_rect(70, 88, 12, 8, DGRAY);
-  wtk_rect(74, 84, 4, 4, LGRAY);
-  /* The door: four panels and a row of glass. */
-  wtk_rect(192, 16, 116, 104, BLACK);
-  wtk_rect(195, 19, 110, 101, LGRAY);
-  for (int i = 1; i < 4; i++) wtk_hline(195, 304, 19 + i * 25, DGRAY);
-  for (int i = 0; i < 4; i++) {
-    wtk_rect(201 + i * 26, 48, 20, 14, DGRAY);
-    wtk_dither(202 + i * 26, 49, 18, 12, LCYAN, LBLUE);
+  /* Plank walls in shadow at the top, a beam, and a concrete floor that is brightest by the door. */
+  wtk_vgrad(0, 0, WTK_W, 140, R_WOOD, 9, 19);
+  for (int x = 0; x < WTK_W; x += 16) {
+    wtk_vline(x, 10, 139, wtk_shade(R_WOOD, 5));
+    wtk_vline(x + 1, 10, 139, wtk_shade(R_WOOD, 22));
   }
-  wtk_rect(244, 110, 12, 3, DGRAY);
-  /* An oil stain, a shadow, and the car. */
-  wtk_dither(86, 140, 150, 8, DGRAY, BLACK);
-  sparrow(60, 142, 44, LRED, hood_up);
+  for (int x = 8; x < WTK_W; x += 32) wtk_disc(x + (x * 5) % 9, 40 + (x * 7) % 80, 1, wtk_shade(R_WOOD, 4));
+  wtk_vgrad(0, 0, WTK_W, 10, R_WOOD, 3, 8);
+  wtk_hline(0, WTK_W - 1, 10, wtk_shade(R_WOOD, 2));
+  wtk_vgrad(0, 140, WTK_W, 60, R_CONCRETE, 13, 23);
+  wtk_hline(0, WTK_W - 1, 140, wtk_shade(R_CONCRETE, 5));
+  wtk_hline(0, WTK_W - 1, 141, wtk_shade(R_CONCRETE, 9));
+  /* The window, with the day outside it and the light it throws on the floor. */
+  wtk_rect(18, 26, 64, 52, wtk_shade(R_WHITE, 22));
+  wtk_vgrad(21, 29, 58, 32, R_SKY, 20, 29);
+  wtk_vgrad(21, 61, 58, 14, R_GRASS, 24, 15);
+  wtk_rect(49, 26, 2, 52, wtk_shade(R_WHITE, 24));
+  wtk_rect(18, 50, 64, 2, wtk_shade(R_WHITE, 24));
+  wtk_hline(18, 81, 78, wtk_shade(R_WOOD, 4));
+  /* The calendar. */
+  wtk_rect(97, 25, 30, 38, wtk_shade(R_WOOD, 5));
+  wtk_rect(96, 24, 30, 38, wtk_shade(R_CREAM, 25));
+  wtk_rect(96, 24, 30, 9, wtk_shade(R_RED, 22));
+  wtk_text(99, 25, "DAY", WHITE);
+  wtk_text_big(103, 38, "1", wtk_shade(R_RUBBER, 6), 2);
+  /* A pegboard, and a bench under it with a vice. */
+  wtk_vgrad(14, 86, 70, 16, R_TAN, 14, 18);
+  for (int x = 18; x < 82; x += 6) wtk_pset(x, 92, wtk_shade(R_TAN, 6));
+  wtk_vgrad(12, 102, 74, 6, R_WOOD, 26, 20);
+  wtk_hline(12, 85, 108, wtk_shade(R_WOOD, 4));
+  wtk_vgrad(16, 109, 5, 31, R_WOOD, 10, 6);
+  wtk_vgrad(78, 109, 5, 31, R_WOOD, 10, 6);
+  wtk_vgrad(62, 92, 14, 10, R_CHROME, 24, 10);
+  wtk_rect(66, 87, 5, 5, wtk_shade(R_CHROME, 26));
+  /* The door: four panels that catch the light from above, and a row of glass. */
+  wtk_rect(194, 18, 116, 123, wtk_shade(R_RUBBER, 4));
+  for (int i = 0; i < 4; i++) {
+    wtk_vgrad(198, 22 + i * 30, 108, 28, R_SILVER, 25, 15);
+    wtk_hline(198, 305, 22 + i * 30, wtk_shade(R_WHITE, 28));
+  }
+  for (int i = 0; i < 4; i++) {
+    wtk_rect(203 + i * 26, 56, 22, 16, wtk_shade(R_RUBBER, 8));
+    wtk_vgrad(205 + i * 26, 58, 18, 12, R_SKY, 22, 29);
+  }
+  wtk_vgrad(244, 128, 16, 4, R_CHROME, 28, 10);
+
+  /* The car, three-quarters on. */
+  wtk_clip(0, 0, WTK_W, 200);
+  wtk_cam cam = {{-FX(1) / 2, FX(2) - FX(1) / 4, -FX(8)}, 0, 0, 400, 140, 90};
+  eye = cam.pos;
+  wtk3_begin(&cam);
+  car_mesh(&BODIES[0], 0, 0, 256 + 58, R_RED, hood_up);
+  wtk3_end();
+  wtk_clip_off();
 }
 
 static void panel(const char *a, const char *b, const char *c) {
-  wtk_rect(0, 160, WTK_W, 40, BLACK);
-  wtk_box(0, 160, WTK_W, 40, LGRAY);
-  wtk_box(2, 162, WTK_W - 4, 36, DGRAY);
-  wtk_text(8, 166, a, YELLOW);
-  wtk_text(8, 177, b, WHITE);
-  wtk_text(8, 188, c, LGRAY);
+  wtk_vgrad(0, 200, WTK_W, 40, R_NAVY, 6, 2);
+  wtk_box(0, 200, WTK_W, 40, wtk_shade(R_CHROME, 22));
+  wtk_box(1, 201, WTK_W - 2, 38, wtk_shade(R_CHROME, 9));
+  wtk_text_sh(8, 206, a, wtk_shade(R_GOLD, 26), BLACK);
+  wtk_text_sh(8, 217, b, WHITE, BLACK);
+  wtk_text(8, 228, c, wtk_shade(R_CHROME, 17));
 }
 
 /* ---- The city --------------------------------------------------------------------------------
@@ -185,13 +299,13 @@ static void panel(const char *a, const char *b, const char *c) {
 
 #define PITCH 64
 #define ROAD 8 /* half the width of a street */
-#define VIEW_H 140
+#define VIEW_H 168
 #define SEE 5 /* blocks drawn each way from the car */
 #define N_TRAFFIC 8
 
 static fx car_x, car_z, speed, steer;
 static int car_yaw, crash_ticks, dents, miles_cm;
-typedef struct { i32 street; fx along; fx speed; int ns; u8 paint; } other;
+typedef struct { i32 street; fx along; fx speed; int ns; u8 paint, body; } other;
 static other traffic[N_TRAFFIC];
 
 static u32 hash2(int a, int b) {
@@ -200,19 +314,17 @@ static u32 hash2(int a, int b) {
   return h;
 }
 
-/* What stands on block (bx, bz): its height in metres (0 for a park) and its two wall colours. */
-static int building(int bx, int bz, u8 *light, u8 *dark, u8 *trim) {
-  static const u8 walls[6][3] = {
-    {LGRAY, DGRAY, BLACK}, {BROWN, RED, YELLOW}, {WHITE, LGRAY, BLUE}, {CYAN, BLUE, WHITE}, {YELLOW, BROWN, BLACK}, {LRED, RED, WHITE},
-  };
+/* What stands on block (bx, bz): its height in metres (0 for a park) and what it is built of. */
+static int building(int bx, int bz, int *ramp) {
+  static const u8 walls[8] = {R_CONCRETE, R_BRICK, R_TAN, R_CREAM, R_GREY, R_BROWN, R_SILVER, R_MAROON};
   u32 h = hash2(bx, bz);
   if (h % 7 == 0) return 0;
-  const u8 *w = walls[(h >> 8) % 6];
-  *light = w[0]; *dark = w[1]; *trim = w[2];
-  return 6 + (int)((h >> 16) % 9) * 4;
+  *ramp = walls[(h >> 8) % 8];
+  return 8 + (int)((h >> 16) % 9) * 4;
 }
 
 static void drive_start(void) {
+  static const u8 paints[8] = {R_BLUE, R_SILVER, R_WHITE, R_GREEN, R_GOLD, R_TEAL, R_MAROON, R_ORANGE};
   car_x = FX(4); car_z = FX(0); car_yaw = 0; speed = 0; steer = 0; crash_ticks = 0;
   for (int i = 0; i < N_TRAFFIC; i++) {
     u32 r = wtk_rand(&rng);
@@ -220,7 +332,8 @@ static void drive_start(void) {
     traffic[i].street = (i32)(r % 7) - 3;
     traffic[i].along = FX((i32)((r >> 8) % 600) - 300);
     traffic[i].speed = FX(8 + (i32)((r >> 20) % 8));
-    traffic[i].paint = (u8)(9 + (r >> 28) % 6);
+    traffic[i].paint = paints[(r >> 4) % 8];
+    traffic[i].body = (u8)((r >> 28) % 4);
   }
 }
 
@@ -232,12 +345,12 @@ static void other_at(const other *o, fx *x, fx *z) {
   if (o->ns) { *x = lane; *z = o->along; } else { *x = o->along; *z = lane; }
 }
 
-static void box(fx x0, fx z0, fx x1, fx z1, fx y0, fx y1, u8 light, u8 dark) {
-  /* Only the walls that face the car are drawn. */
-  if (car_z < z0) { v3 q[4] = {{x0, y0, z0}, {x1, y0, z0}, {x1, y1, z0}, {x0, y1, z0}}; wtk3_poly(q, 4, light, light, 0); }
-  if (car_z > z1) { v3 q[4] = {{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}}; wtk3_poly(q, 4, light, light, 0); }
-  if (car_x < x0) { v3 q[4] = {{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}}; wtk3_poly(q, 4, dark, dark, 0); }
-  if (car_x > x1) { v3 q[4] = {{x1, y0, z0}, {x1, y0, z1}, {x1, y1, z1}, {x1, y1, z0}}; wtk3_poly(q, 4, dark, dark, 0); }
+/* The walls of a box that face the car. */
+static void box(fx x0, fx z0, fx x1, fx z1, fx y0, fx y1, int ramp, int bias) {
+  if (car_z < z0) { v3 q[4] = {{x0, y0, z0}, {x1, y0, z0}, {x1, y1, z0}, {x0, y1, z0}}; wtk3_lit(q, 4, ramp, bias); }
+  if (car_z > z1) { v3 q[4] = {{x0, y0, z1}, {x1, y0, z1}, {x1, y1, z1}, {x0, y1, z1}}; wtk3_lit(q, 4, ramp, bias); }
+  if (car_x < x0) { v3 q[4] = {{x0, y0, z0}, {x0, y0, z1}, {x0, y1, z1}, {x0, y1, z0}}; wtk3_lit(q, 4, ramp, bias); }
+  if (car_x > x1) { v3 q[4] = {{x1, y0, z0}, {x1, y0, z1}, {x1, y1, z1}, {x1, y1, z0}}; wtk3_lit(q, 4, ramp, bias); }
 }
 
 static int floor_div(int a, int b) { return a >= 0 ? a / b : -((-a + b - 1) / b); }
@@ -248,8 +361,8 @@ static int blocked(fx x, fx z) {
   int bx = floor_div(mx, PITCH), bz = floor_div(mz, PITCH);
   int lx = mx - bx * PITCH, lz = mz - bz * PITCH;
   if (lx < ROAD + 3 || lx > PITCH - ROAD - 3 || lz < ROAD + 3 || lz > PITCH - ROAD - 3) return 0;
-  u8 a, b, c;
-  return building(bx, bz, &a, &b, &c) > 0;
+  int ramp;
+  return building(bx, bz, &ramp) > 0;
 }
 
 static void drive_tick(void) {
@@ -300,118 +413,134 @@ static void drive_tick(void) {
   }
 }
 
-static void needle(int cx, int cy, int len, int angle, u8 c) {
-  wtk_line(cx, cy, cx + FX_INT(fx_sin(angle) * len), cy - FX_INT(fx_cos(angle) * len), c);
-}
-
 static void dial(int cx, int cy, int r, int value, int top, const char *label) {
-  wtk_disc(cx, cy, r, BLACK);
-  for (int i = 0; i <= 8; i++) {
-    int a = -384 + i * 96;
-    wtk_pset(cx + FX_INT(fx_sin(a) * (r - 2)), cy - FX_INT(fx_cos(a) * (r - 2)), WHITE);
+  wtk_disc(cx, cy, r + 2, wtk_shade(R_CHROME, 12));
+  wtk_disc(cx, cy, r + 1, wtk_shade(R_CHROME, 26));
+  wtk_disc(cx, cy, r, wtk_shade(R_RUBBER, 3));
+  for (int i = 0; i <= 16; i++) {
+    int a = -384 + i * 48, in = (i & 1) ? r - 3 : r - 6;
+    wtk_line(cx + FX_INT(fx_sin(a) * in), cy - FX_INT(fx_cos(a) * in), cx + FX_INT(fx_sin(a) * (r - 1)), cy - FX_INT(fx_cos(a) * (r - 1)), i >= 13 && top == 80 ? wtk_shade(R_RED, 24) : wtk_shade(R_WHITE, 24));
   }
-  needle(cx, cy, r - 4, -384 + value * 768 / top, LRED);
-  wtk_disc(cx, cy, 2, LGRAY);
-  wtk_text(cx - wtk_strlen(label) * 4, cy + r - 10, label, LGRAY);
+  int a = -384 + value * 768 / top;
+  wtk_line(cx, cy, cx + FX_INT(fx_sin(a) * (r - 5)), cy - FX_INT(fx_cos(a) * (r - 5)), wtk_shade(R_ORANGE, 26));
+  wtk_line(cx + 1, cy, cx + 1 + FX_INT(fx_sin(a) * (r - 5)), cy - FX_INT(fx_cos(a) * (r - 5)), wtk_shade(R_ORANGE, 20));
+  wtk_disc(cx, cy, 3, wtk_shade(R_CHROME, 18));
+  wtk_text(cx - wtk_strlen(label) * 4, cy + r - 13, label, wtk_shade(R_CHROME, 20));
 }
 
 static void drive_draw(void) {
-  int horizon = 62;
-  /* Sky, a band of haze at the bottom of it, and the ground. */
-  wtk_rect(0, 0, WTK_W, horizon - 8, LBLUE);
-  wtk_dither(0, horizon - 8, WTK_W, 8, LBLUE, LCYAN);
-  wtk_rect(0, horizon, WTK_W, VIEW_H - horizon, LGRAY);
+  int horizon = 76;
+  wtk_vgrad(0, 0, WTK_W, horizon, R_SKY, 15, 29);
+  wtk_vgrad(0, horizon, WTK_W, VIEW_H - horizon, R_CONCRETE, 17, 24);
   wtk_clip(0, 0, WTK_W, VIEW_H);
 
-  wtk_cam cam = {{car_x, FX(1) + FX(1) / 8, car_z}, car_yaw, 190, WTK_W / 2, horizon};
+  wtk_cam cam = {{car_x, FX(1) + FX(1) / 8, car_z}, car_yaw, 0, 200, WTK_W / 2, horizon};
+  eye = cam.pos;
   wtk3_begin(&cam);
 
+  col tar = wtk_shade(R_ASPHALT, 15), tar2 = wtk_shade(R_ASPHALT, 16), paint = wtk_shade(R_YELLOW, 23);
   int cbx = floor_div(FX_INT(car_x), PITCH), cbz = floor_div(FX_INT(car_z), PITCH);
   for (int i = -SEE; i <= SEE + 1; i++) {
     for (int j = -SEE; j <= SEE; j++) {
-      /* A length of street going north, and one going east, each a block long, with a dash down the middle. */
+      /* A length of street going north, and one going east, each a block long, with dashes down the middle. */
       int sx = (cbx + i) * PITCH, sz = (cbz + j) * PITCH;
       v3 ns[4] = {at(sx - ROAD, 0, sz), at(sx + ROAD, 0, sz), at(sx + ROAD, 0, sz + PITCH), at(sx - ROAD, 0, sz + PITCH)};
-      wtk3_poly(ns, 4, DGRAY, DGRAY, -4000);
+      wtk3_poly(ns, 4, tar, tar2, -4000);
       int ez = (cbz + i) * PITCH, ex = (cbx + j) * PITCH;
       v3 ew[4] = {at(ex, 0, ez - ROAD), at(ex + PITCH, 0, ez - ROAD), at(ex + PITCH, 0, ez + ROAD), at(ex, 0, ez + ROAD)};
-      wtk3_poly(ew, 4, DGRAY, DGRAY, -4000);
+      wtk3_poly(ew, 4, tar, tar2, -4000);
       if (i >= -3 && i <= 3 && j >= -3 && j <= 3) {
         for (int d = 0; d < 2; d++) {
           int a = 16 + d * 24;
           v3 dn[4] = {at(sx, 0, sz + a), at(sx, 0, sz + a + 8), at(sx, 0, sz + a + 8), at(sx, 0, sz + a)};
           dn[0].x -= FX(1) / 5; dn[1].x -= FX(1) / 5; dn[2].x += FX(1) / 5; dn[3].x += FX(1) / 5;
-          wtk3_poly(dn, 4, YELLOW, YELLOW, -3000);
+          wtk3_poly(dn, 4, paint, paint, -3000);
           v3 de[4] = {at(ex + a, 0, ez), at(ex + a + 8, 0, ez), at(ex + a + 8, 0, ez), at(ex + a, 0, ez)};
           de[0].z -= FX(1) / 5; de[1].z -= FX(1) / 5; de[2].z += FX(1) / 5; de[3].z += FX(1) / 5;
-          wtk3_poly(de, 4, YELLOW, YELLOW, -3000);
+          wtk3_poly(de, 4, paint, paint, -3000);
         }
       }
     }
   }
   for (int i = -SEE; i <= SEE; i++)
     for (int j = -SEE; j <= SEE; j++) {
-      int bx = cbx + i, bz = cbz + j;
-      u8 light, dark, trim;
-      int h = building(bx, bz, &light, &dark, &trim);
+      int bx = cbx + i, bz = cbz + j, ramp = 0;
+      int h = building(bx, bz, &ramp);
       int x0 = bx * PITCH + ROAD + 4, z0 = bz * PITCH + ROAD + 4, x1 = (bx + 1) * PITCH - ROAD - 4, z1 = (bz + 1) * PITCH - ROAD - 4;
       if (!h) {
         /* A park: grass, and nothing to hit. */
         v3 g[4] = {at(x0, 0, z0), at(x1, 0, z0), at(x1, 0, z1), at(x0, 0, z1)};
-        wtk3_poly(g, 4, GREEN, LGREEN, -3500);
+        wtk3_poly(g, 4, wtk_shade(R_GRASS, 20), wtk_shade(R_GRASS, 22), -3500);
         continue;
       }
-      box(FX(x0), FX(z0), FX(x1), FX(z1), 0, FX(h), light, dark);
-      /* A row of glass round the nearer ones. */
-      if (i >= -2 && i <= 2 && j >= -2 && j <= 2)
-        box(FX(x0) - 3000, FX(z0) - 3000, FX(x1) + 3000, FX(z1) + 3000, FX(2), FX(3) + FX(1) / 2, trim, trim);
+      box(FX(x0), FX(z0), FX(x1), FX(z1), 0, FX(h), ramp, 0);
+      /* Rows of glass, a storey at a time, on the ones near enough to see them. */
+      int near = i >= -1 && i <= 1 && j >= -1 && j <= 1, mid = i >= -3 && i <= 3 && j >= -3 && j <= 3;
+      if (mid)
+        for (int f = 0; f * 4 + 4 <= h && f < (near ? 9 : 3); f++)
+          box(FX(x0) - 3000, FX(z0) - 3000, FX(x1) + 3000, FX(z1) + 3000, FX(f * 4 + 1) + FX(1) / 2, FX(f * 4 + 3), R_GLASS, 1);
+      /* A doorway at street level, and a cap round the top. */
+      box(FX(x0) - 2000, FX(z0) - 2000, FX(x1) + 2000, FX(z1) + 2000, FX(h) - FX(1) / 2, FX(h), R_RUBBER, 1);
     }
   for (int i = 0; i < N_TRAFFIC; i++) {
     fx ox, oz;
     other_at(&traffic[i], &ox, &oz);
-    fx hl = traffic[i].ns ? FX(1) - FX(1) / 8 : FX(2), hw = traffic[i].ns ? FX(2) : FX(1) - FX(1) / 8;
-    box(ox - hl, oz - hw, ox + hl, oz + hw, FX(1) / 4, FX(1), traffic[i].paint, traffic[i].paint - 8);
-    box(ox - hl + 8000, oz - hw + 8000, ox + hl - 8000, oz + hw - 8000, FX(1), FX(1) + FX(1) / 2, CYAN, BLUE);
+    fx dx = ox - car_x, dz = oz - car_z;
+    if (dx < 0) dx = -dx;
+    if (dz < 0) dz = -dz;
+    if (dx + dz < FX(110)) car_mesh(&BODIES[traffic[i].body], ox, oz, traffic[i].ns ? 0 : 768, traffic[i].paint, 0);
+    else {
+      fx hl = traffic[i].ns ? FX(1) - FX(1) / 8 : FX(2), hw = traffic[i].ns ? FX(2) : FX(1) - FX(1) / 8;
+      box(ox - hl, oz - hw, ox + hl, oz + hw, FX(1) / 4, FX(1) + FX(1) / 4, traffic[i].paint, 0);
+    }
   }
   wtk3_end();
   wtk_clip_off();
 
   /* From the driver's seat: the hood, the pillars, the mirror and the dash. */
   int lean = FX_INT(steer * 6);
-  int hood[] = {40 - lean, VIEW_H, 96 - lean, 116, 224 - lean, 116, 280 - lean, VIEW_H};
-  wtk_poly(hood, 4, LRED, LRED);
-  wtk_hline(96 - lean, 224 - lean, 116, RED);
-  int lp[] = {0, 0, 14, 0, 4, VIEW_H, 0, VIEW_H}, rp[] = {305, 0, 319, 0, 319, VIEW_H, 315, VIEW_H};
-  wtk_poly(lp, 4, BLACK, BLACK);
-  wtk_poly(rp, 4, BLACK, BLACK);
-  wtk_rect(0, 0, WTK_W, 5, BLACK);
-  wtk_rect(132, 5, 56, 14, BLACK);
-  wtk_dither(134, 7, 52, 10, LBLUE, LGRAY);
-  wtk_rect(0, VIEW_H, WTK_W, WTK_H - VIEW_H, BLACK);
-  wtk_dither(0, VIEW_H, WTK_W, 4, DGRAY, BLACK);
-  wtk_rect(8, VIEW_H + 6, WTK_W - 16, 50, DGRAY);
+  for (int k = 0; k < 6; k++) {
+    int y0 = 138 + k * 5, y1 = y0 + 5, w0 = 64 + k * 14, w1 = 78 + k * 14;
+    int hood[] = {160 - lean - w0, y0, 160 - lean + w0, y0, 160 - lean + w1, y1, 160 - lean - w1, y1};
+    wtk_poly(hood, 4, wtk_shade(R_RED, 27 - k * 2), wtk_shade(R_RED, 26 - k * 2));
+  }
+  wtk_hline(160 - lean - 64, 160 - lean + 64, 138, wtk_shade(R_RED, 30));
+  int lp[] = {0, 0, 16, 0, 5, VIEW_H, 0, VIEW_H}, rp[] = {303, 0, 319, 0, 319, VIEW_H, 314, VIEW_H};
+  wtk_poly(lp, 4, wtk_shade(R_RUBBER, 3), wtk_shade(R_RUBBER, 3));
+  wtk_poly(rp, 4, wtk_shade(R_RUBBER, 3), wtk_shade(R_RUBBER, 3));
+  wtk_rect(0, 0, WTK_W, 6, wtk_shade(R_RUBBER, 3));
+  wtk_rect(130, 6, 60, 16, wtk_shade(R_RUBBER, 3));
+  wtk_vgrad(132, 8, 56, 12, R_SKY, 18, 26);
+  wtk_vgrad(0, VIEW_H, WTK_W, 6, R_RUBBER, 14, 6);
+  wtk_vgrad(0, VIEW_H + 6, WTK_W, WTK_H - VIEW_H - 6, R_RUBBER, 9, 3);
+  wtk_vgrad(52, VIEW_H + 4, 216, 5, R_RUBBER, 20, 10);
   int mph = (int)(((i64)speed * 2237 / 1000) >> 16);
   int v = FX_INT(speed * 10), in = v % 110;
-  dial(58, 172, 24, mph > 140 ? 140 : mph, 140, "MPH");
-  dial(262, 172, 24, speed > 0 ? 15 + in * 55 / 110 : 10, 80, "RPM");
-  wtk_rect(100, 152, 44, 12, BLACK);
-  wtk_num(104, 154, mph, LGREEN);
-  wtk_rect(176, 152, 44, 12, BLACK);
-  wtk_num(180, 154, miles_cm / 160934, LGRAY);
-  wtk_text(84, 168, "DENTS", LGRAY);
-  wtk_num(128, 168, dents, dents ? LRED : LGRAY);
+  dial(52, 206, 27, mph > 140 ? 140 : mph, 140, "MPH");
+  dial(268, 206, 27, speed > 0 ? 15 + in * 55 / 110 : 10, 80, "RPM");
+  wtk_rect(96, 180, 44, 12, BLACK);
+  wtk_box(95, 179, 46, 14, wtk_shade(R_CHROME, 12));
+  wtk_num(100, 182, mph, wtk_shade(R_LIME, 26));
+  wtk_rect(180, 180, 44, 12, BLACK);
+  wtk_box(179, 179, 46, 14, wtk_shade(R_CHROME, 12));
+  wtk_num(184, 182, miles_cm / 160934, wtk_shade(R_CHROME, 24));
+  wtk_text(88, 198, "DENTS", wtk_shade(R_CHROME, 16));
+  wtk_num(132, 198, dents, dents ? wtk_shade(R_RED, 26) : wtk_shade(R_CHROME, 16));
   /* The wheel. */
   int wa = FX_INT(steer * 150);
-  wtk_disc(160, 196, 30, BLACK);
-  wtk_disc(160, 196, 25, DGRAY);
-  wtk_line(160, 196, 160 + FX_INT(fx_sin(wa - 256) * 27), 196 - FX_INT(fx_cos(wa - 256) * 27), BLACK);
-  wtk_line(160, 196, 160 + FX_INT(fx_sin(wa + 256) * 27), 196 - FX_INT(fx_cos(wa + 256) * 27), BLACK);
-  wtk_disc(160, 196, 6, BLACK);
+  wtk_disc(160, 238, 38, wtk_shade(R_RUBBER, 2));
+  wtk_disc(160, 238, 36, wtk_shade(R_RUBBER, 12));
+  wtk_disc(160, 238, 31, wtk_shade(R_RUBBER, 5));
+  for (int k = -1; k <= 1; k++) {
+    wtk_line(160 + k, 238, 160 + k + FX_INT(fx_sin(wa - 256) * 33), 238 - FX_INT(fx_cos(wa - 256) * 33), wtk_shade(R_RUBBER, 12));
+    wtk_line(160 + k, 238, 160 + k + FX_INT(fx_sin(wa + 256) * 33), 238 - FX_INT(fx_cos(wa + 256) * 33), wtk_shade(R_RUBBER, 12));
+  }
+  wtk_disc(160, 238, 8, wtk_shade(R_RUBBER, 14));
 
   if (crash_ticks > 0) {
-    wtk_rect(112, 44, 96, 20, RED);
-    wtk_box(112, 44, 96, 20, WHITE);
-    wtk_text(136, 50, "CRASH!", WHITE);
+    wtk_vgrad(108, 50, 104, 22, R_RED, 26, 16);
+    wtk_box(108, 50, 104, 22, WHITE);
+    wtk_text_sh(136, 57, "CRASH!", WHITE, BLACK);
   }
 }
 
@@ -446,7 +575,7 @@ void game_draw(void) {
   else if (screen == GARAGE) {
     garage_draw();
     const spot *s = spot_under(GARAGE_SPOTS, N_GARAGE);
-    panel("1984 BEXLEY SPARROW", s ? s->name : "LOOK ROUND.", s && s->does == DO_HOOD ? (hood_up ? "ENTER SHUTS IT" : "ENTER OPENS IT") : "ARROWS OR MOUSE, ENTER TO PICK");
+    panel("YOUR CAR", s ? s->name : "LOOK ROUND.", s && s->does == DO_HOOD ? (hood_up ? "ENTER SHUTS IT" : "ENTER OPENS IT") : "ARROWS OR MOUSE, ENTER TO PICK");
     pointer_draw();
   } else drive_draw();
 }

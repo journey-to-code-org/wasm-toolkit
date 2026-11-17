@@ -1,6 +1,6 @@
-// The host for a wtk game: it loads the .wasm, shows its 320x200 screen scaled up in whole pixels,
+// The host for a wtk game: it loads the .wasm, shows its 320x240 screen scaled up in whole pixels,
 // feeds it the keyboard and the pointer thirty times a second, and is its PC speaker.
-const W = 320, H = 200, HZ = 30;
+const W = 320, H = 240, HZ = 30;
 const KEYS = {
   ArrowUp: 1, KeyW: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 4, KeyA: 4, ArrowRight: 8, KeyD: 8,
   Enter: 16, Space: 16, Escape: 32, Backspace: 32, KeyE: 64, KeyQ: 128,
@@ -63,8 +63,8 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1) {
 
   const show = () => {
     const mem = x.memory.buffer;
-    const screen = new Uint8Array(mem, x.wtk_screen(), W * H);
-    const pal = new Uint32Array(mem, x.wtk_palette(), 256);
+    const screen = new Uint16Array(mem, x.wtk_screen(), W * H);
+    const pal = new Uint32Array(mem, x.wtk_palette(), 1024);
     for (let i = 0; i < W * H; i++) out[i] = pal[screen[i]];
     ctx.putImageData(image, 0, 0);
   };

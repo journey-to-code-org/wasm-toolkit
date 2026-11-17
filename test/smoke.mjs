@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 
 const [path, flag, dir] = process.argv.slice(2);
-const W = 320, H = 200;
+const W = 320, H = 240;
 const A = 16, B = 32, UP = 1, LEFT = 4, RIGHT = 8;
 let fails = 0;
 const check = (ok, what) => { if (!ok) { console.log("FAIL", what); fails++; } };
@@ -13,8 +13,8 @@ async function play(shots) {
   const tones = [];
   const { instance } = await WebAssembly.instantiate(readFileSync(path), { env: { wtk_tone: (hz, ms) => tones.push(hz) } });
   const x = instance.exports;
-  const screen = () => new Uint8Array(x.memory.buffer, x.wtk_screen(), W * H).slice();
-  const pal = () => new Uint32Array(x.memory.buffer, x.wtk_palette(), 256);
+  const screen = () => new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H).slice();
+  const pal = () => new Uint32Array(x.memory.buffer, x.wtk_palette(), 1024);
   const shot = (name) => {
     if (!shots) return;
     const s = screen(), p = pal(), out = Buffer.alloc(W * H * 3);
@@ -31,7 +31,7 @@ async function play(shots) {
   run(2, 0); run(1, A); run(2, 0);
   const garage = screen();
   shot("2-garage");
-  run(1, 0, 180, 110); run(1, A, 180, 110); run(2, 0, 180, 110);
+  run(1, 0, 220, 152); run(1, A, 220, 152); run(2, 0, 220, 152);
   const hood = screen();
   shot("3-hood");
   run(1, 0, 250, 60); run(1, A, 250, 60); run(1, 0, 250, 60);
@@ -56,14 +56,14 @@ const differ = (a, b) => a.reduce((n, v, i) => n + (v !== b[i]), 0);
 for (const k of ["title", "garage", "hood", "parked", "moving", "later", "back"]) check(same(one[k], two[k]), `${k} is the same both times`);
 check(one.colours(one.title) >= 4, "the title has something on it");
 check(differ(one.title, one.garage) > 20000, "Enter leaves the title for the garage");
-check(differ(one.garage, one.hood) > 200 && differ(one.garage, one.hood) < 8000, "picking the hood opens it, and only it");
+check(differ(one.garage, one.hood) > 200 && differ(one.garage, one.hood) < 12000, "picking the hood opens it, and only it");
 check(differ(one.hood, one.parked) > 20000, "picking the door goes out to the street");
 check(differ(one.parked, one.moving) > 3000, "the street goes by when you drive");
-check(one.colours(one.moving) >= 6, "there is a city to look at");
+check(one.colours(one.moving) >= 40, "there is a city to look at, in a good many colours");
 check(one.tones.some((hz) => hz > 60), "the engine makes a noise");
 check(one.tones.includes(70), "driving in circles ends at a wall");
-check(differ(one.back, one.hood) < 6000 && differ(one.back, one.later) > 20000, "Escape is the garage again, as it was left");
-check(Math.max(...one.later) < 16 && Math.max(...one.title) < 16, "nothing is drawn outside the sixteen colours");
+check(differ(one.back, one.hood) < 9000 && differ(one.back, one.later) > 20000, "Escape is the garage again, as it was left");
+check(Math.max(...one.later) < 1024 && Math.max(...one.title) < 1024, "nothing is drawn outside the palette");
 
 console.log(fails ? `${fails} FAILED` : "smoke test passes");
 process.exit(fails ? 1 : 0);

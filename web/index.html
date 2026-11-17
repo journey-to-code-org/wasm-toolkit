@@ -7,7 +7,7 @@
 <style>
   html, body { margin: 0; height: 100%; background: #000; }
   body { display: grid; place-items: center; }
-  /* 320x200 was shown on a 4:3 tube, so the pixels were taller than wide: 320x240 on the glass. */
+  /* 320x240 on a 4:3 screen: square pixels, scaled up without smoothing. */
   canvas { width: min(100vw, 133.33vh); aspect-ratio: 4 / 3; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; }
 </style>
 </head>
