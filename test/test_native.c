@@ -10,8 +10,8 @@ void game_init(u32 seed) { (void)seed; }
 void game_tick(void) {}
 void game_draw(void) {}
 
-static int count(u8 c) { int n = 0; for (int i = 0; i < WTK_W * WTK_H; i++) n += wtk_fb[i] == c; return n; }
-static u8 at(int x, int y) { return wtk_fb[y * WTK_W + x]; }
+static int count(col c) { int n = 0; for (int i = 0; i < WTK_W * WTK_H; i++) n += wtk_fb[i] == c; return n; }
+static col at(int x, int y) { return wtk_fb[y * WTK_W + x]; }
 
 int main(void) {
   wtk_init(1);
@@ -69,7 +69,7 @@ int main(void) {
 
   /* Three dimensions: a point dead ahead lands on the horizon, one behind is refused, and of two
      walls the nearer is the one left showing. */
-  wtk_cam cam = {{0, FX(1), 0}, 0, 200, 160, 100};
+  wtk_cam cam = {{0, FX(1), 0}, 0, 0, 200, 160, 100};
   wtk3_begin(&cam);
   int sx, sy;
   v3 ahead = {0, FX(1), FX(10)}, behind = {0, FX(1), -FX(10)}, right = {FX(5), FX(1), FX(10)}, up = {0, FX(6), FX(10)};
@@ -95,6 +95,40 @@ int main(void) {
   v3 road[4] = {{-FX(4), 0, -FX(50)}, {FX(4), 0, -FX(50)}, {FX(4), 0, FX(50)}, {-FX(4), 0, FX(50)}};
   wtk3_poly(road, 4, DGRAY, DGRAY, 0);
   CHECK(wtk3_end() == 1 && at(160, 190) == DGRAY && at(160, 90) == BLACK);
+
+  /* Tipped down, what was on the horizon is above the middle of the screen. */
+  cam.pitch = 64;
+  wtk3_begin(&cam);
+  CHECK(wtk3_point(ahead, &sx, &sy, 0) && sx == 160 && sy < 100);
+  cam.pitch = 0;
+
+  /* The palette: a ramp gets lighter all the way up, and its shades are where wtk_shade says. */
+  CHECK(wtk_shade(R_RED, 0) == R_RED * 32 && wtk_shade(R_RED, 99) == R_RED * 32 + 31 && wtk_shade(R_RED, -4) == R_RED * 32);
+  for (int s = 1; s < 32; s++) CHECK((wtk_pal[wtk_shade(R_RED, s)] & 255) >= (wtk_pal[wtk_shade(R_RED, s - 1)] & 255));
+  CHECK((wtk_pal[WHITE] & 0xFFFFFF) == 0xFFFFFF && (wtk_pal[BLACK] & 0xFFFFFF) == 0);
+
+  /* A gradient starts at one shade and ends at the other, and stays in its ramp. */
+  wtk_clear(BLACK);
+  wtk_vgrad(0, 0, 40, 100, R_SKY, 4, 28);
+  CHECK(at(0, 0) == wtk_shade(R_SKY, 4) && at(39, 99) == wtk_shade(R_SKY, 28));
+  CHECK(at(20, 50) > wtk_shade(R_SKY, 4) && at(20, 50) < wtk_shade(R_SKY, 28) && at(40, 50) == BLACK);
+
+  /* Light: the ground is brighter than a wall, and a wall that faces the light is brighter than one that does not. */
+  wtk3_begin(&cam);
+  wtk_clear(BLACK);
+  v3 floor_q[4] = {{-FX(2), 0, FX(4)}, {FX(2), 0, FX(4)}, {FX(2), 0, FX(8)}, {-FX(2), 0, FX(8)}};
+  v3 south_wall[4] = {{-FX(2), FX(1), FX(12)}, {FX(2), FX(1), FX(12)}, {FX(2), FX(3), FX(12)}, {-FX(2), FX(3), FX(12)}};
+  wtk3_lit(floor_q, 4, R_GREY, 0);
+  wtk3_lit(south_wall, 4, R_GREY, 0);
+  wtk3_end();
+  col ground = at(160, 140), lit_wall = at(160, 70);
+  CHECK(ground > lit_wall && lit_wall > wtk_shade(R_GREY, 8));
+  wtk_cam back = {{0, FX(1), FX(24)}, 512, 0, 200, 160, 100};
+  wtk3_begin(&back);
+  wtk_clear(BLACK);
+  wtk3_lit(south_wall, 4, R_GREY, 0);
+  wtk3_end();
+  CHECK(at(160, 70) < lit_wall && at(160, 70) >= wtk_shade(R_GREY, 0));
 
   printf(failed ? "%d FAILED\n" : "native tests pass\n", failed);
   return failed ? 1 : 0;
