@@ -25,7 +25,7 @@ drive and all-wheel drive, with and without the turbo; the sedans; a small picku
 sedan in ten generations. Parts interchange across the family, which is what makes a parts car
 worth buying. Other makers' big names of the era get the same treatment: a kind of car, not a copy.
 
-A body is a table of cross-sections (`games/shootout/main.c`), so a new car is a dozen lines.
+A body is a table of cross-sections (`games/shootout/cars.c`), so a new car is a dozen lines.
 
 ## Done
 
@@ -39,6 +39,12 @@ A body is a table of cross-sections (`games/shootout/main.c`), so a new car is a
       five gears and a redline, and a timeslip. The torque curve is read off a real dyno sheet
       (Rix Racing: 314 lb-ft, 292 hp at the wheels). Alone against the clock for now.
 - [x] The DSM mark, on the garage wall and the timeslip.
+- [x] Working on the car: under the hood, four parts each held by four bolts. Undo them, lift the
+      part off, set another on, do them up. The car will not start until it is back together.
+- [x] The paper on the bench sells the better parts for cash; a clean pass at the strip pays a
+      little, and a new best pays more. What is bolted on changes what the engine makes.
+- [x] Two generations of the coupe: a wedge with pop-up headlamps, and the rounder one after it.
+- [x] A dash that wraps round the driver: hooded cluster, centre stack, shifter gate, the wheel.
 
 ## Next, in order
 
@@ -46,7 +52,7 @@ A body is a table of cross-sections (`games/shootout/main.c`), so a new car is a
 
 - [ ] The paper: classifieds for cars and for parts, bought with cash, a new paper each day.
 - [ ] Parts are things: bought, carried home, on the floor until fitted.
-- [ ] Under the hood, as a screen: each part held on by bolts, undone one at a time.
+- [ ] The rest of what is under the hood: cam, plugs, oil, the head; and wrenches you have to own.
 - [ ] Under the car: transmission, tyres, with the jack.
 - [ ] Tuning by hand: timing and mixture, with the engine telling you when it is wrong.
 - [ ] Paint, stickers, chopping the top.

@@ -24,6 +24,8 @@ make test     # the toolkit's tests, natively, and the game played by a script
 
 Keys: arrows or WASD, Enter or Space to pick, Escape to go back. The mouse moves the pointer.
 At the strip: hold W to build boost, E into first on the green, E to shift up, Q to shift down.
+Under the hood: click a bolt to undo it or do it up, click a part with its bolts out to lift it off,
+click a part on the floor to pick it up, and click where it goes to set it down.
 
 ## Layout
 
@@ -33,7 +35,7 @@ At the strip: hold W to build boost, E into first on the green, E to shift up, Q
 | `toolkit/wtk.c` | The screen, drawing, fixed-point maths, 3D, and the door to the host |
 | `toolkit/font.c` | The 8x8 font (public domain, from Daniel Hepper's font8x8) |
 | `web/wtk.js` | The host: loads the `.wasm`, shows the screen, reads keys and pointer, makes the tones |
-| `games/shootout/` | The game. `logo.h` is the DSM mark by Mikey Nichols, from `mnichols08/dsm-legacy`, made by `tools/logo.py` |
+| `games/shootout/` | The game, a file a screen: `garage.c` (the room, under the hood, the paper), `town.c`, `strip.c`, with `cars.c` and `cockpit.c` shared. `logo.h` is the DSM mark by Mikey Nichols, from `mnichols08/dsm-legacy`, made by `tools/logo.py` |
 | `test/` | `test_native.c` checks the toolkit; `smoke.mjs` plays the built game twice and compares |
 
 ## Writing a game on it
