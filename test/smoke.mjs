@@ -25,42 +25,76 @@ async function play(shots) {
   const run = (n, keys, mx = 160, my = 100) => { for (let i = 0; i < n; i++) { x.wtk_input(keys, mx, my); x.wtk_step(); } };
   const colours = (s) => new Set(s).size;
 
+  const click = (mx, my) => { run(1, 0, mx, my); run(1, A, mx, my); run(1, 0, mx, my); };
+
   x.wtk_init(1234);
   const title = screen();
-  shot("1-title");
+  shot("01-title");
   run(2, 0); run(1, A); run(2, 0);
   const garage = screen();
-  shot("2-garage");
-  run(1, 0, 220, 152); run(1, A, 220, 152); run(2, 0, 220, 152);
+  shot("02-garage");
+  click(244, 174);
+  const lamps = screen();
+  shot("03-lamps");
+
+  // Under the hood: undo the four bolts on the intake and lift it off.
+  click(200, 138);
   const hood = screen();
-  shot("3-hood");
-  run(1, 0, 250, 60); run(1, A, 250, 60); run(1, 0, 250, 60);
+  shot("04-hood");
+  for (const [bx, by] of [[217, 81], [250, 81], [250, 124], [217, 124]]) click(bx, by);
+  click(234, 103);
+  const stripped = screen();
+  shot("05-intake-off");
+  run(1, B); run(2, 0);
+  // With a part off it, the car goes nowhere.
+  click(110, 40);
+  const refused = screen();
+  shot("06-wont-start");
+
+  // The paper on the bench: buy the better intake.
+  click(28, 98);
+  const paper = screen();
+  click(84, 90);
+  const bought = screen();
+  shot("07-paper");
+  run(1, B); run(2, 0);
+
+  // Pick it up off the floor, set it on, and do up the bolts.
+  click(200, 138);
+  click(120, 183);
+  click(234, 103);
+  for (const [bx, by] of [[217, 81], [250, 81], [250, 124], [217, 124]]) click(bx, by);
+  const fitted = screen();
+  shot("08-fitted");
+  run(1, B); run(2, 0);
+
+  // Into town.
+  click(250, 60);
   const parked = screen();
-  shot("4-street");
+  shot("09-street");
   run(90, UP); run(20, UP | RIGHT); run(60, UP);
   const moving = screen();
-  shot("5-driving");
+  shot("10-driving");
   run(400, UP | LEFT);
   const later = screen();
-  shot("6-later");
   run(1, B); run(2, 0);
-  const back = screen();
-  // The strip: pick the calendar, stage, hold the throttle, go on the green, and shift four times.
-  run(1, 0, 110, 40); run(1, A, 110, 40); run(2, 0, 110, 40);
+
+  // The strip: pick the calendar, stage, hold the throttle, go on the green, and shift.
+  click(110, 40);
   const staged = screen();
-  shot("7-staged");
-  run(1, A); run(50, UP);
+  shot("11-staged");
+  run(1, 0); run(1, A); run(50, UP);
   const green = screen();
-  shot("8-green");
+  shot("12-green");
   run(1, UP | X);
   for (const wait of [43, 54, 103]) { run(wait, UP); run(1, UP | X); }
   run(60, UP);
   const running = screen();
-  shot("9-running");
+  shot("13-running");
   run(200, UP);
   const slip = screen();
-  shot("10-slip");
-  return { title, garage, hood, parked, moving, later, back, staged, green, running, slip, tones, colours };
+  shot("14-slip");
+  return { title, garage, lamps, hood, stripped, refused, paper, bought, fitted, parked, moving, later, staged, green, running, slip, tones, colours };
 }
 
 const one = await play(flag === "--shots" ? dir : null);
@@ -68,17 +102,22 @@ const two = await play(null);
 const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const differ = (a, b) => a.reduce((n, v, i) => n + (v !== b[i]), 0);
 
-for (const k of ["title", "garage", "hood", "parked", "moving", "later", "back", "staged", "green", "running", "slip"]) check(same(one[k], two[k]), `${k} is the same both times`);
+for (const k of Object.keys(one)) if (k !== "tones" && k !== "colours") check(same(one[k], two[k]), `${k} is the same both times`);
 check(one.colours(one.title) >= 4, "the title has something on it");
 check(differ(one.title, one.garage) > 20000, "Enter leaves the title for the garage");
-check(differ(one.garage, one.hood) > 200 && differ(one.garage, one.hood) < 12000, "picking the hood opens it, and only it");
-check(differ(one.hood, one.parked) > 20000, "picking the door goes out to the street");
+check(differ(one.garage, one.lamps) > 20 && differ(one.garage, one.lamps) < 6000, "the headlamps pop up, and only they");
+check(differ(one.lamps, one.hood) > 20000, "picking the hood goes under it");
+check(differ(one.hood, one.stripped) > 300, "four bolts out and the intake lifts off");
+check(differ(one.refused, one.lamps) < 9000, "with a part off, the car will not leave the garage");
+check(differ(one.refused, one.paper) > 20000, "the bench has the paper on it");
+check(differ(one.paper, one.bought) > 100, "an ad can be bought");
+check(differ(one.stripped, one.fitted) > 300 && differ(one.hood, one.fitted) > 100, "the new part goes on in place of the old");
+check(differ(one.fitted, one.parked) > 20000, "bolted back together, the door goes out to the street");
 check(differ(one.parked, one.moving) > 3000, "the street goes by when you drive");
-check(one.colours(one.moving) >= 40, "there is a city to look at, in a good many colours");
+check(one.colours(one.moving) >= 40, "there is a town to look at, in a good many colours");
 check(one.tones.some((hz) => hz > 60), "the engine makes a noise");
 check(one.tones.includes(70), "driving in circles ends at a wall");
-check(differ(one.back, one.hood) < 9000 && differ(one.back, one.later) > 20000, "Escape is the garage again, as it was left");
-check(differ(one.back, one.staged) > 20000, "the calendar goes to the strip");
+check(differ(one.later, one.staged) > 20000, "the calendar goes to the strip");
 check(differ(one.staged, one.green) > 100, "the tree comes down");
 check(differ(one.green, one.running) > 3000, "the car leaves the line");
 check(differ(one.running, one.slip) > 5000, "there is a timeslip at the other end");
