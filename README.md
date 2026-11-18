@@ -69,3 +69,6 @@ give the same game, pixel for pixel, which is what the tests check and what mult
 
 `engine/` is a Rust engine that plays a content pack: a folder of JSON and PNGs made into one file.
 It is the start of moving the game out of the code and into data. See [docs/ENGINE.md](docs/ENGINE.md).
+
+`web/workshop.html` is the workshop: drop in a car's picture, set its ground line and paint, see it in
+the garage, and save the pack.

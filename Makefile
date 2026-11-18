@@ -40,6 +40,7 @@ web/$(PACK).pack: content/$(PACK)/* tools/pack.py tools/paint.py
 test-engine: engine
 	cd engine && cargo test
 	node test/engine.mjs web/engine.wasm web/$(PACK).pack
+	node test/workshop.mjs web/engine.wasm web/default.pack
 
 serve: all
 	cd web && python3 -m http.server 8080
