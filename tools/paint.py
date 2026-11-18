@@ -561,6 +561,7 @@ def main():
     out = [
         "/* The game's painted pictures, as palette indices. Made by tools/paint.py; do not edit by hand.",
         "   The pictures are run-length: width, height, then (count, colour) pairs. 0xFFFF is clear. */",
+        "#ifndef SHOOTOUT_ART_H\n#define SHOOTOUT_ART_H",
         f"#define ART_TACH_X {TACH[0]}\n#define ART_TACH_Y {TACH[1]}\n#define ART_DIAL_R {TACH[2]}",
         f"#define ART_SPEEDO_X {SPEEDO[0]}\n#define ART_SPEEDO_Y {SPEEDO[1]}",
         f"#define ART_MINI_X {MINIS[0][0]}\n#define ART_MINI_Y {MINIS[0][1]}\n#define ART_MINI_STEP {MINIS[1][1] - MINIS[0][1]}\n#define ART_MINI_R 6",
@@ -577,7 +578,7 @@ def main():
         c_array("ART_WHEEL", [int(v) for v in iw.reshape(-1)]),
         c_array("ART_WHEEL_NIGHT", [int(v) for v in to_indices(rim_night, dither=6).reshape(-1)]),
     ]
-    open("games/shootout/art.h", "w").write("\n".join(out) + "\n")
+    open("games/shootout/art.h", "w").write("\n".join(out) + "\n#endif\n")
     print("games/shootout/art.h", len(rle(ib)), len(rle(inn)), iw.shape)
 
 

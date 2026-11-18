@@ -30,71 +30,80 @@ async function play(shots) {
   x.wtk_init(1234);
   const title = screen();
   shot("01-title");
+  // A new game opens on the paper: $750 and no car. Buy the first one in it.
   run(2, 0); run(1, A); run(2, 0);
+  const paper = screen();
+  shot("02-paper");
+  click(100, 70);
+  const bought = screen();
+  shot("03-bought");
+  run(1, B); run(2, 0);
   const garage = screen();
-  shot("02-garage");
+  shot("04-garage");
   click(268, 146);
   const lamps = screen();
-  shot("03-lamps");
+  shot("05-lamps");
 
   // Under the hood: undo the four bolts on the intake and lift it off.
   click(225, 136);
   const hood = screen();
-  shot("04-hood");
-  for (const [bx, by] of [[61, 103], [92, 103], [92, 144], [61, 144]]) click(bx, by);
+  shot("06-hood");
+  const bolts = [[61, 103], [92, 103], [92, 144], [61, 144]];
+  for (const [bx, by] of bolts) click(bx, by);
   click(77, 123);
   const stripped = screen();
-  shot("05-intake-off");
+  shot("07-intake-off");
   run(1, B); run(2, 0);
   // With a part off it, the car goes nowhere.
-  click(110, 40);
-  const refused = screen();
-  shot("06-wont-start");
-
-  // The paper on the bench: buy the better intake.
-  click(30, 100);
-  const paper = screen();
-  click(84, 90);
-  const bought = screen();
-  shot("07-paper");
-  run(1, B); run(2, 0);
-
-  // Pick it up off the floor, set it on, and do up the bolts.
-  click(225, 136);
-  click(120, 183);
-  click(77, 123);
-  for (const [bx, by] of [[61, 103], [92, 103], [92, 144], [61, 144]]) click(bx, by);
-  const fitted = screen();
-  shot("08-fitted");
-  run(1, B); run(2, 0);
-
-  // Into town.
   click(270, 60);
-  const parked = screen();
-  shot("09-street");
-  run(90, UP); run(20, UP | RIGHT); run(60, UP);
-  const moving = screen();
-  shot("10-driving");
-  run(400, UP | LEFT);
-  const later = screen();
+  const refused = screen();
+  shot("08-wont-start");
+  // Pick it up off the floor, set it back on, and do up the bolts.
+  click(225, 136);
+  click(40, 183);
+  click(77, 123);
+  for (const [bx, by] of bolts) click(bx, by);
+  const fitted = screen();
   run(1, B); run(2, 0);
 
-  // The strip: pick the calendar, stage, hold the throttle, go on the green, and shift.
-  click(110, 40);
+  // Out of the door to the lot. The parts page of the paper first, to see it.
+  click(30, 100);
+  shot("09-parts");
+  run(1, B); run(2, 0);
+  click(270, 60);
+  const lot = screen();
+  shot("10-lot");
+  // Race whoever is there, for kicks: stage, hold the throttle, go on the green, and shift.
+  click(30, 186);
+  const betting = screen();
+  shot("11-bet");
+  click(20, 186);
   const staged = screen();
-  shot("11-staged");
+  shot("12-staged");
   run(1, 0); run(1, A); run(50, UP);
   const green = screen();
-  shot("12-green");
+  shot("13-green");
   run(1, UP | X);
   for (const wait of [43, 54, 103]) { run(wait, UP); run(1, UP | X); }
   run(60, UP);
   const running = screen();
-  shot("13-running");
-  run(200, UP);
+  shot("14-running");
+  run(260, UP);
   const slip = screen();
-  shot("14-slip");
-  return { title, garage, lamps, hood, stripped, refused, paper, bought, fitted, parked, moving, later, staged, green, running, slip, tones, colours };
+  shot("15-slip");
+  run(1, 0); run(1, A); run(2, 0);
+  const after = screen();
+  shot("16-after");
+  // A cruise round town, and home.
+  click(215, 186);
+  const parked = screen();
+  run(90, UP); run(20, UP | RIGHT); run(60, UP);
+  const moving = screen();
+  shot("17-driving");
+  run(400, UP | LEFT);
+  const later = screen();
+  run(1, B); run(2, 0);
+  return { title, paper, bought, garage, lamps, hood, stripped, refused, fitted, lot, betting, staged, green, running, slip, after, parked, moving, later, tones, colours };
 }
 
 const one = await play(flag === "--shots" ? dir : null);
@@ -104,23 +113,25 @@ const differ = (a, b) => a.reduce((n, v, i) => n + (v !== b[i]), 0);
 
 for (const k of Object.keys(one)) if (k !== "tones" && k !== "colours") check(same(one[k], two[k]), `${k} is the same both times`);
 check(one.colours(one.title) >= 4, "the title has something on it");
-check(differ(one.title, one.garage) > 20000, "Enter leaves the title for the garage");
+check(differ(one.title, one.paper) > 20000, "a new game opens on the paper");
+check(differ(one.paper, one.bought) > 50, "a car can be bought out of it");
+check(differ(one.bought, one.garage) > 20000, "and it is in the garage");
 check(differ(one.garage, one.lamps) > 20 && differ(one.garage, one.lamps) < 6000, "the headlamps pop up, and only they");
 check(differ(one.lamps, one.hood) > 20000, "picking the hood goes under it");
 check(differ(one.hood, one.stripped) > 300, "four bolts out and the intake lifts off");
 check(differ(one.refused, one.lamps) < 9000, "with a part off, the car will not leave the garage");
-check(differ(one.refused, one.paper) > 20000, "the bench has the paper on it");
-check(differ(one.paper, one.bought) > 100, "an ad can be bought");
-check(differ(one.stripped, one.fitted) > 300 && differ(one.hood, one.fitted) > 100, "the new part goes on in place of the old");
-check(differ(one.fitted, one.parked) > 20000, "bolted back together, the door goes out to the street");
-check(differ(one.parked, one.moving) > 3000, "the street goes by when you drive");
-check(one.colours(one.moving) >= 40, "there is a town to look at, in a good many colours");
-check(one.tones.some((hz) => hz > 60), "the engine makes a noise");
-check(one.tones.includes(70), "driving in circles ends at a wall");
-check(differ(one.later, one.staged) > 20000, "the calendar goes to the strip");
+check(differ(one.stripped, one.fitted) > 300, "the part goes back on");
+check(differ(one.refused, one.lot) > 20000, "bolted back together, the door goes out to the lot");
+check(differ(one.lot, one.betting) > 200 && differ(one.lot, one.betting) < 20000, "racing him means naming a bet");
+check(differ(one.betting, one.staged) > 20000, "and then the strip");
 check(differ(one.staged, one.green) > 100, "the tree comes down");
 check(differ(one.green, one.running) > 3000, "the car leaves the line");
 check(differ(one.running, one.slip) > 5000, "there is a timeslip at the other end");
+check(differ(one.slip, one.after) > 20000 && differ(one.after, one.lot) < 20000, "and then the lot again");
+check(differ(one.after, one.parked) > 20000 && differ(one.parked, one.moving) > 3000, "a cruise goes into town, and the street goes by");
+check(one.colours(one.moving) >= 40, "there is a town to look at, in a good many colours");
+check(one.tones.some((hz) => hz > 60), "the engine makes a noise");
+check(one.tones.includes(70), "driving in circles ends at a wall");
 check(Math.max(...one.later) < 1024 && Math.max(...one.title) < 1024, "nothing is drawn outside the palette");
 
 console.log(fails ? `${fails} FAILED` : "smoke test passes");

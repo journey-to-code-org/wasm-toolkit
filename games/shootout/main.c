@@ -44,6 +44,23 @@ static void title_draw(void) {
   if ((ticks / 15) & 1) wtk_text_sh(116, 222, "PRESS ENTER", WHITE, BLACK);
 }
 
+/* How it ended. */
+static void over_draw(void) {
+  static const char *const head[4] = {"", "THE SEASON IS OVER", "OUTTA DOUGH", "YOU BEAT THE KING"};
+  static const char *const line1[4] = {"", "THE SHOOTOUT CAME AND YOU WERE NOT READY.", "NO CAR, AND NOT ENOUGH TO BUY ONE.", "HIS CAR IS IN YOUR GARAGE."};
+  static const char *const line2[4] = {"", "THE KING STILL HAS HIS CAR.", "YOU ARE DONE FOR THE YEAR.", "SEE YOU AT THE SHOOTOUT."};
+  wtk_vgrad(0, 0, WTK_W, WTK_H, over_kind == 3 ? R_GOLD : R_NAVY, over_kind == 3 ? 6 : 2, over_kind == 3 ? 20 : 10);
+  logo(112, 40, wtk_shade(R_RUBBER, 2), wtk_shade(R_RED, 24));
+  wtk_text_big(160 - wtk_strlen(head[over_kind]) * 8, 90, head[over_kind], WHITE, 2);
+  wtk_text_sh(160 - wtk_strlen(line1[over_kind]) * 4, 126, line1[over_kind], WHITE, BLACK);
+  wtk_text_sh(160 - wtk_strlen(line2[over_kind]) * 4, 140, line2[over_kind], WHITE, BLACK);
+  int x = wtk_text(96, 170, "DAY ", wtk_shade(R_CHROME, 24));
+  x = wtk_num(x, 170, hours / DAY_HOURS + 1, wtk_shade(R_CHROME, 24));
+  x = wtk_text(x, 170, "   CASH $", wtk_shade(R_CHROME, 24));
+  wtk_num(x, 170, cash, wtk_shade(R_CHROME, 24));
+  if ((ticks / 15) & 1) wtk_text_sh(116, 210, "PRESS ENTER", WHITE, BLACK);
+}
+
 void game_init(u32 seed) {
   rng = seed ? seed : 1;
   screen = TITLE;
@@ -54,14 +71,20 @@ void game_init(u32 seed) {
 void game_tick(void) {
   ticks++;
   if (screen == TITLE) {
-    if (wtk_hit & KEY_A) { screen = GARAGE; wtk_tone(880, 80); }
-  } else if (screen == DRIVE) drive_tick();
+    /* A new game starts with the paper in your hand, as Street Rod's does. */
+    if (wtk_hit & KEY_A) { screen = has_car ? GARAGE : PAPER; wtk_tone(880, 80); }
+  } else if (screen == OVER) {
+    if (wtk_hit & KEY_A) game_init(rng);
+  } else if (screen == MEET) meet_tick();
+  else if (screen == DRIVE) drive_tick();
   else if (screen == STRIP) strip_tick();
   else garage_tick();
 }
 
 void game_draw(void) {
   if (screen == TITLE) title_draw();
+  else if (screen == OVER) over_draw();
+  else if (screen == MEET) meet_draw();
   else if (screen == DRIVE) drive_draw();
   else if (screen == STRIP) strip_draw();
   else garage_draw();

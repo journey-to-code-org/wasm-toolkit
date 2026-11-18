@@ -5,14 +5,17 @@
 
 #include "../../toolkit/wtk.h"
 
-enum { TITLE, GARAGE, HOOD, PAPER, DRIVE, STRIP };
+enum { TITLE, GARAGE, HOOD, PAPER, MEET, DRIVE, STRIP, OVER };
 extern int screen;
 extern u32 ticks, rng;
 
 /** How much of the screen is windscreen when you are in the seat; the dash is below it. */
 #define VIEW_H 136
 /** What colour your car is. */
-#define PLAYER_PAINT R_BLUE
+#define PLAYER_PAINT car_paint
+/** The game is a season: it ends on this day, at the Shootout. Twelve hours make a day. */
+#define LAST_DAY 91
+#define DAY_HOURS 12
 
 static inline v3 at(int x, int y, int z) { v3 p = {FX(x), FX(y), FX(z)}; return p; }
 
@@ -35,6 +38,16 @@ void cockpit(const cockpit_look *look);
 /* ---- garage.c: the garage, under the hood, and the paper ---- */
 
 extern int cash, lamps_up;
+/** Your car: whether you have one, its paint, and how healthy its engine is, as a percentage. */
+extern int has_car, car_paint, car_cond;
+/** How many hours of the season are gone, and how many of the regulars you have beaten. */
+extern int hours, rung;
+/** How it ended: 1 the season ran out, 2 broke, 3 you beat the King. */
+extern int over_kind;
+/** Your car, or anyone's, as a picture in its own paint, standing on `ground`. */
+void car_picture(int x, int ground, int paint, int lamps);
+/** Losing your car: what was bolted to it goes with it. */
+void car_lost(void);
 void garage_reset(void);
 void garage_tick(void);
 void garage_draw(void);
@@ -49,7 +62,22 @@ int tune_big_turbo(void);
 void drive_start(void);
 void drive_tick(void);
 void drive_draw(void);
-void strip_start(void);
+/** A pass down the strip. `rival_ms` is what the car in the other lane runs, or 0 to run alone. */
+void strip_race(int rival_ms, int rival_paint);
+
+/* ---- meet.c: the lot by the strip, where the regulars pull up ---- */
+
+void meet_start(void);
+void meet_tick(void);
+void meet_draw(void);
+/** The race is run: 1 you won it, 0 you lost, -1 there was nobody in the other lane. */
+void meet_settle(int won);
+/** The bottom panel, and the pointer, which the garage owns. */
+void panel(const char *a, const char *b, const char *c);
+void pointer_move(void);
+void pointer_draw(void);
+int pointer_x(void);
+int pointer_y(void);
 void strip_tick(void);
 void strip_draw(void);
 

@@ -13,7 +13,9 @@ enum { S_STAGE, S_TREE, S_RUN, S_SLIP };
 #define TREE_STEP 15
 static int s_phase, s_gear, s_rpm, s_launch, s_shift, s_clock, s_tree, s_red, s_rt, s_sixty, s_et, s_mph;
 static fx s_pos, s_v, s_boost;
-static int best, purse;
+/* The other lane: what he runs, how quick he was off the line, where he is, and who won. */
+static int o_et, o_paint, o_rt, o_won;
+static fx o_pos;
 
 static const i16 TORQUE[][2] = {
   {800, 60}, {2000, 105}, {3000, 146}, {3400, 190}, {3800, 250}, {4200, 305}, {4400, 314}, {4600, 310},
@@ -30,13 +32,16 @@ static int torque_at(int rpm) {
   return TORQUE[n - 1][1];
 }
 
-void strip_start(void) {
+void strip_race(int rival_ms, int rival_paint) {
+  screen = STRIP;
+  o_et = rival_ms; o_paint = rival_paint; o_rt = 280 + (int)(wtk_rand(&rng) % 260); o_pos = 0; o_won = 0;
   s_phase = S_STAGE; s_gear = 0; s_rpm = 900; s_launch = 0; s_shift = 0; s_clock = 0; s_tree = 0; s_red = 0;
   s_rt = 0; s_sixty = 0; s_et = 0; s_mph = 0; s_pos = 0; s_v = 0; s_boost = 0;
 }
 
 void strip_tick(void) {
-  if (wtk_hit & KEY_B) { screen = GARAGE; wtk_tone(0, 0); return; }
+  /* Backing out of a race is losing it. */
+  if (wtk_hit & KEY_B) { wtk_tone(0, 0); meet_settle(o_et ? 0 : -1); return; }
   if (s_phase == S_SLIP) {
     /* Past the line: off the throttle and on the brakes. */
     s_v -= FX(8) / WTK_HZ;
@@ -44,11 +49,19 @@ void strip_tick(void) {
     s_pos += s_v / WTK_HZ;
     s_rpm += (900 - s_rpm) / 8;
     wtk_tone(s_v > 0 ? s_rpm / 40 : 0, 60);
-    if (wtk_hit & KEY_A) screen = GARAGE;
+    if (wtk_hit & KEY_A) { wtk_tone(0, 0); meet_settle(o_et ? o_won : -1); }
     return;
   }
   if (s_phase == S_STAGE && (wtk_hit & KEY_A)) { s_phase = S_TREE; s_tree = 0; wtk_tone(660, 60); }
-  else if (s_phase == S_TREE) s_tree++;
+  else if (s_phase == S_TREE || s_phase == S_RUN) s_tree++;
+  if (o_et && s_tree > TREE_STEP * 3) {
+    /* He leaves on the green, a reaction late, and gathers speed all the way down. */
+    int t = (s_tree - TREE_STEP * 3) * 1000 / WTK_HZ - o_rt;
+    fx f = t > 0 ? fx_div(FX(t) / 16, FX(o_et) / 16) : 0;
+    o_pos = f <= FX(1) ? fx_mul(FX(QUARTER), f / 4 + fx_mul(f, f) * 3 / 4) : FX(QUARTER) + fx_mul(FX(QUARTER) * 7 / 4, f - FX(1));
+    /* Long gone, with you still on the line or broken down: that is the race. */
+    if (t > o_et + 12000 && s_pos < FX(QUARTER)) { s_et = 0; o_won = 0; s_phase = S_SLIP; return; }
+  }
   int green = s_phase == S_TREE && s_tree >= TREE_STEP * 3;
   if (s_phase == S_RUN || green) s_clock++;
 
@@ -103,10 +116,7 @@ void strip_tick(void) {
       s_et = now - (s_v > 0 ? (int)(((i64)(s_pos - FX(QUARTER)) * 1000) / s_v) : 0);
       s_mph = (int)(((i64)s_v * 2237 / 1000) >> 16);
       s_phase = S_SLIP;
-      /* A clean pass pays a little, and a new best pays more. */
-      purse = s_red ? 0 : 25;
-      if (!s_red && (!best || s_et < best)) { if (best) purse += 150; best = s_et; }
-      cash += purse;
+      o_won = o_et && !s_red && s_et < o_rt + o_et;
       wtk_tone(990, 200);
       return;
     }
@@ -160,6 +170,7 @@ void strip_draw(void) {
     line[2].z += FX(1) / 2; line[3].z += FX(1) / 2;
     wtk3_poly(line, 4, wtk_shade(R_WHITE, 26), wtk_shade(R_WHITE, 26), -3700);
   }
+  if (o_et && o_pos > s_pos - FX(6) && o_pos < s_pos + FX(260)) car_mesh(&BODIES[B_WEDGE], FX(3), o_pos - FX(2), 0, o_paint, 1);
   wtk3_end();
 
   /* The floodlights: a pole, a hot spot, and the flare it makes on a dirty windscreen. */
@@ -200,24 +211,33 @@ void strip_draw(void) {
   cockpit_look look = {1, PLAYER_PAINT, s_rpm, (int)(((i64)s_v * 2237 / 1000) >> 16), FX_INT(s_boost), s_gear, 0, s_rpm > 6500, 1};
   cockpit(&look);
 
+  if (o_et && s_phase != S_SLIP) {
+    /* Who is where: the two of you along a line the length of the strip. */
+    wtk_rect(60, 36, 201, 1, wtk_shade(R_CHROME, 12));
+    wtk_vline(260, 33, 39, WHITE);
+    int him = FX_INT(o_pos) * 200 / QUARTER, you = FX_INT(s_pos) * 200 / QUARTER;
+    wtk_rect(60 + (him > 200 ? 200 : him) - 2, 37, 5, 3, wtk_shade(o_paint, 24));
+    wtk_rect(60 + (you > 200 ? 200 : you) - 2, 32, 5, 3, wtk_shade(PLAYER_PAINT, 26));
+  }
   const char *say = s_phase == S_STAGE ? "ENTER TO STAGE" : s_phase == S_TREE && s_gear == 0 ? "HOLD W FOR BOOST - E ON GREEN" : s_red ? "RED LIGHT" : "";
-  wtk_text_sh(160 - wtk_strlen(say) * 4, 36, say, s_red ? wtk_shade(R_RED, 28) : WHITE, BLACK);
+  wtk_text_sh(160 - wtk_strlen(say) * 4, 48, say, s_red ? wtk_shade(R_RED, 28) : WHITE, BLACK);
 
   if (s_phase == S_SLIP) {
     /* The timeslip. */
-    wtk_rect(93, 31, 136, 112, wtk_shade(R_RUBBER, 2));
-    wtk_vgrad(90, 28, 136, 112, R_CREAM, 27, 23);
-    logo(110, 34, wtk_shade(R_RUBBER, 3), wtk_shade(R_RED, 24));
-    wtk_hline(96, 219, 60, wtk_shade(R_BROWN, 12));
+    wtk_rect(93, 27, 136, 124, wtk_shade(R_RUBBER, 2));
+    wtk_vgrad(90, 24, 136, 124, R_CREAM, 27, 23);
+    logo(110, 30, wtk_shade(R_RUBBER, 3), wtk_shade(R_RED, 24));
+    wtk_hline(96, 219, 56, wtk_shade(R_BROWN, 12));
     col ink = wtk_shade(R_RUBBER, 4);
-    wtk_text(98, 66, "LEFT LANE", ink);
-    wtk_text(98, 80, "R/T", ink);
-    if (s_red) wtk_text(162, 80, "RED", wtk_shade(R_RED, 22)); else ms(162, 80, s_rt, ink);
-    wtk_text(98, 91, "60 FT", ink); ms(162, 91, s_sixty, ink);
-    wtk_text(98, 102, "1/4 ET", ink); ms(162, 102, s_et, ink);
-    wtk_text(98, 113, "MPH", ink); wtk_num(162, 113, s_mph, ink);
-    int tx = wtk_text(98, 126, "PURSE $", wtk_shade(R_FOREST, 14));
-    wtk_num(tx, 126, purse, wtk_shade(R_FOREST, 14));
-    if (purse > 25) wtk_text(162, 126, "BEST!", wtk_shade(R_RED, 22));
+    wtk_text(98, 62, "LEFT LANE", ink);
+    wtk_text(98, 76, "R/T", ink);
+    if (s_red) wtk_text(162, 76, "RED", wtk_shade(R_RED, 22)); else ms(162, 76, s_rt, ink);
+    wtk_text(98, 86, "60 FT", ink); ms(162, 86, s_sixty, ink);
+    wtk_text(98, 96, "1/4 ET", ink); ms(162, 96, s_et, ink);
+    wtk_text(98, 106, "MPH", ink); wtk_num(162, 106, s_mph, ink);
+    if (o_et) {
+      wtk_text(98, 122, "HIM", ink); ms(162, 122, o_rt + o_et, ink);
+      wtk_text(98, 135, o_won ? "YOU WIN." : s_red ? "RED LIGHT. YOU LOSE." : s_et ? "YOU LOSE." : "HE IS GONE. YOU LOSE.", o_won ? wtk_shade(R_FOREST, 14) : wtk_shade(R_RED, 20));
+    }
   }
 }

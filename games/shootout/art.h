@@ -1,5 +1,7 @@
 /* The game's painted pictures, as palette indices. Made by tools/paint.py; do not edit by hand.
    The pictures are run-length: width, height, then (count, colour) pairs. 0xFFFF is clear. */
+#ifndef SHOOTOUT_ART_H
+#define SHOOTOUT_ART_H
 #define ART_TACH_X 95
 #define ART_TACH_Y 170
 #define ART_DIAL_R 21
@@ -19843,3 +19845,4 @@ static const unsigned short ART_WHEEL_NIGHT[] = {
   65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,
   65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,65535,
 };
+#endif
