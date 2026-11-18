@@ -447,6 +447,47 @@ fn the_season_ends_and_so_does_the_money() {
 }
 
 #[test]
+fn the_paper_has_work_for_when_the_money_is_gone() {
+    let mut s = Screen::new();
+    // A month this time, so there are days enough to work back to a car.
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&MANIFEST.replace(r#""days": 3"#, r#""days": 30"#))));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    // Broke, and the car sold to the dealer: the help-wanted page is the way back.
+    click(&mut g, 220, 10);
+    click(&mut g, 280, 36);
+    g.state.cash = 0;
+    g.tick(KEY_B, 0, 0);
+    click(&mut g, 140, 10);
+    assert_eq!(g.scene, Scene::Paper(0), "with a season of work left, it is not over");
+    click(&mut g, 150, 40);
+    assert_eq!(g.scene, Scene::Paper(2), "the jobs tab");
+    g.draw(&mut s);
+    let jobs = g.jobs();
+    assert_eq!(jobs.len(), 3, "the pack has none of its own, so the ordinary three");
+    let (hours, cash) = (g.state.hours, g.state.cash);
+    click(&mut g, 100, 60);
+    assert_eq!((g.state.cash, g.state.hours), (cash + jobs[0].pay, hours + jobs[0].hours), "it pays, and it takes the hours");
+    assert_eq!(g.scene, Scene::Paper(2));
+    click(&mut g, 280, 40);
+    assert_eq!(g.scene, Scene::Paper(1), "the parts tab is where it was");
+    click(&mut g, 220, 40);
+    assert_eq!(g.scene, Scene::Paper(0), "and so is the cars tab");
+}
+
+#[test]
+fn a_pack_can_list_its_own_jobs() {
+    let m = MANIFEST.replace(r#""bets": [10, 25],"#, r#""bets": [10, 25], "jobs": [ { "name": "Wash cars", "hours": 2, "pay": 40 } ],"#);
+    engine::host::store(b"");
+    let g = Game::new(Pack::parse(&files(&m)));
+    assert_eq!(g.jobs().iter().map(|j| (j.name.as_str(), j.hours, j.pay)).collect::<Vec<_>>(), vec![("Wash cars", 2, 40)]);
+    let bad = MANIFEST.replace(r#""bets": [10, 25],"#, r#""bets": [10, 25], "jobs": [ { "name": "Nothing", "hours": 0, "pay": 40 } ],"#);
+    assert!(Pack::parse(&files(&bad)).is_err(), "a job has to take some time");
+}
+
+#[test]
 fn a_game_is_kept() {
     let mut g = game();
     g.state.cash = 4321;
