@@ -5,19 +5,55 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Road to the Shootout</title>
 <style>
-  html, body { margin: 0; height: 100%; background: #000; }
-  body { display: grid; place-items: center; }
+  html, body { margin: 0; height: 100%; background: #000; color: #e8e4d8; font: 15px ui-monospace, Menlo, Consolas, monospace; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: center; }
   /* 320x240 on a 4:3 screen: square pixels, scaled up without smoothing. */
   canvas { width: min(100vw, 133.33vh); aspect-ratio: 4 / 3; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; }
+  /* Buttons for a screen with no keyboard. They press the same keys. */
+  #pad { display: none; width: 100%; max-width: 560px; padding: 10px; box-sizing: border-box; gap: 10px; grid-template-columns: 1fr 1fr 1fr; align-items: center; }
+  #pad .group { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+  #pad button { height: 58px; border: 1px solid #50556a; border-radius: 10px; background: #1c2030; color: inherit; font: inherit; font-size: 17px;
+    touch-action: none; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; }
+  #pad button.down { background: #e6b84a; color: #1a1408; }
+  #pad .wide { grid-column: 1 / 3; }
+  @media (pointer: coarse) {
+    body { justify-content: flex-start; }
+    canvas { width: min(100vw, 133.33 * (100vh - 230px) / 100); cursor: auto; }
+    #pad { display: grid; }
+  }
 </style>
 </head>
 <body>
 <canvas id="screen" aria-label="Road to the Shootout"></canvas>
+<div id="pad" aria-label="Controls">
+  <div class="group">
+    <button data-key="ArrowLeft" aria-label="Left">&#9664;</button>
+    <button data-key="ArrowRight" aria-label="Right">&#9654;</button>
+    <button data-key="Escape" class="wide">Back</button>
+  </div>
+  <div class="group">
+    <button data-key="KeyQ" aria-label="Shift down">Q &#9660;</button>
+    <button data-key="KeyE" aria-label="Shift up">E &#9650;</button>
+    <button data-key="Enter" class="wide">Enter</button>
+  </div>
+  <div class="group">
+    <button data-key="ArrowDown">Brake</button>
+    <button data-key="ArrowUp">Gas</button>
+  </div>
+</div>
 <script type="module">
   import { boot } from "./wtk.js";
   // The engine, playing a pack. Another pack: engine.html?pack=mine.pack
   const pack = new URLSearchParams(location.search).get("pack") ?? "default.pack";
   boot(document.getElementById("screen"), "engine.wasm", undefined, pack);
+  for (const b of document.querySelectorAll("#pad button")) {
+    const send = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: b.dataset.key }));
+    const up = () => { if (b.classList.contains("down")) { b.classList.remove("down"); send("keyup"); } };
+    b.addEventListener("pointerdown", (e) => { e.preventDefault(); b.setPointerCapture(e.pointerId); b.classList.add("down"); send("keydown"); });
+    b.addEventListener("pointerup", up);
+    b.addEventListener("pointercancel", up);
+    b.addEventListener("contextmenu", (e) => e.preventDefault());
+  }
 </script>
 </body>
 </html>

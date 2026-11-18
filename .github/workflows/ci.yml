@@ -16,9 +16,11 @@ jobs:
       - run: python3 tools/bundle.py
       - run: rustup target add wasm32-unknown-unknown && pip install pillow numpy
       - run: make test-engine
+      - run: python3 tools/bundle.py engine
       - uses: actions/upload-artifact@v4
         with:
           name: shootout
           path: |
             web/
             build/shootout.html
+            build/engine.html
