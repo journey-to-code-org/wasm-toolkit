@@ -163,6 +163,11 @@ extern int wtk_mx, wtk_my, wtk_moved;
 /** A tone from the PC speaker: a square wave of `hz` for `ms`. 0 hz is silence. Supplied by the host. */
 void wtk_tone(int hz, int ms);
 
+/** Keeping a game between visits. The host stores `n` bytes, and gives them back: wtk_fetch
+    copies up to `max` bytes into `buf` and returns how many there were (0 for none). */
+void wtk_store(const u8 *buf, int n);
+int wtk_fetch(u8 *buf, int max);
+
 /* What the game supplies. */
 void game_init(u32 seed);
 void game_tick(void);

@@ -11,7 +11,7 @@ const check = (ok, what) => { if (!ok) { console.log("FAIL", what); fails++; } }
 
 async function play(shots) {
   const tones = [];
-  const { instance } = await WebAssembly.instantiate(readFileSync(path), { env: { wtk_tone: (hz, ms) => tones.push(hz) } });
+  const { instance } = await WebAssembly.instantiate(readFileSync(path), { env: { wtk_tone: (hz, ms) => tones.push(hz), wtk_store: () => {}, wtk_fetch: () => 0 } });
   const x = instance.exports;
   const screen = () => new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H).slice();
   const pal = () => new Uint32Array(x.memory.buffer, x.wtk_palette(), 1024);
@@ -66,8 +66,20 @@ async function play(shots) {
   const fitted = screen();
   run(1, B); run(2, 0);
 
+  // The yard, the spare parts, and a trip for gas.
+  click(50, 50);
+  const yard = screen();
+  shot("08a-yard");
+  run(1, B); run(2, 0);
+  click(50, 90);
+  const spares = screen();
+  shot("08b-spares");
+  run(1, B); run(2, 0);
+  click(300, 166);
+  const gassed = screen();
+  shot("08c-gas");
   // Out of the door to the lot. The parts page of the paper first, to see it.
-  click(30, 100);
+  click(30, 108);
   shot("09-parts");
   run(1, B); run(2, 0);
   click(270, 60);
@@ -103,7 +115,7 @@ async function play(shots) {
   run(400, UP | LEFT);
   const later = screen();
   run(1, B); run(2, 0);
-  return { title, paper, bought, garage, lamps, hood, stripped, refused, fitted, lot, betting, staged, green, running, slip, after, parked, moving, later, tones, colours };
+  return { title, paper, bought, garage, lamps, hood, stripped, refused, fitted, yard, spares, gassed, lot, betting, staged, green, running, slip, after, parked, moving, later, tones, colours };
 }
 
 const one = await play(flag === "--shots" ? dir : null);
@@ -121,6 +133,8 @@ check(differ(one.lamps, one.hood) > 20000, "picking the hood goes under it");
 check(differ(one.hood, one.stripped) > 300, "four bolts out and the intake lifts off");
 check(differ(one.refused, one.lamps) < 9000, "with a part off, the car will not leave the garage");
 check(differ(one.stripped, one.fitted) > 300, "the part goes back on");
+check(differ(one.fitted, one.yard) > 20000 && differ(one.yard, one.spares) > 20000, "the window shows the yard, and the tool board the spares");
+check(differ(one.gassed, one.lamps) > 30 && differ(one.gassed, one.lamps) < 9000, "the gas can fills the tank and takes the money");
 check(differ(one.refused, one.lot) > 20000, "bolted back together, the door goes out to the lot");
 check(differ(one.lot, one.betting) > 200 && differ(one.lot, one.betting) < 20000, "racing him means naming a bet");
 check(differ(one.betting, one.staged) > 20000, "and then the strip");

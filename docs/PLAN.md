@@ -48,9 +48,8 @@ one hour for each thing you do and twelve hours to the day, a season that ends o
 broke with no car and too little to buy one, rivals in rising order with a King last, bets of
 kicks, $10, $25, $50, $100 or pink slips that the other driver may refuse, and kicks not counting.
 
-Where it differs for now: one car at a time (theirs was sixteen), a car won for pink slips is sold
-for cash on the spot, there are nine rivals not twenty-two, no gas, no road race, no name on a
-licence, and no saving.
+Where it still differs, thing by thing, is in [`SPEC.md`](SPEC.md): every feature of the three games,
+where it is written down, and whether ours has it.
 
 ## Done
 
@@ -77,6 +76,16 @@ licence, and no saving.
 
 ## Next, in order
 
+Work down `SPEC.md`. The order, by how much of the game each one opens up:
+
+1. Street Rod's parts model: engines, transmissions, tyres, by make and grade, with wear; changing
+   tyres and the transmission; tuning by ear; blowing an engine.
+2. Street Rod's looks: paint, stickers, bumpers, the roof, car info, more than one model of car.
+3. The road race, with the police, fines and jail; the cruise to the lot, driven.
+4. Test Drive's road: stages, a cliff and a drop, the radar detector, the gas stop, the mirror.
+5. Vette!'s city: a drawn town with places, courses across it, an opponent, damage and repairs,
+   the other views and the map.
+
 ### 0. Paint the rest
 
 The cockpit is painted; these are still drawn from boxes at run time and look it.
@@ -97,7 +106,9 @@ The cockpit is painted; these are still drawn from boxes at run time and look it
 - [ ] Tuning by hand: timing and mixture, with the engine telling you when it is wrong.
 - [ ] Paint, stickers, chopping the top.
 - [ ] Fuel, and a pump.
-- [ ] The save, a garage of several cars, and keeping a car you win.
+- [x] The save, a yard of sixteen cars, and keeping a car you win.
+- [x] Gas: a tank, what a trip and a race use, and filling up.
+- [x] Selling spare parts.
 
 The rules for all of this exist already, in TypeScript, in open.games (`pinkslipscars`,
 `pinkslipsgarage`): the cars, the parts, oil, mixture, wear, tools, Rix Racing, the scrappers.
