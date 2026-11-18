@@ -37,6 +37,30 @@ pub struct Owned {
     pub paint: Option<String>,
     pub cond: i32,
     pub fitted: BTreeMap<String, String>,
+    /// Under the hood: slots with nothing on them (the stock part is on the floor), and which of
+    /// each slot's four bolts are tight, a bit apiece. A slot not listed is done up.
+    #[serde(default)]
+    pub off: Vec<String>,
+    #[serde(default)]
+    pub bolts: BTreeMap<String, u8>,
+}
+
+impl Owned {
+    pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new() }
+    }
+
+    fn tight(&self, slot: &str) -> u8 {
+        self.bolts.get(slot).copied().unwrap_or(15)
+    }
+}
+
+/// Something lying on the floor under the hood, or in your hand: a slot's stock part, or a part
+/// from the pack.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Loose {
+    Stock(String),
+    Part(String),
 }
 
 /// Everything that is kept when the game is saved.
@@ -75,6 +99,7 @@ pub enum Scene {
     Paper(usize),
     /// The bench: what is on the car and what is on the shelf.
     Bench,
+    Hood,
     Yard,
     Bets,
     Race,
@@ -97,6 +122,7 @@ pub struct Game {
     bet: usize,
     pub race: Option<Race>,
     selling: bool,
+    pub carrying: Option<Loose>,
     saved: bool,
     rng: u32,
     last_under: Option<String>,
@@ -128,7 +154,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, selling: false, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -149,7 +175,7 @@ impl Game {
     /// A new game, as the pack starts it.
     fn fresh(&self) -> State {
         let m = &self.pack.manifest;
-        let cars: Vec<Owned> = m.start.car.iter().filter_map(|id| m.cars.get(id).map(|c| Owned { car: id.clone(), paint: c.paint.clone(), cond: 70, fitted: BTreeMap::new() })).collect();
+        let cars: Vec<Owned> = m.start.car.iter().filter_map(|id| m.cars.get(id).map(|c| Owned::new(id, c.paint.clone(), 70))).collect();
         State { pack: m.name.clone(), place: m.start.place.clone(), cash: m.start.cash, cur: (!cars.is_empty()).then_some(0), cars, ..State::default() }
     }
 
@@ -262,6 +288,22 @@ impl Game {
         if m.bets.is_empty() { BETS.to_vec() } else { m.bets.clone() }
     }
 
+    /// Why the car in the bay will not start, if it will not: something under the hood is off, or
+    /// not bolted down.
+    pub fn wont_run(&self) -> Option<String> {
+        let (o, car) = self.owned().zip(self.car())?;
+        let hood = car.hood.as_ref()?;
+        hood.slots.keys().find_map(|slot| {
+            if o.off.contains(slot) {
+                Some(format!("The {} is off. It will not run.", slot.to_lowercase()))
+            } else if o.tight(slot) != 15 {
+                Some(format!("The {} is not bolted down.", slot.to_lowercase()))
+            } else {
+                None
+            }
+        })
+    }
+
     // ---- Time and endings ----
 
     /// Everything takes time. When the days run out, or there is no way to get a car, it is over.
@@ -348,10 +390,20 @@ impl Game {
                     self.scene = Scene::Bench;
                     self.selling = false;
                 }
+                "hood" => {
+                    if self.car().is_some_and(|c| c.hood.is_some()) {
+                        self.scene = Scene::Hood;
+                        self.carrying = None;
+                    } else {
+                        self.say("Nothing to work on under there.");
+                    }
+                }
                 "yard" => self.scene = Scene::Yard,
                 "race" => {
                     if self.state.cur.is_none() {
                         self.no("You have nothing to race.");
+                    } else if let Some(why) = self.wont_run() {
+                        self.no(&why);
                     } else {
                         self.scene = Scene::Bets;
                     }
@@ -367,6 +419,8 @@ impl Game {
                 "solo" => {
                     if self.state.cur.is_none() {
                         self.no("You have nothing to run.");
+                    } else if let Some(why) = self.wont_run() {
+                        self.no(&why);
                     } else {
                         self.start_race(0);
                     }
@@ -425,7 +479,7 @@ impl Game {
                 return self.save();
             }
             if pinks {
-                let theirs = Owned { car: r.car.clone(), paint: r.paint.clone(), cond: (62 + self.who as i32).min(100), fitted: BTreeMap::new() };
+                let theirs = Owned::new(&r.car, r.paint.clone(), (62 + self.who as i32).min(100));
                 if self.state.cars.len() < MOST_CARS {
                     self.state.cars.push(theirs);
                     self.say("You won his car. It is in your yard.");
@@ -561,6 +615,16 @@ impl Game {
                     self.bench_pick();
                 }
             }
+            Scene::Hood => {
+                if back {
+                    self.carrying = None;
+                    self.scene = Scene::Place;
+                    self.note = None;
+                    self.save();
+                } else if pick {
+                    self.hood_pick();
+                }
+            }
             Scene::Yard => {
                 if back {
                     self.scene = Scene::Place;
@@ -595,7 +659,7 @@ impl Game {
         }
         self.state.cash -= offer.price;
         let paint = (!offer.paint.is_empty()).then_some(offer.paint);
-        self.state.cars.push(Owned { car: offer.car, paint, cond: offer.cond, fitted: BTreeMap::new() });
+        self.state.cars.push(Owned::new(&offer.car, paint, offer.cond));
         let day = self.day();
         if self.state.sold.0 != day {
             self.state.sold = (day, Vec::new());
@@ -647,6 +711,12 @@ impl Game {
             }
             let Some(cur) = self.state.cur else { return self.no("No car in the bay to put it on.") };
             let slot = self.part(&id).map(|p| p.slot.clone()).unwrap_or_default();
+            if !self.part(&id).is_some_and(|p| p.goes_on(&self.state.cars[cur].car)) {
+                return self.no("That does not fit this car.");
+            }
+            if self.under_hood(&slot) {
+                return self.say("Pop the hood to bolt that one on.");
+            }
             self.state.spares.remove(i);
             if let Some(old) = self.state.cars[cur].fitted.insert(slot, id) {
                 self.state.spares.push(old);
@@ -656,6 +726,9 @@ impl Game {
             self.spend(1);
         } else if let Some(i) = self.row(8, 156, 34, 10, slots.len()) {
             let Some(cur) = self.state.cur else { return };
+            if self.under_hood(&slots[i]) {
+                return self.say("That one is under the hood.");
+            }
             if let Some(old) = self.state.cars[cur].fitted.remove(&slots[i]) {
                 self.state.spares.push(old);
                 self.say("Off. The stock one is back on.");
@@ -664,6 +737,116 @@ impl Game {
             } else {
                 self.say("That is the stock one.");
             }
+        }
+    }
+
+    /// Whether this slot of the car in the bay is worked on under its hood.
+    fn under_hood(&self, slot: &str) -> bool {
+        self.car().and_then(|c| c.hood.as_ref()).is_some_and(|h| h.slots.contains_key(slot))
+    }
+
+    fn hood_slot_under(&self) -> Option<(String, [i32; 4])> {
+        let hood = self.car()?.hood.as_ref()?;
+        hood.slots.iter().find(|(_, r)| self.py < 176 && self.px >= r[0] && self.px < r[0] + r[2] && self.py >= r[1] && self.py < r[1] + r[3]).map(|(s, r)| (s.clone(), *r))
+    }
+
+    /// What is on the floor under the hood: the stock part of every slot it is not on, and the
+    /// spares that go on this car there. The first eight are in reach.
+    pub fn floor(&self) -> Vec<Loose> {
+        let Some((o, car)) = self.owned().zip(self.car()) else { return Vec::new() };
+        let Some(hood) = &car.hood else { return Vec::new() };
+        let held = |l: &Loose| self.carrying.as_ref() == Some(l);
+        let stock = hood.slots.keys().filter(|s| o.off.contains(*s) || o.fitted.contains_key(*s)).map(|s| Loose::Stock(s.clone()));
+        let spares = self.state.spares.iter().filter(|id| self.part(id).is_some_and(|p| hood.slots.contains_key(&p.slot) && p.goes_on(&o.car))).map(|id| Loose::Part(id.clone()));
+        stock.chain(spares).filter(|l| !held(l)).take(8).collect()
+    }
+
+    fn loose_slot(&self, l: &Loose) -> String {
+        match l {
+            Loose::Stock(slot) => slot.clone(),
+            Loose::Part(id) => self.part(id).map(|p| p.slot.clone()).unwrap_or_default(),
+        }
+    }
+
+    fn loose_name(&self, l: &Loose) -> String {
+        match l {
+            Loose::Stock(slot) => format!("Stock {}", slot.to_lowercase()),
+            Loose::Part(id) => self.part(id).map(|p| p.name.clone()).unwrap_or_default(),
+        }
+    }
+
+    fn chip_at(n: usize) -> (i32, i32) {
+        (4 + (n as i32 % 4) * 79, 178 + (n as i32 / 4) * 11)
+    }
+
+    fn bolt_at(r: [i32; 4], b: usize) -> (i32, i32) {
+        (if b == 0 || b == 3 { r[0] + 5 } else { r[0] + r[2] - 6 }, if b < 2 { r[1] + 5 } else { r[1] + r[3] - 6 })
+    }
+
+    /// Under the hood. A part is held by four bolts: undo them, lift it off, and it is on the
+    /// floor. Pick a part up off the floor, set it on the empty place it goes, and do the bolts up.
+    fn hood_pick(&mut self) {
+        let Some(cur) = self.state.cur else { return };
+        if self.py >= 176 {
+            // The floor: put down what you are holding, or pick something up.
+            if self.carrying.take().is_some() {
+                return self.say("Down it goes.");
+            }
+            let under = self.floor().into_iter().enumerate().find(|(n, _)| {
+                let (x, y) = Self::chip_at(*n);
+                self.px >= x && self.px < x + 76 && self.py >= y && self.py < y + 10
+            });
+            if let Some((_, l)) = under {
+                self.carrying = Some(l);
+                self.say("Now set it where it goes.");
+                tone(520, 40);
+            }
+            return;
+        }
+        let Some((slot, rect)) = self.hood_slot_under() else { return };
+        let empty = self.state.cars[cur].off.contains(&slot);
+        match (empty, self.carrying.clone()) {
+            (false, None) => {
+                let tight = self.state.cars[cur].tight(&slot);
+                for b in 0..4 {
+                    let (x, y) = Self::bolt_at(rect, b);
+                    if (self.px - x).abs() <= 5 && (self.py - y).abs() <= 5 {
+                        let now = tight ^ (1 << b);
+                        self.state.cars[cur].bolts.insert(slot, now);
+                        tone(if now & (1 << b) != 0 { 700 } else { 400 }, 50);
+                        self.note = None;
+                        return;
+                    }
+                }
+                if tight != 0 {
+                    return self.no("It is bolted on. Undo the bolts first.");
+                }
+                let o = &mut self.state.cars[cur];
+                if let Some(part) = o.fitted.remove(&slot) {
+                    self.state.spares.push(part);
+                }
+                self.state.cars[cur].off.push(slot);
+                self.say("It is off, and on the floor.");
+                tone(260, 90);
+                self.spend(1);
+            }
+            (true, Some(l)) => {
+                if self.loose_slot(&l) != slot {
+                    return self.no("That does not go there.");
+                }
+                let o = &mut self.state.cars[cur];
+                o.off.retain(|s| *s != slot);
+                o.bolts.insert(slot.clone(), 0);
+                if let Loose::Part(id) = l {
+                    self.state.spares.retain(|p| *p != id);
+                    self.state.cars[cur].fitted.insert(slot, id);
+                }
+                self.carrying = None;
+                self.say("It is on. Now do up the bolts.");
+                tone(300, 90);
+            }
+            (true, None) => self.say("Nothing on it. Pick a part up off the floor."),
+            (false, Some(_)) => self.say("There is one on there already."),
         }
     }
 
@@ -778,6 +961,7 @@ impl Game {
             Scene::Place | Scene::Bets => self.draw_place(s),
             Scene::Paper(page) => self.draw_paper(s, page),
             Scene::Bench => self.draw_bench(s),
+            Scene::Hood => self.draw_hood(s),
             Scene::Yard => self.draw_yard(s),
             Scene::Race => return self.draw_race(s),
             Scene::Over(kind) => return self.draw_over(s, kind),
@@ -950,6 +1134,84 @@ impl Game {
         let label = if self.selling { "SELLING: PICK ONE" } else { "SELL SPARE PARTS" };
         s.text(238 - label.len() as i32 * 4, 184, label, WHITE);
         self.panel(s, "The bench", self.note.as_deref().or(about.as_deref()).unwrap_or("Pick a part. A change takes an hour."), "Escape goes back.");
+    }
+
+    fn chip(&self, s: &mut Screen, x: i32, y: i32, l: &Loose) {
+        let better = matches!(l, Loose::Part(_));
+        s.rect(x, y, 76, 10, shade(ramp(if better { "GOLD" } else { "GREY" }), if better { 20 } else { 12 }));
+        s.frame(x, y, 76, 10, shade(ramp("RUBBER"), 2));
+        let name = self.loose_name(l).to_uppercase().replace("STOCK ", "STK ");
+        s.text(x + 2, y + 1, &name.chars().take(9).collect::<String>(), if better { shade(ramp("RUBBER"), 2) } else { WHITE });
+    }
+
+    fn draw_hood(&self, s: &mut Screen) {
+        let Some((o, car)) = self.owned().zip(self.car()) else { return };
+        let Some(hood) = &car.hood else { return };
+        s.clear(BLACK);
+        if let Some(pic) = self.pack.pictures.get(&hood.picture) {
+            s.picture(pic, 0, 0);
+        }
+        let over = self.hood_slot_under().map(|(slot, _)| slot);
+        let (dark, chrome, gold) = (ramp("RUBBER"), ramp("CHROME"), ramp("GOLD"));
+        for (slot, &r) in &hood.slots {
+            let [x, y, w, h] = r;
+            let (empty, tight) = (o.off.contains(slot), o.tight(slot));
+            if empty {
+                // Off the car: a dark hole where it was.
+                s.dither(x, y, w, h, shade(dark, 1), shade(ramp("NAVY"), 4));
+                s.frame(x, y, w, h, shade(chrome, 12));
+            } else if o.fitted.contains_key(slot) {
+                // The better part is on: a tag on it says so.
+                s.rect(x + w / 2 - 9, y + h / 2 - 5, 19, 10, shade(gold, 24));
+                s.frame(x + w / 2 - 9, y + h / 2 - 5, 19, 10, shade(dark, 2));
+                s.text(x + w / 2 - 7, y + h / 2 - 4, "+1", shade(dark, 2));
+            }
+            if over.as_ref() == Some(slot) {
+                s.frame(x - 1, y - 1, w + 2, h + 2, shade(gold, 28));
+                s.frame(x - 2, y - 2, w + 4, h + 4, shade(dark, 1));
+            }
+            for b in 0..4 {
+                let (bx, by) = Self::bolt_at(r, b);
+                if !empty && tight & (1 << b) != 0 {
+                    s.disc(bx, by, 3, shade(dark, 2));
+                    s.disc(bx, by, 2, shade(chrome, 27));
+                    s.pset(bx, by, shade(chrome, 10));
+                } else {
+                    s.disc(bx, by, 2, shade(dark, 1));
+                    s.pset(bx, by, shade(chrome, if empty { 9 } else { 22 }));
+                }
+            }
+        }
+        // The floor in front of the car, and what is lying on it.
+        s.vgrad(0, 176, 320, 24, ramp("CONCRETE"), 18, 22);
+        s.rect(0, 176, 320, 1, shade(dark, 2));
+        let floor = self.floor();
+        let mut chip_over = None;
+        for (n, l) in floor.iter().enumerate() {
+            let (x, y) = Self::chip_at(n);
+            self.chip(s, x, y, l);
+            if self.px >= x && self.px < x + 76 && self.py >= y && self.py < y + 10 {
+                chip_over = Some(l);
+            }
+        }
+        if floor.is_empty() && self.carrying.is_none() {
+            s.text(8, 184, "NOTHING ON THE FLOOR.", shade(ramp("CONCRETE"), 8));
+        }
+        const TIGHT: [&str; 5] = ["All four bolts are out. Pick it to lift", "One bolt tight.", "Two bolts tight.", "Three bolts tight.", "Bolted down. Pick a bolt to undo it."];
+        let (title, line, foot) = match (&over, chip_over, &self.carrying) {
+            (Some(slot), _, _) if o.off.contains(slot) => (slot.clone(), "Nothing on it.".to_string(), "Enter to pick. Escape shuts the hood."),
+            (Some(slot), _, _) => {
+                let name = o.fitted.get(slot).and_then(|id| self.part(id)).map(|p| p.name.clone()).unwrap_or_else(|| format!("Stock {}", slot.to_lowercase()));
+                (slot.clone(), name, TIGHT[o.tight(slot).count_ones() as usize])
+            }
+            (None, Some(l), _) => (self.loose_name(l), "Pick it up.".to_string(), "Enter to pick. Escape shuts the hood."),
+            (None, None, Some(l)) => ("Under the hood".to_string(), self.loose_name(l), "Set it on the empty place it goes."),
+            _ => ("Under the hood".to_string(), "Point at a part.".to_string(), "Enter to pick. Escape shuts the hood."),
+        };
+        self.panel(s, &title, &line, self.note.as_deref().unwrap_or(foot));
+        if let Some(l) = &self.carrying {
+            self.chip(s, self.px + 6, self.py + 10, l);
+        }
     }
 
     fn draw_yard(&self, s: &mut Screen) {

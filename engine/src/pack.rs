@@ -111,6 +111,15 @@ pub struct Part {
     pub torque: i32,
     #[serde(default)]
     pub boost: Option<Boost>,
+    /// The cars it goes on. Left out, it goes on any.
+    #[serde(default)]
+    pub fits: Vec<String>,
+}
+
+impl Part {
+    pub fn goes_on(&self, car: &str) -> bool {
+        self.fits.is_empty() || self.fits.iter().any(|c| c == car)
+    }
 }
 
 /// Someone to race. They turn up in the order the pack lists them.
@@ -135,6 +144,14 @@ pub struct Rival {
     pub king: bool,
 }
 
+/// Under the hood: a picture of the engine bay, and where on it each slot's part sits (x, y,
+/// width, height). A car with one has its parts taken off and put on there, bolt by bolt.
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct Hood {
+    pub picture: String,
+    pub slots: BTreeMap<String, [i32; 4]>,
+}
+
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Car {
     pub name: String,
@@ -154,6 +171,8 @@ pub struct Car {
     pub price: Option<i32>,
     #[serde(default)]
     pub drive: Drive,
+    #[serde(default)]
+    pub hood: Option<Hood>,
 }
 
 /// Something in a place that can be picked: where it is, what it is called, and what picking it does.
@@ -213,7 +232,7 @@ pub struct Manifest {
 }
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 9] = ["", "lamps", "paper", "parts", "yard", "calendar", "race", "next", "solo"];
+pub const ACTIONS: [&str; 10] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 
@@ -284,6 +303,11 @@ impl Pack {
         if m.parts.len() > MOST_PARTS {
             return Err(format!("the pack has {} parts; the paper has room for {MOST_PARTS}", m.parts.len()));
         }
+        for (id, part) in &m.parts {
+            if let Some(car) = part.fits.iter().find(|c| !m.cars.contains_key(*c)) {
+                return Err(format!("the part {id} fits the car {car}, which is not in the pack"));
+            }
+        }
         for p in &m.paints {
             colour("a car in the paper", &Some(p.clone()))?;
         }
@@ -309,6 +333,9 @@ impl Pack {
                 return Err(format!("the car {id} needs a torque curve, gears, a final drive and a weight"));
             }
             need(&format!("the car {id}"), &car.side)?;
+            if let Some(hood) = &car.hood {
+                need(&format!("under the hood of the car {id}"), &hood.picture)?;
+            }
             if let Some(l) = &car.side_lamps {
                 need(&format!("the car {id}"), l)?;
             }

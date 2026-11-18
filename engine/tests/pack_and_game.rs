@@ -1,11 +1,10 @@
 //! The engine, given packs made here and the default pack: reading them, saying what is wrong with
 //! a bad one, and playing a season with the keys.
 
-use engine::game::{Game, Owned, Scene, KEY_A, KEY_B, KEY_UP, KEY_X};
+use engine::game::{Game, Loose, Owned, Scene, KEY_A, KEY_B, KEY_UP, KEY_X};
 use engine::gfx::{ramp, shade, Picture, Screen, CLEAR};
 use engine::pack::{Boost, Manifest, Pack};
 use engine::race::{Controls, Phase, Race};
-use std::collections::BTreeMap;
 
 /// A pack file from named pieces, in the format `tools/pack.py` writes.
 fn pack(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
@@ -245,7 +244,7 @@ fn the_bench_bolts_parts_on_and_the_yard_swaps_cars() {
     g.tick(KEY_B, 0, 0);
 
     // The yard: another car, brought into the bay, and the first one sold with its turbo on it.
-    g.state.cars.push(Owned { car: "box".into(), paint: Some("GOLD".into()), cond: 80, fitted: BTreeMap::new() });
+    g.state.cars.push(Owned::new("box", Some("GOLD".into()), 80));
     click(&mut g, 220, 10);
     assert_eq!(g.scene, Scene::Yard);
     g.draw(&mut s);
@@ -255,6 +254,64 @@ fn the_bench_bolts_parts_on_and_the_yard_swaps_cars() {
     assert_eq!(worth, 350 * 6 / 10 + 150);
     click(&mut g, 280, 36);
     assert_eq!((g.state.cars.len(), g.state.cur, g.state.cash), (1, Some(0), cash + worth));
+}
+
+#[test]
+fn under_the_hood_parts_come_off_bolt_by_bolt() {
+    engine::host::store(b"");
+    let with_hood = MANIFEST
+        .replace("\"ground\": 2,", "\"ground\": 2, \"hood\": { \"picture\": \"shed.pic\", \"slots\": { \"Exhaust\": [100, 50, 40, 40] } },")
+        .replace("\"do\": \"say:Hello.\"", "\"do\": \"hood\"");
+    let mut g = Game::new(Pack::parse(&files(&with_hood)));
+    let mut s = Screen::new();
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    g.state.spares = vec!["pipe".into(), "puffer".into()];
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Hood);
+    g.draw(&mut s);
+    assert!(g.floor() == vec![Loose::Part("pipe".into())], "the turbo has no place under this hood, so it is not on the floor");
+
+    // It will not lift with a bolt in it.
+    click(&mut g, 120, 70);
+    assert_eq!(g.note.as_deref(), Some("It is bolted on. Undo the bolts first."));
+    let bolts = [(105, 55), (134, 55), (134, 84), (105, 84)];
+    for (i, (x, y)) in bolts.iter().enumerate() {
+        click(&mut g, *x, *y);
+        assert_eq!(g.owned().unwrap().bolts["Exhaust"].count_ones(), 3 - i as u32);
+    }
+    assert_eq!(g.wont_run().as_deref(), Some("The exhaust is not bolted down."));
+    click(&mut g, 120, 70);
+    assert_eq!((g.owned().unwrap().off.len(), g.state.hours), (1, 1), "lifting it off is an hour's work");
+    assert_eq!(g.wont_run().as_deref(), Some("The exhaust is off. It will not run."));
+    assert_eq!(g.floor(), vec![Loose::Stock("Exhaust".into()), Loose::Part("pipe".into())]);
+    g.draw(&mut s);
+
+    // The loud pipe off the floor, onto the empty place, and done up.
+    click(&mut g, 90, 182);
+    assert_eq!(g.carrying, Some(Loose::Part("pipe".into())));
+    g.draw(&mut s);
+    click(&mut g, 120, 70);
+    assert_eq!((g.carrying.clone(), g.owned().unwrap().fitted.get("Exhaust").map(|p| p.as_str())), (None, Some("pipe")));
+    assert_eq!(g.state.spares, vec!["puffer".to_string()]);
+    assert!(g.wont_run().is_some());
+    for (x, y) in bolts {
+        click(&mut g, x, y);
+    }
+    assert_eq!(g.wont_run(), None);
+    assert!((g.tune(g.owned().unwrap()).0 - 0.77).abs() < 1e-9);
+    assert_eq!(g.floor(), vec![Loose::Stock("Exhaust".into())], "the stock one stays on the floor");
+
+    // A loose bolt, and nobody is racing anybody. The bench will not do the hood's work either.
+    click(&mut g, 105, 55);
+    g.tick(KEY_B, 0, 0);
+    click(&mut g, 20, 10);
+    click(&mut g, 150, 10);
+    assert_eq!((g.scene, g.note.as_deref()), (Scene::Place, Some("The exhaust is not bolted down.")));
+    click(&mut g, 20, 10);
+    click(&mut g, 180, 10);
+    click(&mut g, 50, 36);
+    assert_eq!(g.note.as_deref(), Some("That one is under the hood."));
 }
 
 #[test]
@@ -289,7 +346,7 @@ fn bets_are_made_and_settled() {
 
     // With a car again, beating him for his car wins the game.
     g.tick(0, 0, 0);
-    g.state.cars.push(Owned { car: "box".into(), paint: None, cond: 100, fitted: BTreeMap::new() });
+    g.state.cars.push(Owned::new("box", None, 100));
     g.state.cur = Some(0);
     click(&mut g, 20, 10);
     click(&mut g, 150, 10);
