@@ -44,7 +44,15 @@
   import { boot } from "./wtk.js";
   // The engine, playing a pack. Another pack: engine.html?pack=mine.pack
   const pack = new URLSearchParams(location.search).get("pack") ?? "default.pack";
-  const game = await boot(document.getElementById("screen"), "engine.wasm", undefined, pack);
+  // Other players are met in a room the parlor keeps, beside where it serves this page; "?rooms="
+  // names another. "?name=" is what this player goes by; one is made up and kept otherwise.
+  const asked = new URLSearchParams(location.search);
+  let name = asked.get("name");
+  try { name ??= localStorage.getItem("wtk:name"); name ??= `Racer ${1000 + Math.floor(Math.random() * 9000)}`; localStorage.setItem("wtk:name", name); } catch { name ??= "Racer"; }
+  const rooms = new URL(asked.get("rooms") ?? "../meet/shootout", location.href);
+  rooms.protocol = rooms.protocol === "https:" || rooms.protocol === "wss:" ? "wss:" : "ws:";
+  const net = location.protocol === "file:" && !asked.get("rooms") ? null : { url: rooms.href, name };
+  const game = await boot(document.getElementById("screen"), "engine.wasm", undefined, pack, net);
   const buttons = [...document.querySelectorAll("#pad button")];
   for (const b of buttons) {
     const send = (type) => window.dispatchEvent(new KeyboardEvent(type, { code: b.dataset.key }));

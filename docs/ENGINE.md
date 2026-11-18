@@ -45,6 +45,11 @@ All five steps are in the engine. The engine plays a season out of a pack:
   Pull up beside somewhere, press Enter, and you are in it, an hour later.
 - **Gas**: every car has a tank. Cruising burns it, a pass down the strip burns half a gallon,
   and a dollar buys three gallons wherever the pack puts a pump. Run dry in town and you walk.
+- **The meet**: other people, to race. Whoever opens it is in a room with everyone else who
+  has; pick someone, dare them for kicks or money, and run it side by side from the seat. Each
+  engine runs its own car, so the throttle and shifts are as sharp as alone; the tree comes down
+  when both have staged, and the winner is worked out from the two timeslips. It needs a server
+  to hold the room: see [The meet](#the-meet).
 - **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
 
 Everything the C game did is now in the engine, except its 3D car models: other cars in town
@@ -190,6 +195,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `solo` | a pass down the strip alone |
   | `drive:<map>` | out onto that map, beside the block that leads back here |
   | `gas` | fill the tank, a dollar for three gallons |
+  | `online` | the meet: race other people |
 
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
   picture does not show the thing itself.
@@ -314,6 +320,30 @@ place. `drive:<map>` from a place starts you beside the block that leads to it.
 A pack that names a picture it does not hold, a place that is not there, or a ramp that does not
 exist is refused, and the screen says which.
 
+## The meet
+
+The engine opens no sockets itself. The page does (`web/wtk.js`), to the address it is given:
+by default `../meet/shootout` beside the page, which is where the parlor keeps its room, or
+whatever `engine.html?rooms=` names. `?name=` is what the player goes by. Opened from a file,
+or with no server there, the meet says nobody can be reached and the rest of the game goes on.
+
+The room is simple enough to keep anywhere. Everything is a line of JSON:
+
+| Who says it | What | Meaning |
+|---|---|---|
+| A page, first | `{"t":"hello","name":"Mikey"}` | Let me in |
+| The room | `{"t":"you","id":3,"members":[{"id":1,"name":"Ay"},...]}` | You are in, and who else is |
+| The room | `{"t":"join","id":4,"name":"Bee"}` and `{"t":"left","id":4}` | Someone came or went |
+| A page | anything else | Passed on with `"from": <id>` added, to the member `"to"` names, or to everyone else |
+
+What the engines say to each other through it: `here` (the car and paint they are in), `dare`
+(with a `stake`), `ok`, `no`, `never`, `staged`, `pos` (where they are on the strip, six times a
+second), `slip` (their timeslip) and `quit`. Nothing a page receives is trusted further than it
+must be: names are cut short, stakes must be ones the pack offers, and a car the pack does not
+have is drawn as a plain shape. The timeslip is taken at its word, so this is for racing friends:
+nothing stops a changed page from sending a time it did not run. Only kicks and money are raced
+for online, not cars.
+
 ## The file
 
 `WPK1`, a u32 count, then for each file: u16 name length, the name, u32 length, the bytes. All
@@ -329,3 +359,4 @@ clear.
 4. ~~Under the hood as a place where parts come off bolt by bolt. Rooms with their spots
    drawn and edited in the workshop, and parts and rivals edited there too.~~
 5. ~~The view from the seat, the town as a map, gas, and both edited in the workshop.~~
+6. ~~Racing other people on the strip.~~

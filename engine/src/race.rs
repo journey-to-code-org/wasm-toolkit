@@ -65,6 +65,9 @@ pub struct Race {
     pub rival_rt: i32,
     pub rival_pos: f64,
     pub won: bool,
+    /// The other lane is someone real, somewhere else: where they are and who won is told to the
+    /// race, not worked out by it.
+    pub net: bool,
 }
 
 impl Race {
@@ -75,7 +78,7 @@ impl Race {
             boost_kind: boost.or_else(|| drive.boost.clone()),
             drive: drive.clone(), gain,
             phase: Phase::Stage, gear: 0, rpm: IDLE, boost: 0.0, pos: 0.0, v: 0.0, launch: 0.0, shift: 0, clock: 0, tree: 0,
-            red: false, rt: 0, sixty: 0, et: 0, mph: 0, rival_et, rival_rt, rival_pos: 0.0, won: false,
+            red: false, rt: 0, sixty: 0, et: 0, mph: 0, rival_et, rival_rt, rival_pos: 0.0, won: false, net: false,
         }
     }
 
@@ -88,7 +91,7 @@ impl Race {
     }
 
     pub fn alone(&self) -> bool {
-        self.rival_et == 0
+        self.rival_et == 0 && !self.net
     }
 
     /// Which light of the tree is lit: 0 to 2 the ambers, 3 the green, -1 none yet.
@@ -134,7 +137,7 @@ impl Race {
             self.tree += 1;
         }
         let since_green = (self.tree - TREE_STEP * 3) as f64 * 1000.0 / HZ;
-        if !self.alone() && self.tree > TREE_STEP * 3 {
+        if !self.alone() && !self.net && self.tree > TREE_STEP * 3 {
             // He leaves on the green, a reaction late, and gathers speed all the way down.
             let t = since_green - self.rival_rt as f64;
             let f = (t / self.rival_et as f64).max(0.0);
@@ -213,7 +216,7 @@ impl Race {
             self.et = (now - if self.v > 0.0 { (self.pos - QUARTER) * 1000.0 / self.v } else { 0.0 }) as i32;
             self.mph = (self.v * 2.237) as i32;
             self.phase = Phase::Slip;
-            self.won = !self.alone() && !self.red && self.et < self.rival_rt + self.rival_et;
+            self.won = !self.alone() && !self.net && !self.red && self.et < self.rival_rt + self.rival_et;
         }
     }
 }

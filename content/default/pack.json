@@ -388,7 +388,7 @@
           "rect": [
             4,
             178,
-            60,
+            50,
             18
           ],
           "label": "Race whoever this is",
@@ -398,9 +398,9 @@
         },
         {
           "rect": [
-            66,
+            56,
             178,
-            60,
+            50,
             18
           ],
           "label": "Wave them on: see who else is here",
@@ -409,9 +409,9 @@
         },
         {
           "rect": [
-            128,
+            108,
             178,
-            60,
+            50,
             18
           ],
           "label": "A pass on your own",
@@ -421,9 +421,21 @@
         },
         {
           "rect": [
-            190,
+            160,
             178,
-            60,
+            50,
+            18
+          ],
+          "label": "The meet: race other people",
+          "do": "online",
+          "button": "Online",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            212,
+            178,
+            52,
             18
           ],
           "label": "Cruise the town",
@@ -433,9 +445,9 @@
         },
         {
           "rect": [
-            252,
+            266,
             178,
-            64,
+            50,
             18
           ],
           "label": "Straight back to the garage",

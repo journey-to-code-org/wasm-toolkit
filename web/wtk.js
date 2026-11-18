@@ -8,7 +8,9 @@ const KEYS = {
 
 // `pack` is a content pack, for an engine that plays one. The game and the pack are each an address
 // to fetch or the bytes themselves.
-export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, pack = null) {
+// `net` is where other players are met, for an engine that races them: { url, name }, the address
+// of a room's socket and what this player goes by. Without it the engine is told nobody can be reached.
+export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, pack = null, net = null) {
   const bytesOf = async (from) => (typeof from === "string" ? new Uint8Array(await (await fetch(from)).arrayBuffer()) : from);
   let audio = null, osc = null, gain = null, quietAt = 0;
   const speaker = (hz, ms) => {
@@ -49,7 +51,32 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
       return n;
     } catch { return 0; }
   };
-  const { instance } = await WebAssembly.instantiate(await bytesOf(url), { env: { wtk_tone: speaker, wtk_store: store, wtk_fetch: fetchSave } });
+  // The line to the other players. The engine asks for it and shuts it; what the room says is
+  // handed to the engine a message at a time. The engine is never called back from inside one of
+  // its own calls: answers wait for the call to return.
+  let line = null;
+  const later = (does) => setTimeout(does, 0);
+  const netClose = () => { const was = line; line = null; if (was) { try { was.close(); } catch { /* already gone */ } } };
+  const netOpen = () => {
+    netClose();
+    if (!net?.url) return void later(() => x.net_status(3));
+    let sock;
+    try { sock = new WebSocket(net.url); } catch { return void later(() => x.net_status(3)); }
+    line = sock;
+    sock.onopen = () => { if (line !== sock) return; sock.send(JSON.stringify({ t: "hello", name: net.name ?? "" })); x.net_status(2); };
+    sock.onmessage = (e) => {
+      if (line !== sock || typeof e.data !== "string") return;
+      const bytes = new TextEncoder().encode(e.data);
+      if (bytes.length > 4096) return;
+      const at = x.net_alloc(bytes.length); // first, since making room can move the memory
+      new Uint8Array(x.memory.buffer, at, bytes.length).set(bytes);
+      x.net_recv();
+    };
+    sock.onclose = sock.onerror = () => { if (line === sock) { line = null; x.net_status(3); } };
+  };
+  const netSend = (ptr, n) => { if (line?.readyState === 1) line.send(new TextDecoder().decode(new Uint8Array(x.memory.buffer, ptr, n))); };
+  const env = { wtk_tone: speaker, wtk_store: store, wtk_fetch: fetchSave, wtk_net_open: netOpen, wtk_net_close: netClose, wtk_net_send: netSend };
+  const { instance } = await WebAssembly.instantiate(await bytesOf(url), { env });
   x = instance.exports;
   canvas.width = W;
   canvas.height = H;
