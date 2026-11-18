@@ -7,6 +7,7 @@
 
 int screen;
 u32 ticks, rng;
+static int old_game; /* whether there is a saved game to go back to */
 
 void logo(int x, int y, col black, col red) {
   for (int j = 0; j < LOGO_H; j++)
@@ -41,7 +42,8 @@ static void title_draw(void) {
     wtk_text_big(40, 42, "SHOOTOUT", wtk_shade(R_GOLD, 31 - j * 3), 4);
   }
   wtk_clip_off();
-  if ((ticks / 15) & 1) wtk_text_sh(116, 222, "PRESS ENTER", WHITE, BLACK);
+  if ((ticks / 15) & 1) wtk_text_sh(88, 214, "ENTER: A NEW GAME", WHITE, BLACK);
+  if (old_game) wtk_text_sh(100, 226, "E: AN OLD GAME", wtk_shade(R_GOLD, 26), BLACK);
 }
 
 /* How it ended. */
@@ -66,15 +68,18 @@ void game_init(u32 seed) {
   screen = TITLE;
   ticks = 0;
   garage_reset();
+  old_game = game_saved();
 }
 
 void game_tick(void) {
   ticks++;
   if (screen == TITLE) {
     /* A new game starts with the paper in your hand, as Street Rod's does. */
-    if (wtk_hit & KEY_A) { screen = has_car ? GARAGE : PAPER; wtk_tone(880, 80); }
+    if (wtk_hit & KEY_A) { garage_reset(); screen = PAPER; wtk_tone(880, 80); }
+    /* E is "Old Game": back to where you left it. */
+    else if ((wtk_hit & KEY_X) && game_load()) { screen = GARAGE; wtk_tone(660, 80); }
   } else if (screen == OVER) {
-    if (wtk_hit & KEY_A) game_init(rng);
+    if (wtk_hit & KEY_A) { game_init(rng); game_save(); }
   } else if (screen == MEET) meet_tick();
   else if (screen == DRIVE) drive_tick();
   else if (screen == STRIP) strip_tick();

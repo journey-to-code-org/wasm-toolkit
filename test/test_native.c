@@ -6,6 +6,8 @@ static int failed;
 #define CHECK(what) do { if (!(what)) { printf("FAIL %s:%d: %s\n", __FILE__, __LINE__, #what); failed++; } } while (0)
 
 void wtk_tone(int hz, int ms) { (void)hz; (void)ms; }
+void wtk_store(const u8 *buf, int n) { (void)buf; (void)n; }
+int wtk_fetch(u8 *buf, int max) { (void)buf; (void)max; return 0; }
 void game_init(u32 seed) { (void)seed; }
 void game_tick(void) {}
 void game_draw(void) {}

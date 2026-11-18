@@ -5,7 +5,7 @@
 
 #include "../../toolkit/wtk.h"
 
-enum { TITLE, GARAGE, HOOD, PAPER, MEET, DRIVE, STRIP, OVER };
+enum { TITLE, GARAGE, HOOD, PAPER, YARD, SELL, MEET, DRIVE, STRIP, OVER };
 extern int screen;
 extern u32 ticks, rng;
 
@@ -40,6 +40,15 @@ void cockpit(const cockpit_look *look);
 extern int cash, lamps_up;
 /** Your car: whether you have one, its paint, and how healthy its engine is, as a percentage. */
 extern int has_car, car_paint, car_cond;
+/** What is in its tank, in tenths of a gallon. A full tank is 17 gallons. */
+extern int car_gas;
+#define GAS_FULL 170
+/** Another car for the garage, which holds sixteen. Returns 0 if there is no room. */
+int car_gain(int paint, int cond, int gas);
+/** Whether there is a saved game, and going back to it. */
+int game_saved(void);
+int game_load(void);
+void game_save(void);
 /** How many hours of the season are gone, and how many of the regulars you have beaten. */
 extern int hours, rung;
 /** How it ended: 1 the season ran out, 2 broke, 3 you beat the King. */

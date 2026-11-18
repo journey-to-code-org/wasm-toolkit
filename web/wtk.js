@@ -31,8 +31,23 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1) {
     if (audio.state === "suspended") void audio.resume();
   };
 
-  const { instance } = await WebAssembly.instantiate(await (await fetch(url)).arrayBuffer(), { env: { wtk_tone: speaker } });
-  const x = instance.exports;
+  // A saved game lives in the browser, under the page's address.
+  const slot = "wtk:" + location.pathname;
+  let x = null;
+  const store = (ptr, n) => {
+    try { localStorage.setItem(slot, btoa(String.fromCharCode(...new Uint8Array(x.memory.buffer, ptr, n)))); } catch { /* private window, or full */ }
+  };
+  const fetchSave = (ptr, max) => {
+    try {
+      const raw = atob(localStorage.getItem(slot) ?? "");
+      const n = Math.min(raw.length, max);
+      const out = new Uint8Array(x.memory.buffer, ptr, n);
+      for (let i = 0; i < n; i++) out[i] = raw.charCodeAt(i);
+      return n;
+    } catch { return 0; }
+  };
+  const { instance } = await WebAssembly.instantiate(await (await fetch(url)).arrayBuffer(), { env: { wtk_tone: speaker, wtk_store: store, wtk_fetch: fetchSave } });
+  x = instance.exports;
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext("2d");

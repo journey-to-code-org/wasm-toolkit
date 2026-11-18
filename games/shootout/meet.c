@@ -7,17 +7,31 @@
 #include "game.h"
 
 typedef struct { const char *name, *says; int et; u8 paint; u8 limit; } rival;
-/* What each runs the quarter in, in thousandths of a second, and the biggest bet he will take:
-   1 for $10, 2 for $25, 3 for $50, 4 for $100, 5 for his car. */
+/* Twenty-one regulars in three classes of seven, and the King, as Street Rod had. What each runs
+   the quarter in, in thousandths of a second, and the biggest bet he will take: 1 for $10, 2 for
+   $25, 3 for $50, 4 for $100, 5 for his car. */
 static const rival RIVALS[] = {
-  {"SKEETER", "MY MAMA'S CAR. DON'T SCRATCH IT.", 16400, R_TAN, 2},
-  {"DALE", "PULLED IT OUT OF A FIELD TUESDAY.", 15700, R_GREEN, 2},
-  {"PATTY", "YOU LOOK LOST, HONEY.", 15000, R_VIOLET, 3},
-  {"TWO-BAY TONY", "I BUILT THIS ONE BETWEEN OIL CHANGES.", 14400, R_ORANGE, 3},
-  {"LURLENE", "MY EX PAID FOR THE TURBO.", 13800, R_PINK, 4},
-  {"BOONE", "CASH. NO CHECKS.", 13200, R_FOREST, 5},
-  {"MARGO", "I DON'T LIFT.", 12700, R_WHITE, 5},
-  {"THE DEACON", "SAY YOUR PRAYERS, SON.", 12300, R_RUBBER, 5},
+  {"SKEETER", "MY MAMA'S CAR. DON'T SCRATCH IT.", 16800, R_TAN, 2},
+  {"DALE", "PULLED IT OUT OF A FIELD TUESDAY.", 16500, R_GREEN, 2},
+  {"JUNIOR", "IT'S GOT A TAPE DECK.", 16200, R_SILVER, 2},
+  {"PATTY", "YOU LOOK LOST, HONEY.", 15900, R_VIOLET, 2},
+  {"CRICKET", "SHE SMOKES A LITTLE. SO WHAT.", 15600, R_BROWN, 3},
+  {"WENDELL", "I GOT WORK IN THE MORNING.", 15300, R_TEAL, 3},
+  {"BIG RHONDA", "TEN BUCKS SAYS YOU MISS A SHIFT.", 15000, R_RED, 3},
+  {"TWO-BAY TONY", "I BUILT THIS ONE BETWEEN OIL CHANGES.", 14750, R_ORANGE, 3},
+  {"LURLENE", "MY EX PAID FOR THE TURBO.", 14500, R_PINK, 3},
+  {"HOLLIS", "DON'T LEAN ON THE PAINT.", 14250, R_NAVY, 4},
+  {"THE TWINS", "WE TAKE TURNS DRIVING.", 14000, R_LIME, 4},
+  {"EARLENE", "SLICKS ARE IN THE TRUNK.", 13800, R_MAGENTA, 4},
+  {"COACH", "RUN IT BACK IF YOU DON'T LIKE IT.", 13600, R_GREY, 4},
+  {"DOC", "I'LL FIX WHAT YOU BREAK. FOR A FEE.", 13400, R_CREAM, 5},
+  {"BOONE", "CASH. NO CHECKS.", 13150, R_FOREST, 5},
+  {"SISTER RUTH", "PRIDE GOETH BEFORE THE TREE.", 12950, R_WHITE, 5},
+  {"MARGO", "I DON'T LIFT.", 12750, R_CYAN, 5},
+  {"THE JUDGE", "COURT IS IN SESSION.", 12600, R_MAROON, 5},
+  {"SNAKE", "NICE CAR. BE A SHAME.", 12450, R_YELLOW, 5},
+  {"NITRO NAN", "SMELL THAT? THAT'S YOU LOSING.", 12300, R_INDIGO, 5},
+  {"THE DEACON", "SAY YOUR PRAYERS, SON.", 12150, R_RUBBER, 5},
   {"THE KING", "PINK SLIPS. NOTHING ELSE.", 11900, R_GOLD, 5},
 };
 #define N_RIVALS (int)(sizeof RIVALS / sizeof RIVALS[0])
@@ -25,7 +39,7 @@ static const rival RIVALS[] = {
 
 static const int STAKES[6] = {0, 10, 25, 50, 100, 0};
 static const char *const BETS[6] = {"KICKS", "$10", "$25", "$50", "$100", "PINKS"};
-static const char *const DOES[5] = {"RACE", "WAVE ON", "TUNE RUN", "CRUISE", "HOME"};
+static const char *const DOES[5] = {"RACE", "NEXT", "SOLO", "CRUISE", "HOME"};
 
 static int who, betting, bet;
 static const char *said;
@@ -56,7 +70,8 @@ void meet_tick(void) {
     if (who == KING && b != 5) { said = "PINK SLIPS OR GO HOME."; wtk_tone(120, 80); return; }
     if (cash < STAKES[b]) { said = "YOU DON'T HAVE THAT KIND OF DOUGH."; wtk_tone(120, 80); return; }
     if (b > r->limit || (b == 5 && who != KING && wtk_rand(&rng) % 3 == 0)) { said = "NO WAY. TOO RICH FOR ME."; wtk_tone(120, 80); return; }
-    bet = b; betting = 0;
+    if (car_gas < 7) { said = "NOT ENOUGH GAS TO RACE. GO FILL UP."; wtk_tone(120, 80); return; }
+    bet = b; betting = 0; car_gas -= 5;
     strip_race(r->et, r->paint);
     return;
   }
@@ -67,9 +82,12 @@ void meet_tick(void) {
     who = rung > 0 ? (who + 1 + (int)(wtk_rand(&rng) % (u32)(rung < KING ? rung : KING))) % ((rung < KING ? rung : KING) + 1) : 0;
     wtk_tone(300, 60);
   }
-  if (b == 2) strip_race(0, 0);
+  if (b == 2) {
+    if (car_gas < 7) { said = "NOT ENOUGH GAS FOR A PASS. GO FILL UP."; wtk_tone(120, 80); return; }
+    car_gas -= 5; strip_race(0, 0);
+  }
   if (b == 3) { screen = DRIVE; drive_start(); }
-  if (b == 4) screen = GARAGE;
+  if (b == 4) { car_gas = car_gas > 2 ? car_gas - 2 : 0; screen = GARAGE; }
 }
 
 void meet_settle(int won) {
@@ -79,12 +97,16 @@ void meet_settle(int won) {
   hours += 2;
   if (won) {
     if (bet == 5 && who == KING) { over_kind = 3; screen = OVER; return; }
-    if (bet == 5) { cash += 420 + who * 60; said = "HIS CAR IS YOURS. THE DEALER TOOK IT OFF YOU FOR CASH."; }
+    if (bet == 5) {
+      /* His car is yours: it goes in the yard, if there is room for it. */
+      if (car_gain(RIVALS[who].paint, 62 + who, 40)) said = "YOU JUST WON A HELLUVA CAR. IT IS IN YOUR YARD.";
+      else { cash += 300 + who * 20; said = "NO ROOM IN YOUR YARD. THE DEALER TOOK HIS CAR."; }
+    }
     else { cash += STAKES[bet]; said = bet ? "PAY UP. HE DID." : "YOU WON. IT WAS FOR KICKS."; }
     /* Beating the next one up brings the one after him out. Kicks do not count. */
-    if (who == rung && bet && rung < KING) { rung++; who = rung; said = bet == 5 ? "HIS CAR IS YOURS, SOLD FOR CASH. WORD GETS ROUND." : "PAID. WORD GETS ROUND: SOMEONE NEW PULLS IN."; }
+    if (who == rung && bet && rung < KING) { rung++; who = rung; if (bet != 5) said = "PAID. WORD GETS ROUND: SOMEONE NEW PULLS IN."; }
   } else {
-    if (bet == 5) { car_lost(); screen = GARAGE; return; }
+    if (bet == 5) { car_lost(); screen = GARAGE; return; } /* "Take a walk, sucker." */
     cash -= STAKES[bet];
     said = bet ? "YOU LOSE, SUCKER. PAY THE MAN." : "YOU LOST. IT WAS FOR KICKS.";
   }

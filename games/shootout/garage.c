@@ -19,7 +19,7 @@ static const part PARTS[N_SLOTS] = {
   {"THE INTERCOOLER PIPE", {"SIDE INTERCOOLER", "FRONT INTERCOOLER"}, {"SM COOLER", "BIG COOLR"}, "COLD, DENSE AIR", "THE INTERCOOLER IS OFF. IT WILL NOT RUN.", "THE INTERCOOLER IS NOT BOLTED DOWN.", 350, 100, 100, 28, 56},
 };
 
-int cash, lamps_up, has_car, car_paint, car_cond, hours, rung, over_kind;
+int cash, lamps_up, has_car, car_paint, car_cond, car_gas, hours, rung, over_kind;
 static int fitted[N_SLOTS];   /* -1 for nothing, 0 for the stock part, 1 for the better one */
 static int bolts[N_SLOTS];    /* a bit for each of the four bolts that is tight */
 static int loose[N_SLOTS][2]; /* the parts that are off the car and on the floor */
@@ -28,16 +28,96 @@ static const char *note;      /* what just happened, for the bottom line */
 static int px = 160, py = 100;
 static int page;              /* which page of the paper is open: 0 cars, 1 parts */
 
-void garage_reset(void) {
-  /* As Street Rod has it: $750, no car, and the paper in your hand. */
-  cash = 750; lamps_up = 0; carrying = -1; note = 0; px = 160; py = 100;
-  has_car = 0; car_paint = R_BLUE; car_cond = 70; hours = 0; rung = 0; over_kind = 0; page = 0;
-  for (int s = 0; s < N_SLOTS; s++) { fitted[s] = 0; bolts[s] = 15; loose[s][0] = loose[s][1] = 0; }
+/* The cars you own, sixteen at most, as Street Rod's garage held. The one you are working on is
+   kept in the variables above; `park` puts it back in its place and `take` brings another out. */
+#define MAX_CARS 16
+typedef struct { u8 used, paint, cond, gas; signed char fitted[N_SLOTS]; u8 bolts[N_SLOTS]; } car_t;
+static car_t yard[MAX_CARS];
+static int cur = -1;
+
+static void park(void) {
+  if (cur < 0) return;
+  car_t *c = &yard[cur];
+  c->used = 1; c->paint = (u8)car_paint; c->cond = (u8)car_cond; c->gas = (u8)car_gas;
+  for (int s = 0; s < N_SLOTS; s++) { c->fitted[s] = (signed char)fitted[s]; c->bolts[s] = (u8)bolts[s]; }
+}
+
+static void take(int i) {
+  park();
+  cur = i; lamps_up = 0;
+  has_car = i >= 0;
+  if (i < 0) return;
+  const car_t *c = &yard[i];
+  car_paint = c->paint; car_cond = c->cond; car_gas = c->gas;
+  for (int s = 0; s < N_SLOTS; s++) { fitted[s] = c->fitted[s]; bolts[s] = c->bolts[s]; }
+}
+
+static int car_count(void) { int n = 0; for (int i = 0; i < MAX_CARS; i++) n += yard[i].used; return n; }
+
+int car_gain(int paint, int cond, int gas) {
+  for (int i = 0; i < MAX_CARS; i++)
+    if (!yard[i].used) {
+      car_t *c = &yard[i];
+      c->used = 1; c->paint = (u8)paint; c->cond = (u8)cond; c->gas = (u8)gas;
+      for (int s = 0; s < N_SLOTS; s++) { c->fitted[s] = 0; c->bolts[s] = 15; }
+      if (cur < 0) take(i);
+      return 1;
+    }
+  return 0;
 }
 
 void car_lost(void) {
-  has_car = 0; lamps_up = 0;
-  for (int s = 0; s < N_SLOTS; s++) { fitted[s] = 0; bolts[s] = 15; }
+  if (cur >= 0) yard[cur].used = 0;
+  cur = -1; has_car = 0; lamps_up = 0;
+}
+
+void garage_reset(void) {
+  /* As Street Rod has it: $750, no car, and the paper in your hand. */
+  cash = 750; lamps_up = 0; carrying = -1; note = 0; px = 160; py = 100;
+  has_car = 0; car_paint = R_BLUE; car_cond = 70; car_gas = 0; hours = 0; rung = 0; over_kind = 0; page = 0; cur = -1;
+  for (int i = 0; i < MAX_CARS; i++) yard[i].used = 0;
+  for (int s = 0; s < N_SLOTS; s++) { fitted[s] = 0; bolts[s] = 15; loose[s][0] = loose[s][1] = 0; }
+}
+
+/* ---- Keeping the game ------------------------------------------------------------------------- */
+
+#define SAVE_BYTES (20 + MAX_CARS * (4 + N_SLOTS * 2) + N_SLOTS * 2)
+static u8 blob[SAVE_BYTES];
+
+static void put32(u8 *p, int v) { p[0] = (u8)v; p[1] = (u8)(v >> 8); p[2] = (u8)(v >> 16); p[3] = (u8)(v >> 24); }
+static int get32(const u8 *p) { return (int)((u32)p[0] | (u32)p[1] << 8 | (u32)p[2] << 16 | (u32)p[3] << 24); }
+
+void game_save(void) {
+  park();
+  u8 *p = blob;
+  put32(p, 0x52445331); put32(p + 4, cash); put32(p + 8, hours); put32(p + 12, rung); put32(p + 16, cur);
+  p += 20;
+  for (int i = 0; i < MAX_CARS; i++) {
+    const car_t *c = &yard[i];
+    *p++ = c->used; *p++ = c->paint; *p++ = c->cond; *p++ = c->gas;
+    for (int s = 0; s < N_SLOTS; s++) { *p++ = (u8)c->fitted[s]; *p++ = c->bolts[s]; }
+  }
+  for (int s = 0; s < N_SLOTS; s++) { *p++ = (u8)loose[s][0]; *p++ = (u8)loose[s][1]; }
+  wtk_store(blob, SAVE_BYTES);
+}
+
+int game_saved(void) { return wtk_fetch(blob, SAVE_BYTES) == SAVE_BYTES && get32(blob) == 0x52445331; }
+
+int game_load(void) {
+  if (!game_saved()) return 0;
+  const u8 *p = blob;
+  garage_reset();
+  cash = get32(p + 4); hours = get32(p + 8); rung = get32(p + 12);
+  int was = get32(p + 16);
+  p += 20;
+  for (int i = 0; i < MAX_CARS; i++) {
+    car_t *c = &yard[i];
+    c->used = *p++; c->paint = *p++; c->cond = *p++; c->gas = *p++;
+    for (int s = 0; s < N_SLOTS; s++) { c->fitted[s] = (signed char)*p++; c->bolts[s] = *p++; }
+  }
+  for (int s = 0; s < N_SLOTS; s++) { loose[s][0] = *p++; loose[s][1] = *p++; }
+  if (was >= 0 && was < MAX_CARS && yard[was].used) take(was);
+  return 1;
 }
 
 int car_runs(const char **why) {
@@ -57,7 +137,7 @@ static int owned(int s) { return loose[s][1] || fitted[s] == 1 || carrying == s 
 /* ---- The pointer, and the things it can be on ------------------------------------------------ */
 
 typedef struct { i16 x, y, w, h; const char *name; int does; } spot;
-enum { DO_NOTHING, DO_STREET, DO_HOOD, DO_CALENDAR, DO_PAPER, DO_LAMPS };
+enum { DO_NOTHING, DO_STREET, DO_HOOD, DO_CALENDAR, DO_PAPER, DO_LAMPS, DO_YARD, DO_SELL, DO_GAS };
 
 int pointer_x(void) { return px; }
 int pointer_y(void) { return py; }
@@ -104,13 +184,15 @@ static void cash_line(int x, int y, col c) {
 /* ---- The room --------------------------------------------------------------------------------- */
 
 static const spot GARAGE_SPOTS[] = {
-  {232, 14, 84, 108, "THE GARAGE DOOR: HIT THE STREET", DO_STREET},
-  {16, 24, 68, 56, "A WINDOW. IT IS DAYLIGHT.", DO_NOTHING},
+  {232, 14, 84, 108, "HIT THE STREET", DO_STREET},
+  {16, 24, 68, 56, "OUT THE WINDOW: YOUR CARS", DO_YARD},
   {100, 22, 30, 38, "THE CALENDAR", DO_CALENDAR},
   {132, 30, 100, 26, "A BANNER", DO_NOTHING},
-  {6, 86, 92, 34, "THE PAPER ON THE BENCH: CARS AND PARTS", DO_PAPER},
+  {8, 86, 84, 12, "THE TOOL BOARD: SELL SPARE PARTS", DO_SELL},
+  {6, 98, 92, 22, "CHECK OUT THE NEWSPAPER", DO_PAPER},
+  {288, 150, 24, 34, "WANNA TANK? THE GAS STATION", DO_GAS},
   {128, 118, 76, 44, "THE DOOR: GET IN AND HIT THE STREET", DO_STREET},
-  {204, 126, 54, 24, "THE HOOD: GET UNDER IT", DO_HOOD},
+  {204, 126, 54, 24, "POP THE HOOD", DO_HOOD},
   {256, 134, 28, 26, "THE HEADLAMPS", DO_LAMPS},
 };
 #define N_GARAGE (int)(sizeof GARAGE_SPOTS / sizeof GARAGE_SPOTS[0])
@@ -127,6 +209,13 @@ static void room_draw(void) {
   wtk_rect(101, 32, 28, 27, wtk_shade(R_CREAM, 26));
   char d[3] = {(char)(day > 9 ? '0' + day / 10 : '0' + day), (char)(day > 9 ? '0' + day % 10 : 0), 0};
   wtk_text_big(day > 9 ? 99 : 107, 37, d, wtk_shade(R_RUBBER, 4), 2);
+  /* A gas can by the door. */
+  wtk_vgrad(292, 160, 16, 22, R_RED, 26, 14);
+  wtk_box(292, 160, 16, 22, wtk_shade(R_RUBBER, 2));
+  wtk_rect(296, 155, 5, 5, wtk_shade(R_RED, 18));
+  wtk_rect(303, 157, 6, 3, wtk_shade(R_GOLD, 22));
+  wtk_line(294, 164, 305, 178, wtk_shade(R_RED, 10));
+  wtk_line(305, 164, 294, 178, wtk_shade(R_RED, 10));
   if (has_car) car_picture(40, 182, car_paint, lamps_up);
   else wtk_text(132, 160, "EMPTY BAY", wtk_shade(R_CONCRETE, 10));
 }
@@ -185,15 +274,32 @@ static void room_tick(void) {
     note = 0;
     if (s->does == DO_PAPER) { screen = PAPER; page = has_car ? 1 : 0; hours++; }
     if (s->does == DO_CALENDAR) note = days_left();
+    if (s->does == DO_YARD) screen = YARD;
+    if (s->does == DO_SELL) screen = SELL;
+    if (s->does == DO_GAS) {
+      /* Three gallons a dollar, as many as fit or as you can pay for. The trip is two hours. */
+      if (!has_car) { note = "YOU'VE GOT NO CAR, DUMMY!"; wtk_tone(90, 200); }
+      else if (!car_runs(&why)) { note = why; wtk_tone(90, 200); }
+      else if (car_gas >= 140) note = "YOU'VE GOT A FULL TANK!";
+      else if (cash == 0) note = "GAS AIN'T FREE!";
+      else {
+        int units = (190 - car_gas) / 30;
+        while (units-- > 0 && cash > 0) { car_gas += 30; cash--; }
+        if (car_gas > GAS_FULL) car_gas = GAS_FULL;
+        hours += 2; note = "FILLED UP, AND BACK."; wtk_tone(700, 80);
+      }
+    }
     if (s->does == DO_HOOD || s->does == DO_LAMPS || s->does == DO_STREET) {
       if (!has_car) { note = "YOU HAVE NO CAR. THE PAPER IS ON THE BENCH."; wtk_tone(90, 200); }
       else if (s->does == DO_HOOD) { screen = HOOD; px = 160; py = 100; }
       else if (s->does == DO_LAMPS) { lamps_up = !lamps_up; wtk_tone(lamps_up ? 440 : 330, 70); }
       else if (!car_runs(&why)) { note = why; wtk_tone(90, 200); }
-      else { hours++; meet_start(); }
+      else if (car_gas <= 8) { note = "YOU DON'T GOT ENOUGH GAS TO CRUISE DOWN THERE."; wtk_tone(90, 200); }
+      else { hours++; car_gas -= 2; meet_start(); }
     }
   }
   if (wtk_hit & KEY_B) screen = TITLE;
+  if (!(ticks % 60)) game_save();
 }
 
 /* ---- Under the hood --------------------------------------------------------------------------- */
@@ -362,12 +468,12 @@ static void paper_tick(void) {
     for (int i = 0; i < 3; i++) {
       used u = used_car(i);
       if (py < 54 + i * 40 || py >= 92 + i * 40) continue;
-      if (has_car) { note = "ONE CAR AT A TIME. SELL YOURS FIRST."; wtk_tone(120, 80); }
+      if (car_count() >= MAX_CARS) { note = "NO ROOM FOR ALL THESE CARS. SELL SOME FIRST!"; wtk_tone(120, 80); }
       else if (cash < u.price) { note = "YOU CANNOT AFFORD IT."; wtk_tone(120, 80); }
       else {
-        cash -= u.price; has_car = 1; car_paint = u.paint; car_cond = u.cond;
-        for (int s = 0; s < N_SLOTS; s++) { fitted[s] = 0; bolts[s] = 15; }
-        note = "IT IS YOURS. IT IS IN THE GARAGE."; wtk_tone(880, 80);
+        int first = !has_car;
+        cash -= u.price; car_gain(u.paint, u.cond, 20 + (u.price * 7) % 60);
+        note = first ? "IT IS YOURS. IT IS IN THE GARAGE." : "IT IS YOURS. IT IS OUT IN THE YARD."; wtk_tone(880, 80);
       }
       return;
     }
@@ -455,20 +561,133 @@ static void paper_draw(void) {
   pointer_draw();
 }
 
+/* ---- The yard: your cars ----------------------------------------------------------------------
+ * Street Rod's "Cars": every car you own, the one you are working on marked. Pick one to bring it
+ * into the bay, or sell it to the dealer. */
+
+static int car_value(const car_t *c) {
+  int v = (150 + c->cond * 6) * 6 / 10;
+  for (int s = 0; s < N_SLOTS; s++) if (c->fitted[s] == 1) v += PARTS[s].price / 2;
+  return v;
+}
+
+static int row_under(int rows) {
+  if (py < 34 || py >= 34 + rows * 10 || px < 8 || px >= 312) return -1;
+  return (py - 34) / 10;
+}
+
+static void yard_tick(void) {
+  pointer_move();
+  if (wtk_hit & KEY_B) { screen = GARAGE; note = 0; return; }
+  if (!(wtk_hit & KEY_A)) return;
+  park();
+  int r = row_under(MAX_CARS);
+  if (r < 0 || !yard[r].used) return;
+  if (px >= 264) {
+    cash += car_value(&yard[r]);
+    yard[r].used = 0;
+    if (r == cur) { cur = -1; has_car = 0; lamps_up = 0; }
+    note = "SOLD TO THE DEALER."; wtk_tone(660, 80);
+  } else if (r != cur) { take(r); note = "IT IS IN THE BAY."; wtk_tone(520, 60); }
+}
+
+static void gas_text(int x, int y, int gas, col c) {
+  x = wtk_num(x, y, gas / 10, c);
+  x = wtk_text(x, y, ".", c);
+  wtk_num(x, y, gas % 10, c);
+}
+
+static void yard_draw(void) {
+  park();
+  wtk_vgrad(0, 0, WTK_W, 200, R_GRASS, 14, 8);
+  wtk_vgrad(0, 0, WTK_W, 26, R_SKY, 20, 27);
+  wtk_text_sh(8, 8, "THE YARD", WHITE, BLACK);
+  wtk_text_sh(120, 8, "CONDITION", wtk_shade(R_CREAM, 26), BLACK);
+  wtk_text_sh(204, 8, "GAS", wtk_shade(R_CREAM, 26), BLACK);
+  int over = row_under(MAX_CARS);
+  for (int i = 0; i < MAX_CARS; i++) {
+    const car_t *c = &yard[i];
+    int y = 34 + i * 10;
+    if (!c->used) { wtk_hline(8, 311, y + 4, wtk_shade(R_GRASS, 6)); continue; }
+    if (i == over) wtk_rect(8, y - 1, 304, 10, wtk_shade(R_GRASS, 20));
+    wtk_rect(10, y, 12, 8, BLACK);
+    wtk_vgrad(11, y + 1, 10, 6, c->paint, 27, 16);
+    wtk_text_sh(28, y, i == cur ? "IN THE BAY" : paint_name(c->paint), i == cur ? wtk_shade(R_GOLD, 27) : WHITE, BLACK);
+    wtk_text_sh(120, y, c->cond < 62 ? "TIRED" : c->cond < 72 ? "RUNS OK" : "STRONG", WHITE, BLACK);
+    gas_text(204, y, c->gas, WHITE);
+    wtk_text_sh(264, y, "SELL", i == over && px >= 264 ? wtk_shade(R_RED, 28) : wtk_shade(R_CREAM, 22), BLACK);
+  }
+  int v = over >= 0 && yard[over].used ? car_value(&yard[over]) : 0;
+  static char line[40];
+  const char *a = "THE DEALER GIVES $";
+  int n = 0, div = 1000;
+  while (*a) line[n++] = *a++;
+  while (div > 1 && v / div == 0) div /= 10;
+  for (; div; div /= 10) line[n++] = (char)('0' + v / div % 10);
+  line[n] = 0;
+  panel("YOUR CARS", note ? note : v ? line : "PICK ONE TO BRING IT INTO THE BAY.", "SELL IS ON THE RIGHT. ESCAPE GOES BACK.");
+  cash_line(216, 206, wtk_shade(R_LIME, 24));
+  pointer_draw();
+}
+
+/* ---- Selling spare parts ----------------------------------------------------------------------
+ * A bolt-on fetches between 70 and 89 hundredths of what it cost, as in Street Rod; what they
+ * will give changes with the day. The stock part it replaced is worth a fifth of that. */
+
+static int spare_offer(int s, int which) {
+  u32 h = (u32)(hours / DAY_HOURS * 8 + s * 2 + which + 3) * 2654435761u;
+  int value = which ? PARTS[s].price : PARTS[s].price / 5;
+  return value * (70 + (int)((h >> 12) % 20)) / 100;
+}
+
+static void sell_tick(void) {
+  pointer_move();
+  if (wtk_hit & KEY_B) { screen = GARAGE; note = 0; return; }
+  if (!(wtk_hit & KEY_A)) return;
+  int r = row_under(N_SLOTS * 2);
+  if (r < 0 || !loose[r / 2][r % 2]) return;
+  cash += spare_offer(r / 2, r % 2);
+  loose[r / 2][r % 2] = 0;
+  note = "SOLD."; wtk_tone(660, 80);
+}
+
+static void sell_draw(void) {
+  wtk_vgrad(0, 0, WTK_W, 200, R_TAN, 20, 14);
+  wtk_text_sh(8, 8, "SPARE PARTS", WHITE, BLACK);
+  wtk_text_sh(216, 8, "THEY OFFER", wtk_shade(R_CREAM, 28), BLACK);
+  int over = row_under(N_SLOTS * 2), any = 0;
+  for (int r = 0; r < N_SLOTS * 2; r++) {
+    int y = 34 + r * 10;
+    if (!loose[r / 2][r % 2]) continue;
+    any = 1;
+    if (r == over) wtk_rect(8, y - 1, 304, 10, wtk_shade(R_TAN, 26));
+    wtk_text_sh(12, y, PARTS[r / 2].name[r % 2], WHITE, BLACK);
+    dollars(232, y, spare_offer(r / 2, r % 2), wtk_shade(R_FOREST, 10), 1);
+  }
+  panel("SELL PARTS", note ? note : any ? "PICK A PART TO SELL IT." : "YOU'VE GOT NO SPARE PARTS, DUMMY!", "ESCAPE GOES BACK.");
+  cash_line(216, 206, wtk_shade(R_LIME, 24));
+  pointer_draw();
+}
+
 /* ---- All of it -------------------------------------------------------------------------------- */
 
 void garage_tick(void) {
   if (screen == HOOD) hood_tick();
   else if (screen == PAPER) paper_tick();
+  else if (screen == YARD) yard_tick();
+  else if (screen == SELL) sell_tick();
   else room_tick();
 }
 
 void garage_draw(void) {
   if (screen == HOOD) { hood_draw(); return; }
   if (screen == PAPER) { paper_draw(); return; }
+  if (screen == YARD) { yard_draw(); return; }
+  if (screen == SELL) { sell_draw(); return; }
   room_draw();
   const spot *s = spot_under(GARAGE_SPOTS, N_GARAGE);
   panel("YOUR CAR", note ? note : s ? s->name : "LOOK ROUND.", "ARROWS OR MOUSE, ENTER TO PICK");
   cash_line(216, 206, wtk_shade(R_LIME, 24));
+  if (has_car) { wtk_text(252, 217, "GAS", wtk_shade(R_CHROME, 17)); gas_text(280, 217, car_gas, car_gas <= 8 ? wtk_shade(R_RED, 26) : wtk_shade(R_CHROME, 22)); }
   pointer_draw();
 }
