@@ -33,7 +33,7 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
   };
 
   // A saved game lives in the browser, under the page's address.
-  const slot = "wtk:" + location.pathname;
+  const slot = "wtk:" + location.pathname + (pack ? ":" + pack : "");
   let x = null;
   const store = (ptr, n) => {
     try { localStorage.setItem(slot, btoa(String.fromCharCode(...new Uint8Array(x.memory.buffer, ptr, n)))); } catch { /* private window, or full */ }

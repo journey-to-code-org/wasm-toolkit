@@ -15,9 +15,25 @@ Pillow and numpy for the pack tool.
 
 ## What is in the engine so far
 
-Steps 1 and 2 of 5 are done. The engine reads a pack, shows its title, and lets you walk between its
-places: each place is a picture (or a plain backdrop) with a car standing in it and spots to pick.
-The paper, the hood, the bets, the strip and the cockpit are still only in the C game.
+Steps 1 to 3 of 5 are done. The engine plays a season out of a pack:
+
+- **Places**: a picture or backdrop, your car standing in it, spots to pick, and buttons.
+- **The season**: so many days of so many hours. Reading the paper is an hour, bolting a part on
+  or off is an hour, a race is two, a pass alone is one. It ends when the days run out, when you
+  have no car and no way to buy one, or when you beat the one to beat.
+- **The paper**: three cars a day picked from the pack's cars, in differing paint and health,
+  and every part in the pack.
+- **The bench**: what is on the car, slot by slot, and what is on the shelf. Parts go on, come
+  off, and are sold from here.
+- **The yard**: up to sixteen cars; bring one into the bay or sell it to the dealer.
+- **Rivals**: they pull in one at a time, in the pack's order. Race for kicks, for money up to
+  what each will take, or for cars. Beating one for money or better brings out the next.
+- **The strip**: the quarter mile from the side, with the pack's car pictures. The car's torque
+  curve, gears, weight, grip and turbo are the pack's; the parts fitted change them.
+- **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
+
+Not in the engine yet: the view from the seat, the drive across town, gas, and taking parts
+off bolt by bolt under the hood. Those are in the C game, and come with steps 4 and 5.
 
 ## The workshop
 
@@ -38,7 +54,9 @@ pack, or any `.pack` you give it, and edits its cars in the browser:
 - **Save the pack** downloads it. **Play it** opens the game on it in another tab. Work in
   progress is kept in the browser between visits.
 
-The workshop only edits cars so far. Places are still edited in `pack.json`.
+The workshop only edits cars so far: their pictures, paint and price. Places, parts, rivals and
+a car's `drive` are still edited in `pack.json`; a car added in the workshop borrows the first
+car's `drive`.
 
 ## A pack folder
 
@@ -82,7 +100,8 @@ transparent pixels stay clear.
 }
 ```
 
-- **start**: the cash, place and car a new game begins with. `car` may be left out.
+- **start**: the cash, place and car a new game begins with. `car` may be left out, and then
+  the first thing to do is buy one.
 - **cars**: `side` is the car from the side. `side_lamps` is the same picture with the lamps on,
   if there is one. `ground` is the row of the picture the tyres stand on. `paint_ramps` names the
   colour ramps the picture was painted in, and `paint` the ramp the body is shown in, so one
@@ -98,7 +117,62 @@ transparent pixels stay clear.
   | `say:<words>` | show the words in the panel |
   | `lamps` | work the car's headlamps |
 
+  | `calendar` | say what day it is and how many hours are left |
+  | `paper` | open the paper |
+  | `parts` | open the bench |
+  | `yard` | open the yard |
+  | `race` | race whoever has pulled in (the place needs `rival_at`) |
+  | `next` | wave them on and see who else is about |
+  | `solo` | a pass down the strip alone |
+
+  A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
+  picture does not show the thing itself.
+- **places** may also have `rival_at`, like `car_at`: where whoever you are up against stands.
+
 Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
+
+### The season, cars that go, parts and rivals
+
+```json
+{
+  "season": { "days": 90, "hours_per_day": 12 },
+  "bets": [10, 25, 50, 100],
+  "paints": ["BLUE", "RED", "GOLD"],
+  "cars": {
+    "umbra-base": {
+      "name": "1990 Kagami Umbra", "side": "car.pic", "ground": 74,
+      "price": 420,
+      "drive": {
+        "torque": [[800, 70], [2000, 100], [4000, 125], [6800, 95]],
+        "gears": [3.36, 1.95, 1.29, 0.94, 0.76], "final": 4.3,
+        "redline": 6800, "launch": 4500, "weight_lb": 2700, "grip": 9,
+        "boost": null
+      }
+    }
+  },
+  "parts": {
+    "header": { "name": "Tubular header", "slot": "Exhaust", "price": 420, "pitch": "Lets it all out", "torque": 6 },
+    "big-turbo": { "name": "Big turbo", "slot": "Turbo", "price": 900, "pitch": "27 psi. Hits late",
+                   "boost": { "from": 3000, "psi": 27, "lag": 10 } }
+  },
+  "rivals": [
+    { "name": "Skeeter", "says": "My mama's car. Don't scratch it.", "car": "umbra-base", "paint": "TAN", "et": 19.4, "limit": 25 },
+    { "name": "The King", "says": "Pink slips. Nothing else.", "car": "umbra", "paint": "GOLD", "et": 11.9, "king": true }
+  ]
+}
+```
+
+- **cars**: `price` is what one in fair shape costs; a car with no price never comes up in the
+  paper. `drive` is what makes it go: `torque` is pound-feet at the wheels at each engine speed,
+  at full boost if it has a turbo; `boost` is the turbo (`from` the rpm it wakes at, `psi`, and
+  `lag`, bigger being lazier) or `null`. A car with no `drive` gets a two-litre turbo four.
+  Two cars may share a picture.
+- **parts**: one part to a `slot`; the slots are whatever the parts name. `torque` is a
+  percentage more. A part with `boost` replaces the car's turbo. At most 14 parts.
+- **rivals**: in the order they turn up. `et` is their quarter mile in seconds. `limit` is the
+  most money they will race for, `pinks` whether they will race for cars. The one with `king`
+  must be last, races for cars only, and beating them wins the game.
+- **bets** and **paints** may be left out.
 
 A pack that names a picture it does not hold, a place that is not there, or a ramp that does not
 exist is refused, and the screen says which.
@@ -114,6 +188,7 @@ clear.
 1. ~~The pack and its loader, with the garage and the car coming out of it.~~
 2. ~~The workshop: a page where you drop in a car's picture, set its ground line and paint, see it
    in the garage, and save the pack.~~
-3. Parts, rivals and the paper as data, and the season's rules in the engine.
-4. Rooms with their spots drawn and edited in the workshop.
-5. Maps: the town and the roads.
+3. ~~Parts, rivals and the paper as data, and the season's rules in the engine.~~
+4. Rooms with their spots drawn and edited in the workshop, parts and rivals edited there too,
+   and under the hood as a place where parts come off bolt by bolt.
+5. Maps: the town and the roads, the view from the seat, and gas.

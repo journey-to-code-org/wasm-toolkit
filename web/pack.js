@@ -141,7 +141,7 @@ export function slug(words) {
 // hand back the screen as RGBA. `lamps` picks the first spot that works the headlamps, if any.
 export async function makeViewer(wasmBytes) {
   const module = await WebAssembly.compile(wasmBytes);
-  const start = async () => (await WebAssembly.instantiate(module, { env: { wtk_tone: () => {} } })).exports;
+  const start = async () => (await WebAssembly.instantiate(module, { env: { wtk_tone: () => {}, wtk_store: () => {}, wtk_fetch: () => 0 } })).exports;
   const first = await start();
   first.wtk_init(1);
   const palette = new Uint32Array(first.memory.buffer, first.wtk_palette(), 1024).slice();
