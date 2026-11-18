@@ -8,7 +8,7 @@
 use crate::gfx::{ramp, shade, Screen, Tint, BLACK, WHITE};
 use crate::host::tone;
 use crate::g3d::{Cam, Scene3, V3};
-use crate::pack::{Boost, Car, Cockpit, Dial, Pack, Part, Place, Rival, Slot, Spot};
+use crate::pack::{Boost, Car, Cockpit, Dial, Job, Pack, Part, Place, Rival, Slot, Spot};
 use crate::race::{Controls, Phase, Race, QUARTER};
 use crate::town::{Pedals, Town};
 use serde::{Deserialize, Serialize};
@@ -304,6 +304,18 @@ impl Game {
     }
 
     /// What can be raced for: nothing, each of the pack's bets, and cars.
+    /// The help-wanted ads: the pack's, or three ordinary ones. A way to money that needs no car.
+    pub fn jobs(&self) -> Vec<Job> {
+        let m = &self.pack.manifest;
+        if !m.jobs.is_empty() {
+            return m.jobs.clone();
+        }
+        [("Sweep up at Rix Racing", 3, 25), ("Run parts for the store", 6, 55), ("Night shift at the car wash", 8, 70)]
+            .iter()
+            .map(|&(name, hours, pay)| Job { name: name.into(), hours, pay })
+            .collect()
+    }
+
     fn stakes(&self) -> Vec<i32> {
         let m = &self.pack.manifest;
         if m.bets.is_empty() { BETS.to_vec() } else { m.bets.clone() }
@@ -353,7 +365,10 @@ impl Game {
         } else if self.state.cars.is_empty() {
             let cheapest = m.cars.keys().filter(|id| m.cars[*id].price.is_some()).map(|id| self.list_price(id, 55)).min();
             let spare: i32 = self.state.spares.iter().map(|p| self.spare_offer(p)).sum();
-            if cheapest.is_none_or(|c| self.state.cash + spare < c) {
+            // What working could still bring in before the season is out.
+            let left = m.season.days * m.season.hours_per_day - self.state.hours;
+            let earn = self.jobs().iter().map(|j| left / j.hours * j.pay).max().unwrap_or(0);
+            if cheapest.is_none_or(|c| self.state.cash + spare + earn < c) {
                 self.scene = Scene::Over(2);
             }
         }
@@ -674,9 +689,14 @@ impl Game {
                     self.scene = Scene::Place;
                     self.note = None;
                 } else if pick {
-                    if self.py >= 34 && self.py < 50 && self.px >= 192 {
-                        self.scene = Scene::Paper((self.px >= 256) as usize);
+                    if self.py >= 34 && self.py < 50 && self.px >= 128 {
+                        // The tabs, left to right: jobs, cars, parts.
+                        self.scene = Scene::Paper(if self.px >= 256 { 1 } else if self.px >= 192 { 0 } else { 2 });
                         self.note = None;
+                    } else if page == 2 {
+                        if let Some(i) = self.row(8, 312, 56, 20, self.jobs().len()) {
+                            self.work(i);
+                        }
                     } else if page == 0 {
                         if let Some(i) = self.row(8, 312, 54, 44, 3) {
                             self.buy_car(i);
@@ -797,6 +817,15 @@ impl Game {
         }
         tone(880, 80);
         self.save();
+    }
+
+    /// Work the job in the paper's ad: the pay now, and the hours gone.
+    fn work(&mut self, i: usize) {
+        let Some(job) = self.jobs().get(i).cloned() else { return };
+        self.state.cash += job.pay;
+        self.say(&format!("{} hours, ${} in your pocket.", job.hours, job.pay));
+        tone(660, 80);
+        self.spend(job.hours);
     }
 
     fn buy_part(&mut self, i: usize) {
@@ -1176,8 +1205,7 @@ impl Game {
         s.vgrad(0, 0, 320, 200, cream, 27, 23);
         s.text_big(8, 8, "THE PAPER", ink, 2);
         s.text(8, 30, &format!("DAY {}", self.day()), grey);
-        for (t, label) in ["CARS", "PARTS"].iter().enumerate() {
-            let x = 192 + t as i32 * 64;
+        for (t, label, x) in [(2, "JOBS", 128), (0, "CARS", 192), (1, "PARTS", 256)] {
             if t == page {
                 s.rect(x, 34, 60, 16, ink);
             }
@@ -1211,6 +1239,21 @@ impl Game {
                 s.text(12, 60, "NO CARS FOR SALE.", grey);
             }
             self.panel(s, "The paper", self.note.as_deref().unwrap_or("Pick a car to buy it."), "Escape puts it down.");
+        } else if page == 2 {
+            let jobs = self.jobs();
+            let over = self.row(8, 312, 56, 20, jobs.len());
+            for (i, j) in jobs.iter().enumerate() {
+                let y = 56 + i as i32 * 20;
+                if over == Some(i) {
+                    s.rect(8, y - 1, 304, 19, hover);
+                }
+                s.text(12, y + 1, &j.name.to_uppercase().chars().take(28).collect::<String>(), ink);
+                s.text(12, y + 10, &format!("{} HOURS", j.hours), grey);
+                let pay = format!("${}", j.pay);
+                s.text(308 - pay.len() as i32 * 8, y + 5, &pay, shade(ramp("FOREST"), 12));
+                s.rect(8, y + 18, 304, 1, grey);
+            }
+            self.panel(s, "Help wanted", self.note.as_deref().unwrap_or("Pick a job to work it. It pays, and it takes the hours."), "Escape puts it down.");
         } else {
             let parts = &self.pack.manifest.parts;
             let over = self.row(8, 312, 56, 10, parts.len());

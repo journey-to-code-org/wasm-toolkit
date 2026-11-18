@@ -463,7 +463,22 @@ pub struct Manifest {
     pub bets: Vec<i32>,
     #[serde(default)]
     pub maps: BTreeMap<String, Map>,
+    /// The help-wanted ads in the paper: work that pays whether you have a car or not. Left out,
+    /// three ordinary ones.
+    #[serde(default)]
+    pub jobs: Vec<Job>,
 }
+
+/// A job in the paper: so many hours of your day for so many dollars.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Job {
+    pub name: String,
+    pub hours: i32,
+    pub pay: i32,
+}
+
+/// The most jobs the paper has room to list.
+pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
 pub const ACTIONS: [&str; 12] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online"];
@@ -533,6 +548,12 @@ impl Pack {
         };
         if m.season.days < 1 || m.season.hours_per_day < 1 {
             return Err("the season has to be at least a day of at least an hour".into());
+        }
+        if m.jobs.len() > MOST_JOBS {
+            return Err(format!("the pack has {} jobs; the paper has room for {MOST_JOBS}", m.jobs.len()));
+        }
+        if let Some(j) = m.jobs.iter().find(|j| j.hours < 1 || j.pay < 1) {
+            return Err(format!("the job {} has to take at least an hour and pay at least a dollar", j.name));
         }
         if m.parts.len() > MOST_PARTS {
             return Err(format!("the pack has {} parts; the paper has room for {MOST_PARTS}", m.parts.len()));
