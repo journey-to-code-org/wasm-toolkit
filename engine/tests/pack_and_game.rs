@@ -845,3 +845,188 @@ fn a_part_behind_another_waits_for_it() {
     click(&mut g, filter.0, filter.1);
     assert!(g.owned().unwrap().off.is_empty());
 }
+
+const ROADS: &str = r#""roads": { "pass": { "title": "The pass", "ends": ["shed", "map:grid"], "limit": 50, "ticket": 30, "traffic": 0, "cops": 1, "hours": 2,
+      "parts": [ { "len": 300 }, { "len": 240, "curve": 0.6, "hill": 12, "left": "rock", "right": "drop" }, { "len": 300, "hill": -12, "left": "fields", "right": "posts" } ] } },
+  "maps": { "grid": { "title": "Grid", "traffic": 0, "rows": ["A.S", "H.P"],
+    "blocks": { "A": { "wall": "BRICK", "height": 12 }, "P": { "road": "pass", "name": "The pass" },
+                "H": { "wall": "WOOD", "height": 6, "to": "shed", "name": "Home" }, "S": { "to": "road", "name": "Strip" } } } },
+  "places": {"#;
+
+fn road_game() -> Game {
+    engine::host::store(b"");
+    let manifest = MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"road:pass\"")
+        .replace("\"puffer\": {", "\"fuzz\": { \"name\": \"Detector\", \"slot\": \"Dash\", \"price\": 50, \"radar\": true }, \"puffer\": {");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(5);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    g
+}
+
+/// Hold the middle of the lane at about a speed, until something is so.
+fn cruise(g: &mut Game, mph: f64, until: &dyn Fn(&Game) -> bool) {
+    for _ in 0..20000 {
+        if until(g) {
+            return;
+        }
+        let Some(t) = g.trip.as_ref() else { return };
+        let mut keys = if t.speed * 2.237 < mph { KEY_UP } else { 0 };
+        if t.x > 0.55 { keys |= 4 } else if t.x < 0.45 { keys |= 8 }
+        g.tick(keys, 0, 0);
+    }
+    panic!("never happened: {:?}", g.trip.as_ref().map(|t| (t.z, t.x, t.speed)));
+}
+
+#[test]
+fn a_road_is_stretches_between_two_ends() {
+    let g = road_game();
+    let road = &g.pack.manifest.roads["pass"];
+    assert_eq!((road.len(), road.limit, road.cops), (840.0, 50.0, 1));
+    let t = engine::road::Trip::new("pass", road, false, 3);
+    assert_eq!((t.len(), t.segs.len()), (840.0, 140));
+    assert!((t.height(540.0) - 12.0).abs() < 0.2 && t.height(840.0).abs() < 0.7, "up twelve metres and down again");
+    assert!(t.seg(420.0).curve > 0.5 && t.seg(100.0).curve == 0.0 && t.seg(310.0).curve < 0.3, "a bend eases in");
+    // The other way it is the same road turned about.
+    let back = engine::road::Trip::new("pass", road, true, 3);
+    assert!(back.seg(420.0).curve < -0.5 && (back.height(300.0) - 12.0).abs() < 0.2);
+    assert_eq!((t.seg(420.0).right, back.seg(420.0).left), (engine::road::Side::Drop, engine::road::Side::Drop));
+
+    let bad = |from: &str, to: &str| Pack::parse(&files(&MANIFEST.replace("\"places\": {", &ROADS.replace(from, to)))).err().unwrap();
+    assert!(bad("\"ends\": [\"shed\"", "\"ends\": [\"moon\"").contains("moon"));
+    assert!(bad("\"right\": \"drop\"", "\"right\": \"lava\"").contains("lava"));
+    assert!(bad("{ \"len\": 300 }", "{ \"len\": 3 }").contains("12 metres"));
+    assert!(bad("\"road\": \"pass\"", "\"road\": \"lane\"").contains("map:grid"));
+    assert!(bad("\"curve\": 0.6", "\"curve\": 6").contains("bends more"));
+    let spot = MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"road:nowhere\"");
+    assert!(Pack::parse(&files(&spot)).err().unwrap().contains("nowhere"));
+}
+
+#[test]
+fn a_road_is_driven_to_its_other_end() {
+    let mut g = road_game();
+    let mut s = Screen::new();
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Road);
+    assert!(g.trip.as_ref().is_some_and(|t| !t.backwards && t.x == 0.5));
+    g.draw(&mut s);
+    assert_eq!(s.at(160, 150), shade(ramp("ASPHALT"), 15), "the road is under the nose of the car");
+
+    // Turning round costs nothing but the gas.
+    cruise(&mut g, 40.0, &|g| g.trip.as_ref().unwrap().z > 60.0);
+    g.tick(KEY_B, 0, 0);
+    assert_eq!((g.scene, g.state.place.as_str(), g.state.hours), (Scene::Place, "shed", 0));
+    g.tick(0, 0, 0);
+
+    // Inside the limit all the way: past the police, round the bend, and into town at the block the road comes in by.
+    click(&mut g, 100, 10);
+    cruise(&mut g, 45.0, &|g| g.trip.as_ref().unwrap().z > 500.0);
+    g.draw(&mut s);
+    cruise(&mut g, 45.0, &|g| g.scene != Scene::Road);
+    assert_eq!((g.scene, g.state.hours, g.state.cash), (Scene::Drive, 2, 1000), "two hours, and no ticket");
+    let t = g.town.as_ref().unwrap();
+    assert!(t.beside(&g.pack.manifest.maps["grid"]).is_some_and(|b| b.road.as_deref() == Some("pass")), "{:?}", (t.x, t.z));
+    let gas = g.owned().unwrap().gas;
+    assert!(gas < 8.0 && gas > 7.6, "{gas}");
+    // The shed is a road away now: no stepping back to it.
+    g.tick(KEY_B, 0, 0);
+    assert_eq!(g.scene, Scene::Drive);
+    g.draw(&mut s);
+
+    // And back out the way you came, which is the road the other way round.
+    g.tick(0, 0, 0);
+    g.tick(KEY_A, 0, 0);
+    assert_eq!(g.scene, Scene::Road);
+    assert!(g.trip.as_ref().unwrap().backwards);
+    cruise(&mut g, 45.0, &|g| g.scene != Scene::Road);
+    assert_eq!((g.scene, g.state.place.as_str(), g.state.hours), (Scene::Place, "shed", 4));
+}
+
+#[test]
+fn the_law_is_on_the_road() {
+    // Past the police well over the limit: lights. Stop, and it is a ticket.
+    let mut g = road_game();
+    click(&mut g, 100, 10);
+    let cop = g.trip.as_ref().unwrap().cops[0].z;
+    cruise(&mut g, 80.0, &|g| g.trip.as_ref().unwrap().chase.is_some());
+    assert!(g.trip.as_ref().unwrap().z >= cop && g.note.as_deref() == Some("Police! Pull over, or run for it."));
+    g.tick(KEY_B, 0, 0);
+    assert_eq!((g.scene, g.note.as_deref()), (Scene::Road, Some("Not with him behind you.")));
+    for _ in 0..400 {
+        g.tick(2, 0, 0);
+    }
+    let t = g.trip.as_ref().unwrap();
+    assert!(t.chase.is_none() && t.speed == 0.0);
+    let fine = 1000 - g.state.cash;
+    assert!((30 + 2 * 15..30 + 2 * 45).contains(&fine), "thirty dollars and two for every mile an hour over: {fine}");
+    assert_eq!(g.note, Some(format!("Speeding. That is a ${fine} ticket.")));
+
+    // Keep your foot in it for twenty seconds and he is gone.
+    let road = g.pack.manifest.roads["pass"].clone();
+    let mut long = road.clone();
+    long.parts[2].len = 4000.0;
+    let mut t = engine::road::Trip::new("pass", &long, false, 9);
+    let (mut siren, mut lost, mut fined) = (false, false, false);
+    for _ in 0..3000 {
+        let keys = Pedals { go: true, left: t.x > 0.55, right: t.x < 0.45, ..Pedals::default() };
+        let h = t.tick(&long, keys);
+        siren |= h.siren;
+        lost |= h.lost_him;
+        fined |= h.ticket.is_some();
+    }
+    assert!(siren && lost && !fined, "{:?}", (siren, lost, fined, t.z, t.speed));
+
+    // A detector knows about him before you do, if it is in the car.
+    let mut g = road_game();
+    click(&mut g, 100, 10);
+    cruise(&mut g, 40.0, &|g| g.trip.as_ref().unwrap().radar);
+    assert!(g.trip.as_ref().unwrap().z < cop && !g.radar());
+    g.state.cars[0].fitted.insert("Dash".into(), "fuzz".into());
+    assert!(g.radar());
+}
+
+#[test]
+fn the_road_has_edges_and_other_cars() {
+    let g = road_game();
+    let mut road = g.pack.manifest.roads["pass"].clone();
+    // Off the right-hand side of the bend is the drop.
+    let mut t = engine::road::Trip::new("pass", &road, false, 9);
+    let mut crashed = false;
+    for _ in 0..2000 {
+        let h = t.tick(&road, Pedals { go: t.speed < 25.0, right: t.z > 400.0 || t.x < 0.45, left: t.z <= 400.0 && t.x > 0.55, ..Pedals::default() });
+        if h.crashed {
+            crashed = true;
+            break;
+        }
+    }
+    assert!(crashed && t.z > 400.0 && t.scrapes == 1 && t.speed == 0.0 && t.crash > 0, "{:?}", (t.z, t.x));
+    // Fields are only slow.
+    let mut t = engine::road::Trip::new("pass", &road, false, 9);
+    t.z = 600.0;
+    for _ in 0..300 {
+        assert!(!t.tick(&road, Pedals { go: true, left: true, ..Pedals::default() }).crashed);
+    }
+    assert!(t.x < -1.5 && t.speed < 16.0, "{:?}", (t.x, t.speed));
+    // Other cars keep to their lanes, and one in yours is in the way.
+    road.traffic = 12;
+    let mut t = engine::road::Trip::new("pass", &road, false, 4);
+    assert_eq!(t.others.len(), 12);
+    assert!(t.others.iter().all(|o| (o.lane == 0.5) == (o.speed > 0.0)) && t.others.iter().any(|o| o.speed < 0.0) && t.others.iter().any(|o| o.speed > 0.0));
+    t.others[0] = engine::road::Other { z: 40.0, lane: 0.5, speed: 5.0, paint: "RED" };
+    let mut hit = false;
+    for _ in 0..600 {
+        hit |= t.tick(&road, Pedals { go: true, left: t.x > 0.55, right: t.x < 0.45, ..Pedals::default() }).crashed;
+    }
+    assert!(hit);
+
+    // In the game a crash is a tired car, and running dry is a walk.
+    let mut g = road_game();
+    click(&mut g, 100, 10);
+    g.trip.as_mut().unwrap().others.push(engine::road::Other { z: 60.0, lane: 0.5, speed: 0.0, paint: "RED" });
+    let cond = g.owned().unwrap().cond;
+    cruise(&mut g, 40.0, &|g| g.trip.as_ref().unwrap().crash > 0);
+    assert_eq!(g.owned().unwrap().cond, cond - 3);
+    g.state.cars[0].gas = 0.01;
+    cruise(&mut g, 40.0, &|g| g.scene != Scene::Road);
+    assert_eq!((g.scene, g.state.place.as_str(), g.note.as_deref()), (Scene::Place, "shed", Some("Out of gas. You walked home.")));
+}

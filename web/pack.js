@@ -152,7 +152,7 @@ export async function makeViewer(wasmBytes) {
   const palette = new Uint32Array(first.memory.buffer, first.wtk_palette(), 1024).slice();
   return {
     palette,
-    async view(packBytes, { lamps = false, spot = null } = {}) {
+    async view(packBytes, { lamps = false, spot = null, roll = 0 } = {}) {
       const x = await start();
       const at = x.pack_alloc(packBytes.length);
       new Uint8Array(x.memory.buffer, at, packBytes.length).set(packBytes);
@@ -163,6 +163,8 @@ export async function makeViewer(wasmBytes) {
         step(16, 160, 100); step(0, 160, 100);
         if (lamps && spot) { const [sx, sy, sw, sh] = spot; step(0, sx + (sw >> 1), sy + (sh >> 1)); step(16, sx + (sw >> 1), sy + (sh >> 1)); }
         step(0, 319, 199);
+        // A little way down the road, foot down, so it is seen moving.
+        for (let i = 0; i < roll; i++) step(1, 319, 199);
       }
       const screen = new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H);
       const out = new Uint8ClampedArray(W * H * 4);

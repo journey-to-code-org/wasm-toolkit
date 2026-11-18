@@ -49,8 +49,13 @@ pub struct Pedals {
 
 impl Town {
     /// Out on the street beside the block that leads to `from`, or in the south-west corner.
-    pub fn new(id: &str, map: &Map, from: Option<&str>, mut rand: impl FnMut() -> u32) -> Town {
-        let (c, r) = map.places().into_iter().find(|(_, _, b)| b.to.as_deref() == from && from.is_some()).map(|(c, r, _)| (c, r)).unwrap_or((0, 0));
+    pub fn new(id: &str, map: &Map, from: Option<&str>, rand: impl FnMut() -> u32) -> Town {
+        Town::at(id, map, |b| b.to.as_deref() == from && from.is_some(), rand)
+    }
+
+    /// Out on the street beside the first block that is the one wanted.
+    pub fn at(id: &str, map: &Map, wanted: impl Fn(&Block) -> bool, mut rand: impl FnMut() -> u32) -> Town {
+        let (c, r) = map.places().into_iter().find(|(_, _, b)| wanted(b)).map(|(c, r, _)| (c, r)).unwrap_or((0, 0));
         let others = (0..map.traffic).map(|i| {
             let (k, north) = (rand(), i & 1 == 1);
             let (streets, length) = if north { (map.cols() + 1, map.depth()) } else { (map.depth() + 1, map.cols()) };

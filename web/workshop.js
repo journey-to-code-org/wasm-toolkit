@@ -16,11 +16,11 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"]];
-const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"]];
+const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
-const at = { tab: "cars", car: null, place: null, spot: -1, slot: null, map: null, brush: "." };
+const at = { tab: "cars", car: null, place: null, spot: -1, slot: null, map: null, brush: ".", road: null, stretch: 0 };
 // The pictures dropped in this visit, by car, so they can be matched to the colours again when a
 // setting changes: { side, lamps (ImageBitmaps), width, corner, body: [r, g, b] | null, within }.
 const sources = new Map();
@@ -540,10 +540,11 @@ function roomsPanel() {
     const others = Object.entries(m.places).filter(([id]) => id !== at.place).map(([id, pl]) => [id, pl.title]);
     spots.append(h("div", { class: "card" },
       field("What it is called", s.label, (v) => { s.label = v; }, { maxlength: 38, id: "spotLabel" }),
-      choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v === "drive" ? "drive:" + (Object.keys(m.maps ?? {})[0] ?? "") : v; }),
+      choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v === "drive" ? "drive:" + (Object.keys(m.maps ?? {})[0] ?? "") : v === "road" ? "road:" + (Object.keys(m.roads ?? {})[0] ?? "") : v; }),
       kind === "say" ? field("What it says", arg, (v) => { s.do = "say:" + v; }, { maxlength: 38, id: "spotSays" }) : null,
       kind === "go" ? choice("Where to", arg, others, (v) => { s.do = "go:" + v; }) : null,
       kind === "drive" ? choice("Which map", arg, Object.entries(m.maps ?? {}).map(([id, mp]) => [id, mp.title]), (v) => { s.do = "drive:" + v; }) : null,
+      kind === "road" ? choice("Which road", arg, Object.entries(m.roads ?? {}).map(([id, r]) => [id, r.title]), (v) => { s.do = "road:" + v; }) : null,
       field("Draw it as a button with this word on it (blank: the picture shows it)", s.button, (v) => { if (v) s.button = v; else delete s.button; }, { maxlength: 9 }),
       tick("Only there when you have a car", s.needs_car, (v) => { if (v) s.needs_car = true; else delete s.needs_car; })));
   }
@@ -570,6 +571,8 @@ function mapsPanel() {
       at.map ? h("button", { text: "Remove this one", onclick: () => {
         const from = Object.values(m.places).find((p) => p.spots.some((s) => s.do === "drive:" + at.map));
         if (from) return fail(`${from.title} has a way out onto this map. Change that first.`);
+        const road = Object.values(m.roads ?? {}).find((r) => r.ends.includes("map:" + at.map));
+        if (road) return fail(`${road.title} ends at this map. Change that first.`);
         if (!confirm(`Remove ${map().title} from the pack?`)) return;
         delete m.maps[at.map]; at.map = null; render();
       } }) : null))];
@@ -602,8 +605,9 @@ function mapsPanel() {
       h("div", { class: "two" },
         choice("Built of", kind.wall ?? "CONCRETE", colours(), (v) => { kind.wall = v; }),
         field("How tall, in metres (0: open ground)", kind.height ?? 0, (n) => { kind.height = Math.max(0, n ?? 0); }, { type: "number", min: 0, max: 80, redo: true })),
-      choice("Pulling up beside it takes you to", kind.to ?? "", places, (v) => { if (v) kind.to = v; else { delete kind.to; delete kind.name; } }),
-      kind.to ? field("What it is called on the list in the windscreen", kind.name, (v) => { if (v) kind.name = v; else delete kind.name; }, { maxlength: 16, redo: true }) : null) : null));
+      choice("Pulling up beside it takes you to", kind.to ?? "", places, (v) => { if (v) { kind.to = v; delete kind.road; } else { delete kind.to; delete kind.name; } }),
+      choice("Or it is the way onto a road", kind.road ?? "", [["", "No"], ...Object.entries(m.roads ?? {}).filter(([, r]) => r.ends.includes("map:" + at.map)).map(([id, r]) => [id, r.title])], (v) => { if (v) { kind.road = v; delete kind.to; kind.name ??= m.roads[v].title.slice(0, 16); } else delete kind.road; }),
+      kind.to || kind.road ? field("What it is called on the list in the windscreen", kind.name, (v) => { if (v) kind.name = v; else delete kind.name; }, { maxlength: 16, redo: true }) : null) : null));
   return out;
 }
 
@@ -621,9 +625,9 @@ function drawMap() {
   g.textAlign = "center"; g.textBaseline = "middle";
   mp.rows.forEach((row, j) => [...row].forEach((ch, i) => {
     const b = mp.blocks[ch], x = i * cell + road, y = j * cell + road, w = cell - road;
-    g.fillStyle = !b ? css(pal[RAMPS.indexOf("GRASS") * 32 + 18]) : b.height > 0 ? css(pal[RAMPS.indexOf(b.wall ?? "CONCRETE") * 32 + 20]) : b.to ? "#e6b84a" : css(pal[RAMPS.indexOf("GRASS") * 32 + 22]);
+    g.fillStyle = !b ? css(pal[RAMPS.indexOf("GRASS") * 32 + 18]) : b.height > 0 ? css(pal[RAMPS.indexOf(b.wall ?? "CONCRETE") * 32 + 20]) : b.to || b.road ? "#e6b84a" : css(pal[RAMPS.indexOf("GRASS") * 32 + 22]);
     g.fillRect(x, y, w, w);
-    if (b?.to) { g.strokeStyle = "#e6b84a"; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, w - 2, w - 2); }
+    if (b?.to || b?.road) { g.strokeStyle = "#e6b84a"; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, w - 2, w - 2); }
     if (b) { g.fillStyle = "rgba(0,0,0,.75)"; g.fillText(ch, x + w / 2 + 1, y + w / 2 + 1); g.fillStyle = "#fff"; g.fillText(ch, x + w / 2, y + w / 2); }
   }));
   const paint = (e) => {
@@ -635,6 +639,128 @@ function drawMap() {
   };
   canvas.onpointerdown = (e) => { canvas.setPointerCapture(e.pointerId); canvas.onpointermove = paint; paint(e); };
   canvas.onpointerup = () => { canvas.onpointermove = null; };
+}
+
+// ---- Roads ----
+
+const road = () => pack.manifest.roads?.[at.road];
+const SIDES = [["trees", "Trees"], ["rock", "Rock: a cutting"], ["drop", "A drop, and a rail"], ["fields", "Fields: open, and only slow"], ["posts", "Posts: open"]];
+
+function roadsPanel() {
+  const m = pack.manifest;
+  m.roads ??= {};
+  if (!(at.road in m.roads)) { at.road = Object.keys(m.roads)[0] ?? null; at.stretch = 0; }
+  const ends = [...Object.entries(m.places).map(([id, p]) => [id, p.title]), ...Object.entries(m.maps ?? {}).map(([id, mp]) => ["map:" + id, `The streets of ${mp.title}`])];
+  const out = [h("section", {}, h("h2", { text: "Roads in this pack" }),
+    h("p", { class: "hint", text: "A road runs between two ends, and is driven from the seat: bends, hills, other cars both ways, and police. An end is a room, or a map, where a block is the way onto it." }),
+    list(Object.entries(m.roads).map(([id, r]) => [id, r.title]), at.road, (id) => { at.road = id; at.stretch = 0; render(); }),
+    h("div", { class: "row" },
+      h("button", { id: "addRoad", text: "Add a road", disabled: !Object.keys(m.places).length, onclick: () => {
+        const id = freshId("new-road", m.roads), places = Object.keys(m.places);
+        m.roads[id] = { title: "New road", ends: [places[0], places[1] ?? places[0]], limit: 55, ticket: 40, traffic: 6, cops: 1, hours: 2,
+          parts: [{ len: 300 }, { len: 240, curve: 0.5, hill: 10 }, { len: 300, curve: -0.4, hill: -6, left: "fields", right: "fields" }] };
+        at.road = id; at.stretch = 0; render();
+      } }),
+      at.road ? h("button", { text: "Remove this one", onclick: () => {
+        const from = Object.values(m.places).find((p) => p.spots.some((s) => s.do === "road:" + at.road));
+        if (from) return fail(`${from.title} has a way onto this road. Change that first.`);
+        if (!confirm(`Remove ${road().title} from the pack?`)) return;
+        for (const mp of Object.values(m.maps ?? {})) for (const b of Object.values(mp.blocks)) if (b.road === at.road) delete b.road;
+        delete m.roads[at.road]; at.road = null; render();
+      } }) : null))];
+  if (!at.road) return out;
+  const r = road(), total = r.parts.reduce((n, p) => n + (p.len || 0), 0);
+  const end = (i, v) => {
+    r.ends[i] = v;
+    // A map needs a block that is the way onto the road: one is made, to be put down under Maps.
+    const mp = v.startsWith("map:") && m.maps[v.slice(4)];
+    if (mp && !Object.values(mp.blocks).some((b) => b.road === at.road)) {
+      const ch = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].find((x) => !(x in mp.blocks));
+      if (ch) mp.blocks[ch] = { road: at.road, name: r.title.slice(0, 16) };
+    }
+  };
+  const placed = (e) => !e.startsWith("map:") || m.maps[e.slice(4)]?.rows.some((row) => [...row].some((ch) => m.maps[e.slice(4)].blocks[ch]?.road === at.road));
+  out.push(h("section", {}, h("h2", { text: "This road" }),
+    field("Its name", r.title, (v) => { r.title = v; }, { maxlength: 20, redo: true, id: "roadTitle" }),
+    h("div", { class: "two" },
+      choice("It starts at", r.ends[0], ends, (v) => end(0, v)),
+      choice("And ends at", r.ends[1], ends, (v) => end(1, v))),
+    r.ends.every(placed) ? null : h("p", { class: "hint bad", text: "The block that is the way onto this road is not on its map yet. Under Maps, pick it and put it down." }),
+    r.ends.some((e) => !e.startsWith("map:")) ? h("p", { class: "hint", text: "At a room, something to pick has to take the road: under Rooms, add one that \"Takes a road out of town\"." }) : null,
+    h("div", { class: "two" },
+      field("Speed limit, mph", r.limit ?? 55, (n) => { r.limit = Math.max(10, n ?? 55); }, { type: "number", min: 10, max: 120 }),
+      field("A ticket, dollars (and 2 for every mph over)", r.ticket ?? 40, (n) => { r.ticket = Math.max(0, Math.floor(n ?? 40)); }, { type: "number", min: 0 }),
+      field("Other cars on it", r.traffic ?? 6, (n) => { r.traffic = Math.max(0, Math.min(30, Math.floor(n ?? 6))); }, { type: "number", min: 0, max: 30 }),
+      field("Police parked beside it", r.cops ?? 1, (n) => { r.cops = Math.max(0, Math.min(8, Math.floor(n ?? 1))); }, { type: "number", min: 0, max: 8 }),
+      field("Hours the trip takes", r.hours ?? 2, (n) => { r.hours = Math.max(0, Math.floor(n ?? 2)); }, { type: "number", min: 0, max: 12 }),
+      field("Gallons burned a kilometre", r.gas_per_km ?? 0.25, (n) => { r.gas_per_km = Math.max(0, n ?? 0.25); }, { type: "number", step: "0.05", min: 0 }),
+      choice("The sky", r.sky ?? "", colours("Blue sky"), (v) => { if (v) r.sky = v; else delete r.sky; }),
+      choice("The country", r.ground ?? "", colours("Grass"), (v) => { if (v) r.ground = v; else delete r.ground; }))));
+  const move = (i, j) => { [r.parts[i], r.parts[j]] = [r.parts[j], r.parts[i]]; at.stretch = j; render(); };
+  out.push(h("section", {}, h("h2", { text: `Its stretches, first end first: ${(total / 1000).toFixed(1)} km` }),
+    h("p", { class: "hint", text: "Each stretch has one bend and one climb. A bend of 1 is as hard as they come; at speed the car is thrown to the outside of it." }),
+    r.parts.map((p, i) => h("div", { class: "card", id: `stretch-${i}` },
+      h("div", { class: "three" },
+        field("Length, m", p.len, (n) => { p.len = Math.max(12, n ?? 12); }, { type: "number", min: 12, max: 5000, step: 10, redo: true }),
+        field("Bend: -1 left to 1 right", p.curve ?? 0, (n) => { p.curve = Math.max(-1, Math.min(1, n ?? 0)); }, { type: "number", min: -1, max: 1, step: "0.1", redo: true }),
+        field("Climb, m (less than 0 falls)", p.hill ?? 0, (n) => { p.hill = Math.max(-80, Math.min(80, n ?? 0)); }, { type: "number", min: -80, max: 80, redo: true })),
+      h("div", { class: "two" },
+        choice("On the left", p.left ?? "trees", SIDES, (v) => { p.left = v; }),
+        choice("On the right", p.right ?? "trees", SIDES, (v) => { p.right = v; })),
+      h("div", { class: "row" },
+        h("button", { "aria-current": String(i === at.stretch), text: i === at.stretch ? "Looking from here" : "Look from here", onclick: () => { at.stretch = i; render(); } }),
+        i > 0 ? h("button", { text: "Sooner", onclick: () => move(i, i - 1) }) : null,
+        i < r.parts.length - 1 ? h("button", { text: "Later", onclick: () => move(i, i + 1) }) : null,
+        r.parts.length > 1 ? h("button", { text: "Remove", onclick: () => { r.parts.splice(i, 1); at.stretch = Math.min(at.stretch, r.parts.length - 1); render(); } }) : null))),
+    h("button", { id: "addStretch", text: "Add a stretch", disabled: r.parts.length >= 60, onclick: () => { r.parts.push({ len: 240 }); at.stretch = r.parts.length - 1; render(); } })));
+  return out;
+}
+
+// The road from above, as the engine lays it out, and under that how high it runs.
+function drawRoad() {
+  const r = road(), canvas = $("roadView");
+  if (!r) return;
+  const g = canvas.getContext("2d"), W = canvas.width, H = canvas.height, PLAN = H - 110;
+  const tint = { trees: "#3f8a45", rock: "#8d8a84", drop: "#5b8fd6", fields: "#c8aa78", posts: "#e8e8ec" };
+  g.fillStyle = "#1d2a1f"; g.fillRect(0, 0, W, H);
+  // Six metres at a time, each piece turned a little from the last: the same sums as the engine does.
+  const pts = [];
+  let x = 0, z = 0, hd = 0, y = 0;
+  r.parts.forEach((p, i) => {
+    const n = Math.max(1, Math.round((p.len || 12) / 6));
+    for (let k = 0; k < n; k++) {
+      const t = k / n, ease = Math.min(t / 0.25, (1 - t) / 0.25, 1);
+      pts.push({ x, z, hd, y: y + (p.hill ?? 0) * t * t * (3 - 2 * t), i, p });
+      x += Math.sin(hd) * 6; z += Math.cos(hd) * 6; hd += (p.curve ?? 0) * ease * 0.032;
+    }
+    y += p.hill ?? 0;
+  });
+  pts.push({ x, z, hd, y, i: r.parts.length - 1, p: r.parts.at(-1) });
+  const xs = pts.map((q) => q.x), zs = pts.map((q) => q.z), ys = pts.map((q) => q.y);
+  const [x0, x1, z0, z1] = [Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)];
+  const k = Math.min((W - 60) / Math.max(1, x1 - x0), (PLAN - 50) / Math.max(1, z1 - z0));
+  const px = (q, out = 0) => [W / 2 + (q.x + Math.cos(q.hd) * out - (x0 + x1) / 2) * k, PLAN / 2 - (q.z - Math.sin(q.hd) * out - (z0 + z1) / 2) * k];
+  const edge = Math.max(4 / k, 14);
+  for (let n = 0; n + 1 < pts.length; n++) {
+    const a = pts[n], b = pts[n + 1], on = a.i === at.stretch;
+    for (const [sign, side] of [[-1, a.p.left ?? "trees"], [1, a.p.right ?? "trees"]]) {
+      g.strokeStyle = tint[side]; g.lineWidth = 3;
+      g.beginPath(); g.moveTo(...px(a, sign * edge)); g.lineTo(...px(b, sign * edge)); g.stroke();
+    }
+    g.strokeStyle = on ? "#f4d24a" : "#565861"; g.lineWidth = on ? 5 : 3;
+    g.beginPath(); g.moveTo(...px(a)); g.lineTo(...px(b)); g.stroke();
+  }
+  g.fillStyle = "#fff"; g.beginPath(); g.arc(...px(pts[0]), 5, 0, 7); g.fill();
+  // How high it runs, start to end.
+  const [lo, hi] = [Math.min(...ys), Math.max(...ys)], top = PLAN + 14, deep = H - top - 22;
+  g.fillStyle = "#12161c"; g.fillRect(0, PLAN, W, H - PLAN);
+  const hx = (n) => 20 + n / (pts.length - 1) * (W - 40), hy = (v) => top + deep - (v - lo) / Math.max(10, hi - lo) * deep;
+  for (let n = 0; n + 1 < pts.length; n++) {
+    g.strokeStyle = pts[n].i === at.stretch ? "#f4d24a" : "#9aa0ac"; g.lineWidth = pts[n].i === at.stretch ? 3 : 2;
+    g.beginPath(); g.moveTo(hx(n), hy(pts[n].y)); g.lineTo(hx(n + 1), hy(pts[n + 1].y)); g.stroke();
+  }
+  g.fillStyle = "#c9ced8"; g.font = "12px system-ui, sans-serif";
+  g.fillText(`Lowest ${Math.round(lo)} m, highest ${Math.round(hi)} m, ${((pts.length - 1) * 6 / 1000).toFixed(1)} km`, 20, H - 6);
 }
 
 // ---- Parts ----
@@ -659,6 +785,7 @@ function partsPanel() {
           field("A gearbox: its ratios, first gear first", (p.gears ?? []).join(" "), (v) => { const n = v.split(/[\s,]+/).map(Number).filter((x) => x > 0); if (n.length) p.gears = n; else delete p.gears; }),
           field("A final drive", p.final, (v) => { if (v > 0) p.final = v; else delete p.final; }, { type: "number", step: "0.01" }),
           field("A redline, rpm (a built engine)", p.redline, (v) => { if (v > 0) p.redline = v; else delete p.redline; }, { type: "number", step: 100 }))),
+      tick("It is a radar detector: it beeps when police are ahead on a road", !!p.radar, (v) => { if (v) p.radar = true; else delete p.radar; }),
       tick("It is a turbo, and replaces the car's own", !!p.boost, (v) => { if (v) p.boost = { from: 3000, psi: 27, lag: 10 }; else delete p.boost; }),
       p.boost ? h("div", { class: "three" },
         field("Wakes at, rpm", p.boost.from, (v) => { p.boost.from = v ?? 3000; }, { type: "number", step: 100 }),
@@ -734,7 +861,7 @@ function gamePanel() {
 
 // ---- Putting it on the page ----
 
-const PANELS = { cars: carsPanel, rooms: roomsPanel, maps: mapsPanel, parts: partsPanel, rivals: rivalsPanel, game: gamePanel };
+const PANELS = { cars: carsPanel, rooms: roomsPanel, maps: mapsPanel, roads: roadsPanel, parts: partsPanel, rivals: rivalsPanel, game: gamePanel };
 let redraw = () => {};
 
 function render() {
@@ -750,11 +877,13 @@ function render() {
   const cars = at.tab === "cars" && at.car, rooms = at.tab === "rooms", maps = at.tab === "maps" && !!map();
   $("mapBox").hidden = !maps;
   if (maps) drawMap();
+  $("roadBox").hidden = !(at.tab === "roads" && road());
+  if (at.tab === "roads" && road()) drawRoad();
   $("sideBox").hidden = !cars;
   $("hoodBox").hidden = !(cars && car().hood);
   $("lampsBox").hidden = !cars;
   $("viewOver").hidden = !rooms;
-  $("viewTitle").textContent = rooms ? place().title : maps ? "From the seat, in the south-west corner or beside the first place to go" : "In the game";
+  $("viewTitle").textContent = rooms ? place().title : maps ? "From the seat, in the south-west corner or beside the first place to go" : at.tab === "roads" && road() ? "From the seat, a little way into the stretch that is picked" : "In the game";
   $("viewHint").textContent = rooms ? "The crosses are where the tyres of your car and the rival's meet the floor: drag them." : "";
   if (cars) { drawSide(); if (car().hood) drawHood(); }
   redraw = rooms ? boxes($("viewOver"), 2, roomItems, {
@@ -778,6 +907,22 @@ async function preview() {
     if (!car) delete shown.start.car;
     lamps = [0, 0, 320, 200];
     const { ok, rgba } = await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: true, spot: lamps });
+    $("view").getContext("2d").putImageData(new ImageData(rgba, 320, 240), 0, 0);
+    if (!ok) fail("The engine will not play this pack as it stands; the screen says why.");
+    else if (!car) fail("There is no car in the pack to drive it in.");
+    else if ($("problem").textContent.startsWith("The engine will not")) fail("");
+    return;
+  }
+  if (at.tab === "roads" && road()) {
+    // The road from the stretch that is picked on: the pack is given a road that starts there, and a way onto it.
+    const car = m.start.car ?? Object.keys(m.cars)[0], from = m.start.place, r = road();
+    const parts = [...r.parts.slice(Math.min(at.stretch, r.parts.length - 1)), { len: 240 }];
+    const room = { ...m.places[from], spots: [...m.places[from].spots, { rect: [0, 0, 320, 200], label: "", do: "road:" + at.road }] };
+    shown = { ...m, start: { ...m.start, car }, places: { ...m.places, [from]: room }, roads: { ...m.roads, [at.road]: { ...r, parts, cops: 0 } } };
+    if (!car) delete shown.start.car;
+    // The engine is asked about the pack as it is, too, so that what is wrong with the real road is said.
+    const real = await viewer.view(buildPack(pack));
+    const { ok, rgba } = real.ok ? await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: true, spot: [0, 0, 320, 200], roll: 24 }) : real;
     $("view").getContext("2d").putImageData(new ImageData(rgba, 320, 240), 0, 0);
     if (!ok) fail("The engine will not play this pack as it stands; the screen says why.");
     else if (!car) fail("There is no car in the pack to drive it in.");

@@ -141,6 +141,9 @@ pub struct Part {
     /// A redline, in place of the car's own: for a built bottom end.
     #[serde(default)]
     pub redline: Option<f64>,
+    /// A radar detector: it warns of police ahead on a road.
+    #[serde(default)]
+    pub radar: bool,
     /// What it looks like bolted on under the hood: a picture drawn over its slot's box, in place
     /// of the stock part that the engine bay's picture shows there.
     #[serde(default)]
@@ -405,6 +408,9 @@ pub struct Block {
     /// What it is called on the list of places to go.
     #[serde(default)]
     pub name: Option<String>,
+    /// The way out of town: pull up beside it and you are on this road.
+    #[serde(default)]
+    pub road: Option<String>,
 }
 
 /// A town to drive round: blocks in rows, with a street between every two and round the outside.
@@ -465,12 +471,86 @@ impl Map {
         let mut out = Vec::new();
         for r in 0..self.depth() {
             for c in 0..self.cols() {
-                if let Some(b) = self.block(c, r).filter(|b| b.to.is_some()) {
+                if let Some(b) = self.block(c, r).filter(|b| b.to.is_some() || b.road.is_some()) {
                     out.push((c, r, b));
                 }
             }
         }
         out
+    }
+}
+
+/// A stretch of a road: how long, how it bends (-1 hard left to 1 hard right), how much it
+/// climbs in metres, and what is beside it: "trees", "rock", "drop", "fields" or "posts".
+#[derive(Deserialize, Clone, Debug)]
+pub struct Stretch {
+    pub len: f64,
+    #[serde(default)]
+    pub curve: f64,
+    #[serde(default)]
+    pub hill: f64,
+    #[serde(default = "trees")]
+    pub left: String,
+    #[serde(default = "trees")]
+    pub right: String,
+}
+
+fn trees() -> String {
+    "trees".into()
+}
+
+pub const SIDES: [&str; 5] = ["trees", "rock", "drop", "fields", "posts"];
+
+/// A road out of town: two lanes that bend and climb between two ends, with other cars on it and
+/// the law beside it. An end is a place, or `map:<id>` for a block of that map marked with this road.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Road {
+    pub title: String,
+    pub ends: [String; 2],
+    pub parts: Vec<Stretch>,
+    /// The speed limit, in miles an hour, and what being caught well over it costs.
+    #[serde(default = "limit")]
+    pub limit: f64,
+    #[serde(default = "ticket")]
+    pub ticket: i32,
+    /// How many other cars are on it, and how many police are parked beside it.
+    #[serde(default = "road_traffic")]
+    pub traffic: usize,
+    #[serde(default = "one")]
+    pub cops: usize,
+    #[serde(default = "road_gas")]
+    pub gas_per_km: f64,
+    /// How long the trip takes off the clock.
+    #[serde(default = "two")]
+    pub hours: i32,
+    #[serde(default)]
+    pub sky: Option<String>,
+    #[serde(default)]
+    pub ground: Option<String>,
+}
+
+fn limit() -> f64 {
+    55.0
+}
+fn ticket() -> i32 {
+    40
+}
+fn road_traffic() -> usize {
+    6
+}
+fn one() -> usize {
+    1
+}
+fn two() -> i32 {
+    2
+}
+fn road_gas() -> f64 {
+    0.25
+}
+
+impl Road {
+    pub fn len(&self) -> f64 {
+        self.parts.iter().map(|p| p.len).sum()
     }
 }
 
@@ -498,6 +578,8 @@ pub struct Manifest {
     pub bets: Vec<i32>,
     #[serde(default)]
     pub maps: BTreeMap<String, Map>,
+    #[serde(default)]
+    pub roads: BTreeMap<String, Road>,
     /// The help-wanted ads in the paper: work that pays whether you have a car or not. Left out,
     /// three ordinary ones.
     #[serde(default)]
@@ -601,6 +683,28 @@ impl Pack {
                 return Err(format!("the part {id} fits the car {car}, which is not in the pack"));
             }
         }
+        for (id, road) in &m.roads {
+            if road.parts.is_empty() || road.parts.iter().any(|p| p.len < 12.0 || !p.len.is_finite()) || road.len() < 200.0 || road.len() > 30000.0 {
+                return Err(format!("the road {id} needs stretches of 12 metres or more, adding up to between 200 metres and 30 kilometres"));
+            }
+            if let Some(p) = road.parts.iter().find(|p| !SIDES.contains(&p.left.as_str()) || !SIDES.contains(&p.right.as_str())) {
+                return Err(format!("the road {id} has \"{}\" and \"{}\" beside it; what can be beside a road is {}", p.left, p.right, SIDES.join(", ")));
+            }
+            if road.parts.iter().any(|p| p.curve.abs() > 1.0 || p.hill.abs() > 80.0) {
+                return Err(format!("the road {id} bends more than 1 or climbs more than 80 metres in one stretch"));
+            }
+            for end in &road.ends {
+                let there = match end.strip_prefix("map:") {
+                    Some(map) => m.maps.get(map).is_some_and(|mp| mp.blocks.values().any(|b| b.road.as_deref() == Some(id.as_str()))),
+                    None => m.places.contains_key(end),
+                };
+                if !there {
+                    return Err(format!("the road {id} ends at {end}, which is not a place, or a map with a block marked for this road"));
+                }
+            }
+            colour(&format!("the sky over the road {id}"), &road.sky)?;
+            colour(&format!("the ground beside the road {id}"), &road.ground)?;
+        }
         for (id, map) in &m.maps {
             if map.rows.is_empty() || map.cols() == 0 || map.rows.iter().any(|r| r.chars().count() as i32 != map.cols()) {
                 return Err(format!("the map {id} needs rows of blocks, all the same length"));
@@ -615,6 +719,9 @@ impl Pack {
                 colour(&format!("block {ch} of the map {id}"), &b.wall)?;
                 if let Some(to) = b.to.as_ref().filter(|to| !m.places.contains_key(*to)) {
                     return Err(format!("block {ch} of the map {id} leads to {to}, which is not a place"));
+                }
+                if let Some(road) = b.road.as_ref().filter(|r| !m.roads.get(*r).is_some_and(|road| road.ends.contains(&format!("map:{id}")))) {
+                    return Err(format!("block {ch} of the map {id} is the way onto the road {road}, which has no end at this map"));
                 }
             }
         }
@@ -679,6 +786,10 @@ impl Pack {
                 if let Some(to) = spot.action.strip_prefix("go:") {
                     if !m.places.contains_key(to) {
                         return Err(format!("in {id}, \"{}\" goes to {to}, which is not a place", spot.label));
+                    }
+                } else if let Some(road) = spot.action.strip_prefix("road:") {
+                    if !m.roads.contains_key(road) {
+                        return Err(format!("in {id}, \"{}\" takes the road {road}, which is not in the pack", spot.label));
                     }
                 } else if let Some(map) = spot.action.strip_prefix("drive:") {
                     if !m.maps.contains_key(map) {

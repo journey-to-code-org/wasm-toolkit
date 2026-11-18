@@ -13,6 +13,7 @@ pub mod gfx;
 pub mod host;
 pub mod pack;
 pub mod race;
+pub mod road;
 pub mod town;
 
 use game::Game;
@@ -140,7 +141,7 @@ pub extern "C" fn wtk_mode() -> i32 {
     match engine().game.scene {
         game::Scene::Title => 0,
         game::Scene::Race => 2,
-        game::Scene::Drive => 3,
+        game::Scene::Drive | game::Scene::Road => 3,
         game::Scene::Over(_) => 4,
         _ => 1,
     }
