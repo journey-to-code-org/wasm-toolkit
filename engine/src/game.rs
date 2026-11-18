@@ -14,6 +14,9 @@ use crate::town::{Pedals, Town};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+pub mod online;
+use online::Net;
+
 pub const KEY_UP: u32 = 1;
 pub const KEY_DOWN: u32 = 2;
 pub const KEY_LEFT: u32 = 4;
@@ -113,6 +116,9 @@ pub enum Scene {
     Hood,
     Yard,
     Bets,
+    /// The meet: other people, to race. And picking what a race with one of them is for.
+    Online,
+    OnlineBets,
     Race,
     /// Out on a map, behind the wheel.
     Drive,
@@ -135,6 +141,7 @@ pub struct Game {
     bet: usize,
     pub race: Option<Race>,
     pub town: Option<Town>,
+    pub net: Net,
     selling: bool,
     pub carrying: Option<Loose>,
     saved: bool,
@@ -168,7 +175,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, net: Net::default(), selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -446,6 +453,7 @@ impl Game {
                     }
                 }
                 "yard" => self.scene = Scene::Yard,
+                "online" => self.go_online(),
                 "gas" => {
                     // A dollar buys three gallons.
                     let Some((o, car)) = self.owned().zip(self.car()) else { return self.no("You have nothing to fill.") };
@@ -604,7 +612,7 @@ impl Game {
             return;
         }
         if self.scene == Scene::Race {
-            return self.race_tick(keys, hit);
+            return if self.net.versus.is_some() { self.versus_tick(keys, hit) } else { self.race_tick(keys, hit) };
         }
         if self.scene == Scene::Drive {
             return self.drive_tick(keys, hit);
@@ -716,6 +724,8 @@ impl Game {
                     }
                 }
             }
+            Scene::Online => self.online_tick(pick, back),
+            Scene::OnlineBets => self.online_bets_tick(pick, back),
             Scene::Race | Scene::Drive => {}
         }
     }
@@ -1092,6 +1102,7 @@ impl Game {
             Scene::Bench => self.draw_bench(s),
             Scene::Hood => self.draw_hood(s),
             Scene::Yard => self.draw_yard(s),
+            Scene::Online | Scene::OnlineBets => self.draw_online(s),
             Scene::Race => return self.draw_race(s),
             Scene::Drive => return self.draw_drive(s),
             Scene::Over(kind) => return self.draw_over(s, kind),
@@ -1410,10 +1421,10 @@ impl Game {
             s.rect(x, 96, 3, 82, shade(ramp(name), 26));
         }
         if !r.alone() {
-            if let Some(rv) = self.rival() {
+            if let Some((car, paint, _)) = self.opponent() {
                 let x = NOSE - 122 + ((r.rival_pos - r.pos) * PER_M) as i32;
                 if (-200..400).contains(&x) {
-                    self.draw_car(s, &rv.car, rv.paint.as_deref(), true, x, 128, true);
+                    self.draw_car(s, &car, paint.as_deref(), true, x, 128, true);
                 }
             }
         }
@@ -1474,10 +1485,12 @@ impl Game {
             s.rect(40, 12, 201, 1, shade(ramp("CHROME"), 12));
             s.rect(240, 8, 1, 9, WHITE);
             let mark = |pos: f64| 40 + ((pos / QUARTER).clamp(0.0, 1.0) * 200.0) as i32 - 2;
-            s.rect(mark(r.rival_pos), 13, 5, 3, shade(ramp(self.rival().and_then(|v| v.paint.as_deref()).unwrap_or("GREY")), 24));
+            s.rect(mark(r.rival_pos), 13, 5, 3, shade(ramp(self.opponent().and_then(|v| v.1).as_deref().unwrap_or("GREY")), 24));
             s.rect(mark(r.pos), 8, 5, 3, shade(ramp(self.owned().and_then(|o| o.paint.as_deref()).unwrap_or("WHITE")), 26));
         }
+        let versus = self.versus_says();
         let say = match r.phase {
+            Phase::Stage if versus.is_some() => versus.as_ref().unwrap().0,
             Phase::Stage => "ENTER TO STAGE",
             Phase::Tree if r.gear == 0 => "HOLD UP FOR REVS. E ON THE GREEN.",
             _ if r.red => "RED LIGHT",
@@ -1498,12 +1511,16 @@ impl Game {
                 s.text(164, 56 + i as i32 * 12, value, if r.red && i == 0 { red } else { ink });
             }
             if !r.alone() {
-                s.text(100, 110, "HIM", ink);
-                s.text(164, 110, &ms(r.rival_rt + r.rival_et), ink);
-                let (words, c) = if r.won { ("YOU WIN.", shade(ramp("FOREST"), 14)) } else if r.red { ("RED LIGHT.", red) } else if r.et > 0 { ("YOU LOSE.", red) } else { ("HE IS GONE.", red) };
+                s.text(100, 110, if versus.is_some() { "THEM" } else { "HIM" }, ink);
+                s.text(164, 110, &match &versus { Some((_, theirs)) => theirs.clone().unwrap_or_else(|| "...".into()), None => ms(r.rival_rt + r.rival_et) }, ink);
+                let (words, c) = if let Some((words, _)) = &versus {
+                    (*words, if r.won { shade(ramp("FOREST"), 14) } else { red })
+                } else if r.won { ("YOU WIN.", shade(ramp("FOREST"), 14)) } else if r.red { ("RED LIGHT.", red) } else if r.et > 0 { ("YOU LOSE.", red) } else { ("HE IS GONE.", red) };
                 s.text(100, 126, words, c);
             }
-            s.text(100, 140, "ENTER", shade(ramp("BROWN"), 14));
+            if versus.as_ref().is_none_or(|v| v.0 != "WAITING FOR THEM") {
+                s.text(100, 140, "ENTER", shade(ramp("BROWN"), 14));
+            }
         }
     }
 
@@ -1602,7 +1619,7 @@ impl Game {
             scene.poly(&[at(-6.0, 0.0, line), at(6.0, 0.0, line), at(6.0, 0.0, line + 0.5), at(-6.0, 0.0, line + 0.5)], shade(white, 26), shade(white, 26), -3700.0);
         }
         // Whoever is in the other lane, from behind: where he is has to be worked out before the scene is spent.
-        let him = (!r.alone()).then(|| self.rival()).flatten().and_then(|rv| {
+        let him = (!r.alone()).then(|| self.opponent()).flatten().and_then(|rv| {
             let (x, _, depth) = scene.point(at(3.0, 0.0, r.rival_pos - 2.0))?;
             let (_, ground, _) = scene.point(at(3.0, 0.0, r.rival_pos - 2.0))?;
             (depth < 260.0).then_some((rv, x, ground, depth))
@@ -1611,6 +1628,7 @@ impl Game {
         let tree = scene.point(at(0.0, 0.0, 12.0)).zip(scene.point(at(0.0, 3.0, 12.0)));
         scene.end(s);
         if let Some((rv, x, ground, depth)) = him {
+            let rv = Rival { name: rv.2, says: String::new(), car: rv.0, paint: rv.1, et: 0.0, limit: 0, pinks: false, king: false };
             let car = self.pack.manifest.cars.get(&rv.car);
             match car.and_then(|c| c.rear.as_ref()).and_then(|rear| Some((rear, self.pack.pictures.get(&rear.picture)?))) {
                 Some((rear, pic)) => {

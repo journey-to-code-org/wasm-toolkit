@@ -466,7 +466,7 @@ pub struct Manifest {
 }
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 11] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas"];
+pub const ACTIONS: [&str; 12] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 

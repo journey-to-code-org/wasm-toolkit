@@ -9,6 +9,9 @@ mod raw {
         pub fn wtk_tone(hz: i32, ms: i32);
         pub fn wtk_store(ptr: *const u8, n: i32);
         pub fn wtk_fetch(ptr: *mut u8, max: i32) -> i32;
+        pub fn wtk_net_open();
+        pub fn wtk_net_close();
+        pub fn wtk_net_send(ptr: *const u8, n: i32);
     }
 }
 
@@ -48,4 +51,24 @@ pub fn fetch() -> Vec<u8> {
     }
     #[cfg(not(target_arch = "wasm32"))]
     KEPT.with(|k| k.borrow().clone())
+}
+
+/// Ask the page for a line to the meet, or to shut it. How that goes comes back through `net_status`.
+pub fn net_line(open: bool) {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        if open { raw::wtk_net_open() } else { raw::wtk_net_close() }
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = open;
+}
+
+/// A message for the others in the meet.
+pub fn net_send(text: &str) {
+    #[cfg(target_arch = "wasm32")]
+    unsafe {
+        raw::wtk_net_send(text.as_ptr(), text.len() as i32)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    let _ = text;
 }

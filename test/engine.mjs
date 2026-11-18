@@ -12,7 +12,7 @@ const check = (ok, what) => { if (!ok) { console.log("FAIL", what); fails++; } }
 async function play(shots, packBytes) {
   let kept = new Uint8Array(0), x;
   const env = {
-    wtk_tone: () => {},
+    wtk_tone: () => {}, wtk_net_open: () => {}, wtk_net_close: () => {}, wtk_net_send: () => {},
     wtk_store: (ptr, n) => { kept = new Uint8Array(x.memory.buffer, ptr, n).slice(); },
     wtk_fetch: (ptr, max) => { new Uint8Array(x.memory.buffer, ptr, max).set(kept.subarray(0, max)); return Math.min(kept.length, max); },
   };
