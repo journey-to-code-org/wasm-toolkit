@@ -12,7 +12,8 @@ pack**, one file, made from a folder of JSON and PNGs.
 
 `python3 tools/bundle.py engine` then writes `build/engine.html`: the engine, its page and the
 default pack in one file, to open from disk or put anywhere a single page can go. On a phone the
-page shows buttons for the keys: left and right, gas and brake, the two shifts, Enter and Back.
+page lays buttons over the picture, and only the ones in use: Back in the menus, left, right, gas
+and brake in town, the two shifts and gas on the strip. Tapping the picture is Enter.
 
 Needs Rust with the wasm target (`rustup target add wasm32-unknown-unknown`), and Python with
 Pillow and numpy for the pack tool.
