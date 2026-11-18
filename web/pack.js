@@ -157,7 +157,7 @@ export async function makeViewer(wasmBytes) {
       if (ok) {
         step(16, 160, 100); step(0, 160, 100);
         if (lamps && spot) { const [sx, sy, sw, sh] = spot; step(0, sx + (sw >> 1), sy + (sh >> 1)); step(16, sx + (sw >> 1), sy + (sh >> 1)); }
-        step(0, 319, 239);
+        step(0, 319, 199);
       }
       const screen = new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H);
       const out = new Uint8ClampedArray(W * H * 4);

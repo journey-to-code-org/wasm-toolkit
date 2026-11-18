@@ -10,11 +10,11 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"]];
-const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["gas", "Fills the tank"]];
+const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
-const at = { tab: "cars", car: null, place: null, spot: -1, slot: null };
+const at = { tab: "cars", car: null, place: null, spot: -1, slot: null, map: null, brush: "." };
 // The pictures dropped in this visit, by car, so they can be matched to the colours again when a
 // setting changes: { side, lamps (ImageBitmaps), width, corner, body: [r, g, b] | null, within }.
 const sources = new Map();
@@ -108,6 +108,18 @@ async function wholePicture(file, most) {
   g.imageSmoothingQuality = "high";
   g.drawImage(bitmap, 0, 0, w, Math.round(bitmap.height * w / bitmap.width));
   return picEncode(w, hh, toIndices(g.getImageData(0, 0, w, hh).data, w, hh, pal, { dither: 5 }).ix);
+}
+
+// A small picture, such as a steering wheel or a car from behind: brought down to `most` wide if
+// it is wider, and made square if asked.
+async function smallPicture(file, most, square) {
+  const bitmap = await createImageBitmap(file);
+  const w = Math.min(most, bitmap.width), hh = square ? w : Math.max(1, Math.round(bitmap.height * w / bitmap.width));
+  const c = new OffscreenCanvas(w, hh), g = c.getContext("2d", { willReadFrequently: true });
+  g.imageSmoothingEnabled = bitmap.width > w * 1.5;
+  g.imageSmoothingQuality = "high";
+  g.drawImage(bitmap, 0, 0, w, hh);
+  return picEncode(w, hh, toIndices(g.getImageData(0, 0, w, hh).data, w, hh, pal, { dither: 6 }).ix);
 }
 
 function dropZone(label, onFile) {
@@ -267,7 +279,9 @@ function fileCar() {
 // Pictures nothing names any more are dropped from the pack.
 function tidy() {
   const m = pack.manifest, used = new Set();
-  for (const c of Object.values(m.cars)) { used.add(c.side); used.add(c.side_lamps); used.add(c.hood?.picture); }
+  for (const c of Object.values(m.cars)) {
+    for (const name of [c.side, c.side_lamps, c.hood?.picture, c.rear?.picture, c.cockpit?.picture, c.cockpit?.night, c.cockpit?.bonnet, c.cockpit?.wheel?.picture, c.cockpit?.wheel?.night]) used.add(name);
+  }
   for (const p of Object.values(m.places)) used.add(p.picture);
   for (const name of [...pack.files.keys()]) if (name.endsWith(".pic") && !used.has(name)) pack.files.delete(name);
 }
@@ -331,6 +345,7 @@ function carsPanel() {
         field("Wakes at, rpm", turbo.from, (v) => { turbo.from = v ?? 2200; }, { type: "number", step: 100 }),
         field("Boost, psi", turbo.psi, (v) => { turbo.psi = v ?? 20; }, { type: "number" }),
         field("Lag (6 quick, 10 lazy)", turbo.lag, (v) => { turbo.lag = v ?? 6; }, { type: "number" })) : null),
+    seatForm(c),
     h("details", { id: "hoodForm", open: !!c.hood }, h("summary", { text: "Under its hood" }),
       h("p", { class: "hint", text: "A picture of the engine bay, 320 wide and up to 176 tall. Parts are then taken off and put on there, bolt by bolt." }),
       dropZone("The engine bay", async (f) => {
@@ -340,6 +355,46 @@ function carsPanel() {
       }),
       c.hood ? hoodSlots(c) : null)));
   return out;
+}
+
+// The view from the seat, and the car from behind.
+function seatForm(c) {
+  const k = c.cockpit;
+  const drop = (label, name, most, set, small) => dropZone(label, async (f) => {
+    try { pack.files.set(name, small ? await smallPicture(f, most, small === "square") : await wholePicture(f, most)); } catch { return fail("That file is not a picture the browser can read."); }
+    set(name); tidy(); render();
+  });
+  const pair = (label, get, set, extra = []) => {
+    const v = get() ?? [], put = (i) => (n) => { const now = [...(get() ?? [0, 0])]; now[i] = n ?? 0; set(now); };
+    return h("div", {}, h("label", { text: label }), h("div", { class: extra.length ? "three" : "two" },
+      field("Across", v[0], put(0), { type: "number" }), field("Down", v[1], put(1), { type: "number" }), extra));
+  };
+  const dial = (label, key, top) => {
+    const d = k[key];
+    return h("div", {}, tick(label, !!d, (on) => { if (on) k[key] = { at: [160, 170], r: 17, max: top }; else delete k[key]; }),
+      d ? h("div", { class: "three" },
+        field("Across", d.at[0], (n) => { d.at[0] = n ?? 0; }, { type: "number" }), field("Down", d.at[1], (n) => { d.at[1] = n ?? 0; }, { type: "number" }),
+        field("Needle length", d.r, (n) => { d.r = n ?? 10; }, { type: "number" }), field("Full sweep reads", d.max, (n) => { d.max = n ?? top; }, { type: "number" })) : null);
+  };
+  return h("details", { id: "seatForm", ontoggle: () => preview() }, h("summary", { text: "From the seat" }),
+    h("p", { class: "hint", text: "A painting of the cabin, 320 by 240, with the glass left clear. With one, the car is raced and driven from behind its wheel; without, from the side." }),
+    drop("The cabin", `${at.car}-cockpit.pic`, 240, (n) => { c.cockpit = { view_h: 136, ...c.cockpit, picture: n }; }),
+    k ? [
+      drop("The cabin at night (optional)", `${at.car}-cockpit-night.pic`, 240, (n) => { k.night = n; }),
+      drop("The bonnet through the glass, in the car's paint (optional)", `${at.car}-bonnet.pic`, 240, (n) => { k.bonnet = n; }),
+      drop("The steering wheel: a square picture, up to 176", `${at.car}-wheel.pic`, 176, (n) => { k.wheel = { at: [120, 216], ...k.wheel, picture: n }; }, "square"),
+      k.wheel ? pair("Where the middle of the wheel goes", () => k.wheel.at, (v) => { k.wheel.at = v; }) : null,
+      field("How far down the view out goes", k.view_h, (n) => { k.view_h = n ?? 136; }, { type: "number", min: 60, max: 240 }),
+      dial("A tachometer", "tach", 9000), dial("A speedometer", "speedo", 160), dial("A boost gauge", "boost", 30),
+      tick("A shift light", !!k.shift_light, (on) => { if (on) k.shift_light = [120, 170]; else delete k.shift_light; }),
+      k.shift_light ? pair("Where it is", () => k.shift_light, (v) => { k.shift_light = v; }) : null,
+      tick("The gear lights up in the lever's gate", !!k.gear_gate, (on) => { if (on) k.gear_gate = [286, 224]; else delete k.gear_gate; }),
+      k.gear_gate ? pair("The middle of the gate", () => k.gear_gate, (v) => { k.gear_gate = v; }) : null,
+      h("div", { class: "row", style: "margin-top:10px" }, h("button", { text: "No cockpit for this car", onclick: () => { delete c.cockpit; tidy(); render(); } })),
+    ] : null,
+    drop("The car from behind, for when it is ahead of you (up to 96 wide)", `${at.car}-rear.pic`, 96, (n) => { c.rear = { width_m: 1.7, ...c.rear, picture: n }; }, "small"),
+    field("Gallons its tank holds", c.tank ?? 17, (n) => { if (n > 0) c.tank = n; else delete c.tank; }, { type: "number", min: 1 }),
+    Object.keys(pack.manifest.maps ?? {}).length ? h("p", { class: "hint", text: "While this is open, the game beside it is seen from this car's seat." }) : null);
 }
 
 function hoodSlots(c) {
@@ -437,14 +492,101 @@ function roomsPanel() {
     const others = Object.entries(m.places).filter(([id]) => id !== at.place).map(([id, pl]) => [id, pl.title]);
     spots.append(h("div", { class: "card" },
       field("What it is called", s.label, (v) => { s.label = v; }, { maxlength: 38, id: "spotLabel" }),
-      choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v; }),
+      choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v === "drive" ? "drive:" + (Object.keys(m.maps ?? {})[0] ?? "") : v; }),
       kind === "say" ? field("What it says", arg, (v) => { s.do = "say:" + v; }, { maxlength: 38, id: "spotSays" }) : null,
       kind === "go" ? choice("Where to", arg, others, (v) => { s.do = "go:" + v; }) : null,
+      kind === "drive" ? choice("Which map", arg, Object.entries(m.maps ?? {}).map(([id, mp]) => [id, mp.title]), (v) => { s.do = "drive:" + v; }) : null,
       field("Draw it as a button with this word on it (blank: the picture shows it)", s.button, (v) => { if (v) s.button = v; else delete s.button; }, { maxlength: 9 }),
       tick("Only there when you have a car", s.needs_car, (v) => { if (v) s.needs_car = true; else delete s.needs_car; })));
   }
   out.push(spots);
   return out;
+}
+
+// ---- Maps ----
+
+const map = () => pack.manifest.maps?.[at.map];
+
+function mapsPanel() {
+  const m = pack.manifest;
+  m.maps ??= {};
+  if (!(at.map in m.maps)) at.map = Object.keys(m.maps)[0] ?? null;
+  const out = [h("section", {}, h("h2", { text: "Maps in this pack" }),
+    list(Object.entries(m.maps).map(([id, mp]) => [id, mp.title]), at.map, (id) => { at.map = id; at.brush = "."; render(); }),
+    h("div", { class: "row" },
+      h("button", { id: "addMap", text: "Add a map", onclick: () => {
+        const id = freshId("new-map", m.maps);
+        m.maps[id] = { title: "New map", rows: ["B.B.", "....", ".B.B"], blocks: { B: { wall: "BRICK", height: 16 } } };
+        at.map = id; at.brush = "B"; render();
+      } }),
+      at.map ? h("button", { text: "Remove this one", onclick: () => {
+        const from = Object.values(m.places).find((p) => p.spots.some((s) => s.do === "drive:" + at.map));
+        if (from) return fail(`${from.title} has a way out onto this map. Change that first.`);
+        if (!confirm(`Remove ${map().title} from the pack?`)) return;
+        delete m.maps[at.map]; at.map = null; render();
+      } }) : null))];
+  if (!at.map) return out;
+  const mp = map(), cols = mp.rows[0].length, rows = mp.rows.length;
+  const size = (c, r) => { mp.rows = Array.from({ length: r }, (_, j) => (mp.rows[j] ?? "").padEnd(c, ".").slice(0, c)); };
+  out.push(h("section", {}, h("h2", { text: "This map" }),
+    field("Its name", mp.title, (v) => { mp.title = v; }, { maxlength: 24, redo: true, id: "mapTitle" }),
+    h("div", { class: "two" },
+      field("Blocks across", cols, () => {}, { type: "number", min: 1, max: 24, id: "mapCols", onchange: (e) => { size(Math.max(1, Math.min(24, +e.target.value || cols)), rows); render(); } }),
+      field("Blocks down", rows, () => {}, { type: "number", min: 1, max: 24, id: "mapRows", onchange: (e) => { size(cols, Math.max(1, Math.min(24, +e.target.value || rows))); render(); } }),
+      field("Other cars about", mp.traffic ?? 8, (n) => { mp.traffic = Math.max(0, Math.min(40, Math.floor(n ?? 8))); }, { type: "number", min: 0, max: 40 }),
+      field("Gallons burned a kilometre", mp.gas_per_km ?? 0.4, (n) => { mp.gas_per_km = Math.max(0, n ?? 0.4); }, { type: "number", step: "0.1", min: 0 })),
+    h("p", { class: "hint", text: "There is a street between every two blocks and one round the outside. The top of the map is north." })));
+  const places = [["", "Nowhere: it is only a building"], ...Object.entries(m.places).map(([id, p]) => [id, p.title])];
+  const brush = (ch, words, b) => h("button", { "aria-current": String(at.brush === ch), onclick: () => { at.brush = ch; render(); } },
+    h("span", { class: "swatch", style: `background:${ch === "." ? css(pal[RAMPS.indexOf("GRASS") * 32 + 20]) : b.height > 0 ? css(pal[RAMPS.indexOf(b.wall ?? "CONCRETE") * 32 + 20]) : "#e6b84a"};margin-right:8px` }), words);
+  const kind = mp.blocks[at.brush];
+  out.push(h("section", {}, h("h2", { text: "What stands on a block" }),
+    h("p", { class: "hint", text: "Pick one, then click or drag over the map to put it down." }),
+    h("ul", { class: "list" }, h("li", {}, brush(".", "Grass")), Object.entries(mp.blocks).map(([ch, b]) => h("li", {}, brush(ch, `${ch}: ${b.name ?? (b.height > 0 ? `${nice(b.wall ?? "CONCRETE")}, ${b.height} m` : "open ground")}`, b)))),
+    h("div", { class: "row" },
+      h("button", { id: "addBlock", text: "Add a kind", onclick: () => {
+        const ch = [..."ABCDEFGHIJKLMNOPQRSTUVWXYZ"].find((x) => !(x in mp.blocks));
+        if (!ch) return fail("A map has room for 26 kinds of block.");
+        mp.blocks[ch] = { wall: "CONCRETE", height: 16 }; at.brush = ch; render();
+      } }),
+      kind ? h("button", { text: "Remove this kind", onclick: () => { mp.rows = mp.rows.map((r) => r.replaceAll(at.brush, ".")); delete mp.blocks[at.brush]; at.brush = "."; render(); } }) : null),
+    kind ? h("div", { class: "card" },
+      h("div", { class: "two" },
+        choice("Built of", kind.wall ?? "CONCRETE", colours(), (v) => { kind.wall = v; }),
+        field("How tall, in metres (0: open ground)", kind.height ?? 0, (n) => { kind.height = Math.max(0, n ?? 0); }, { type: "number", min: 0, max: 80, redo: true })),
+      choice("Pulling up beside it takes you to", kind.to ?? "", places, (v) => { if (v) kind.to = v; else { delete kind.to; delete kind.name; } }),
+      kind.to ? field("What it is called on the list in the windscreen", kind.name, (v) => { if (v) kind.name = v; else delete kind.name; }, { maxlength: 16, redo: true }) : null) : null));
+  return out;
+}
+
+// The map from above, to paint on.
+function drawMap() {
+  const mp = map(), canvas = $("mapView");
+  if (!mp) return;
+  const cols = mp.rows[0].length, rows = mp.rows.length, cell = Math.max(14, Math.min(48, Math.floor(600 / Math.max(cols, rows)))), road = Math.max(3, cell >> 2);
+  canvas.width = cols * cell + road; canvas.height = rows * cell + road;
+  canvas.style.width = Math.min(640, canvas.width) + "px";
+  const g = canvas.getContext("2d");
+  g.fillStyle = css(pal[RAMPS.indexOf("ASPHALT") * 32 + 14]);
+  g.fillRect(0, 0, canvas.width, canvas.height);
+  g.font = `bold ${Math.max(9, cell >> 1)}px ui-monospace, monospace`;
+  g.textAlign = "center"; g.textBaseline = "middle";
+  mp.rows.forEach((row, j) => [...row].forEach((ch, i) => {
+    const b = mp.blocks[ch], x = i * cell + road, y = j * cell + road, w = cell - road;
+    g.fillStyle = !b ? css(pal[RAMPS.indexOf("GRASS") * 32 + 18]) : b.height > 0 ? css(pal[RAMPS.indexOf(b.wall ?? "CONCRETE") * 32 + 20]) : b.to ? "#e6b84a" : css(pal[RAMPS.indexOf("GRASS") * 32 + 22]);
+    g.fillRect(x, y, w, w);
+    if (b?.to) { g.strokeStyle = "#e6b84a"; g.lineWidth = 2; g.strokeRect(x + 1, y + 1, w - 2, w - 2); }
+    if (b) { g.fillStyle = "rgba(0,0,0,.75)"; g.fillText(ch, x + w / 2 + 1, y + w / 2 + 1); g.fillStyle = "#fff"; g.fillText(ch, x + w / 2, y + w / 2); }
+  }));
+  const paint = (e) => {
+    const r = canvas.getBoundingClientRect();
+    const i = Math.floor(((e.clientX - r.left) / r.width * canvas.width - road / 2) / cell), j = Math.floor(((e.clientY - r.top) / r.height * canvas.height - road / 2) / cell);
+    if (i < 0 || j < 0 || i >= cols || j >= rows || mp.rows[j][i] === at.brush) return;
+    mp.rows[j] = mp.rows[j].slice(0, i) + at.brush + mp.rows[j].slice(i + 1);
+    drawMap(); touch();
+  };
+  canvas.onpointerdown = (e) => { canvas.setPointerCapture(e.pointerId); canvas.onpointermove = paint; paint(e); };
+  canvas.onpointerup = () => { canvas.onpointermove = null; };
 }
 
 // ---- Parts ----
@@ -526,7 +668,7 @@ function gamePanel() {
 
 // ---- Putting it on the page ----
 
-const PANELS = { cars: carsPanel, rooms: roomsPanel, parts: partsPanel, rivals: rivalsPanel, game: gamePanel };
+const PANELS = { cars: carsPanel, rooms: roomsPanel, maps: mapsPanel, parts: partsPanel, rivals: rivalsPanel, game: gamePanel };
 let redraw = () => {};
 
 function render() {
@@ -539,12 +681,14 @@ function render() {
   $("tabs").replaceChildren(...TABS.map(([id, words]) => h("button", { role: "tab", id: "tab-" + id, "aria-selected": String(at.tab === id), text: words, onclick: () => { at.tab = id; render(); } })));
   $("panel").replaceChildren(...PANELS[at.tab]());
   for (const d of document.querySelectorAll("#panel details")) if (d.id in open) d.open = open[d.id];
-  const cars = at.tab === "cars" && at.car, rooms = at.tab === "rooms";
+  const cars = at.tab === "cars" && at.car, rooms = at.tab === "rooms", maps = at.tab === "maps" && !!map();
+  $("mapBox").hidden = !maps;
+  if (maps) drawMap();
   $("sideBox").hidden = !cars;
   $("hoodBox").hidden = !(cars && car().hood);
   $("lampsBox").hidden = !cars;
   $("viewOver").hidden = !rooms;
-  $("viewTitle").textContent = rooms ? place().title : "In the game";
+  $("viewTitle").textContent = rooms ? place().title : maps ? "From the seat, in the south-west corner or beside the first place to go" : "In the game";
   $("viewHint").textContent = rooms ? "The crosses are where the tyres of your car and the rival's meet the floor: drag them." : "";
   if (cars) { drawSide(); if (car().hood) drawHood(); }
   redraw = rooms ? boxes($("viewOver"), 2, roomItems, {
@@ -558,6 +702,22 @@ function render() {
 async function preview() {
   const m = pack.manifest;
   let shown = m, lamps = null;
+  const seat = at.tab === "cars" && at.car && document.querySelector("#seatForm")?.open && Object.keys(m.maps ?? {})[0];
+  if ((at.tab === "maps" && map()) || seat) {
+    // Out on the map: a way onto it is added to a room for the look, and picked.
+    const id = seat || at.map, mp = m.maps[id], car = seat ? at.car : m.start.car ?? Object.keys(m.cars)[0];
+    const from = Object.values(mp.blocks).find((b) => b.to in m.places)?.to ?? m.start.place;
+    const room = { ...m.places[from], spots: [...m.places[from].spots, { rect: [0, 0, 320, 200], label: "", do: "drive:" + id }] };
+    shown = { ...m, start: { ...m.start, place: from, car }, places: { ...m.places, [from]: room } };
+    if (!car) delete shown.start.car;
+    lamps = [0, 0, 320, 200];
+    const { ok, rgba } = await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: true, spot: lamps });
+    $("view").getContext("2d").putImageData(new ImageData(rgba, 320, 240), 0, 0);
+    if (!ok) fail("The engine will not play this pack as it stands; the screen says why.");
+    else if (!car) fail("There is no car in the pack to drive it in.");
+    else if ($("problem").textContent.startsWith("The engine will not")) fail("");
+    return;
+  }
   if (at.tab === "cars" && at.car) {
     shown = { ...m, start: { ...m.start, car: at.car } };
     lamps = m.places[m.start.place]?.spots?.find((s) => s.do === "lamps")?.rect ?? null;
