@@ -10,6 +10,10 @@ pack**, one file, made from a folder of JSON and PNGs.
     make serve           # then open http://localhost:8080/engine.html
                          # another pack: engine.html?pack=mine.pack
 
+`python3 tools/bundle.py engine` then writes `build/engine.html`: the engine, its page and the
+default pack in one file, to open from disk or put anywhere a single page can go. On a phone the
+page shows buttons for the keys: left and right, gas and brake, the two shifts, Enter and Back.
+
 Needs Rust with the wasm target (`rustup target add wasm32-unknown-unknown`), and Python with
 Pillow and numpy for the pack tool.
 

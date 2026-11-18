@@ -6,8 +6,10 @@ const KEYS = {
   Enter: 16, Space: 16, Escape: 32, Backspace: 32, KeyE: 64, KeyQ: 128,
 };
 
-// `pack` is the address of a content pack, for an engine that plays one.
+// `pack` is a content pack, for an engine that plays one. The game and the pack are each an address
+// to fetch or the bytes themselves.
 export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, pack = null) {
+  const bytesOf = async (from) => (typeof from === "string" ? new Uint8Array(await (await fetch(from)).arrayBuffer()) : from);
   let audio = null, osc = null, gain = null, quietAt = 0;
   const speaker = (hz, ms) => {
     if (!audio) return;
@@ -33,7 +35,7 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
   };
 
   // A saved game lives in the browser, under the page's address.
-  const slot = "wtk:" + location.pathname + (pack ? ":" + pack : "");
+  const slot = "wtk:" + location.pathname + (typeof pack === "string" ? ":" + pack : "");
   let x = null;
   const store = (ptr, n) => {
     try { localStorage.setItem(slot, btoa(String.fromCharCode(...new Uint8Array(x.memory.buffer, ptr, n)))); } catch { /* private window, or full */ }
@@ -47,7 +49,7 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
       return n;
     } catch { return 0; }
   };
-  const { instance } = await WebAssembly.instantiate(await (await fetch(url)).arrayBuffer(), { env: { wtk_tone: speaker, wtk_store: store, wtk_fetch: fetchSave } });
+  const { instance } = await WebAssembly.instantiate(await bytesOf(url), { env: { wtk_tone: speaker, wtk_store: store, wtk_fetch: fetchSave } });
   x = instance.exports;
   canvas.width = W;
   canvas.height = H;
@@ -87,7 +89,7 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
 
   if (pack && x.pack_alloc) {
     // Hand the engine its content before it starts.
-    const bytes = new Uint8Array(await (await fetch(pack)).arrayBuffer());
+    const bytes = await bytesOf(pack);
     const at = x.pack_alloc(bytes.length);
     new Uint8Array(x.memory.buffer, at, bytes.length).set(bytes);
     x.pack_load();
