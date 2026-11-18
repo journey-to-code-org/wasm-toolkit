@@ -5,6 +5,7 @@ use engine::game::{Game, Loose, Owned, Scene, KEY_A, KEY_B, KEY_UP, KEY_X};
 use engine::gfx::{ramp, shade, Picture, Screen, CLEAR};
 use engine::pack::{Boost, Manifest, Pack};
 use engine::race::{Controls, Phase, Race};
+use engine::town::{Pedals, Town};
 
 /// A pack file from named pieces, in the format `tools/pack.py` writes.
 fn pack(files: &[(&str, Vec<u8>)]) -> Vec<u8> {
@@ -484,7 +485,8 @@ fn the_race_is_seen_from_the_seat_when_the_car_has_a_cockpit() {
     g.state.cur = Some(0);
     assert!(g.car().unwrap().cockpit.is_some());
     // Out to the lot, and a race for kicks against whoever is there; then sit on the line while he goes.
-    click(&mut g, 270, 60);
+    click(&mut g, 150, 130);
+    assert_eq!(g.state.place, "lot");
     g.who = 12;
     click(&mut g, 40, 186);
     click(&mut g, 30, 185);
@@ -507,4 +509,106 @@ fn the_race_is_seen_from_the_seat_when_the_car_has_a_cockpit() {
     g.pack.manifest.cars.get_mut("umbra").unwrap().cockpit = None;
     g.draw(&mut s);
     assert_eq!(s.at(300, 230) >> 5, ramp("RUBBER") as u16, "the side view's dash is along the bottom");
+}
+
+const TOWN: &str = r#""maps": { "grid": { "title": "Grid", "traffic": 0, "rows": ["A.S", "H.B"],
+    "blocks": { "A": { "wall": "BRICK", "height": 12 }, "B": { "wall": "TAN", "height": 8 },
+                "H": { "wall": "WOOD", "height": 6, "to": "shed", "name": "Home" }, "S": { "to": "road", "name": "Strip" } } } },
+  "places": {"#;
+
+fn town_game() -> Game {
+    engine::host::store(b"");
+    let manifest = MANIFEST.replace("\"places\": {", TOWN).replace("\"do\": \"say:Hello.\"", "\"do\": \"drive:grid\"").replace("\"label\": \"Solo\", \"do\": \"solo\"", "\"label\": \"Gas\", \"do\": \"gas\"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(5);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    g
+}
+
+#[test]
+fn a_map_is_blocks_and_streets() {
+    let g = town_game();
+    let map = &g.pack.manifest.maps["grid"];
+    assert_eq!((map.cols(), map.depth()), (3, 2));
+    assert_eq!(map.block(0, 0).and_then(|b| b.name.as_deref()), Some("Home"), "the bottom row of the text is the south");
+    assert_eq!(map.block(2, 1).and_then(|b| b.to.as_deref()), Some("road"));
+    assert!(map.block(1, 0).is_none() && map.block(3, 0).is_none());
+    assert_eq!(map.places().len(), 2);
+    // Streets are clear, buildings are not, a lot with nothing built on it is, and the country beyond is not.
+    assert!(!Town::blocked(map, 0.0, 30.0) && !Town::blocked(map, 30.0, 64.0));
+    assert!(Town::blocked(map, 32.0, 32.0) && Town::blocked(map, 160.0, 32.0));
+    assert!(!Town::blocked(map, 160.0, 96.0) && !Town::blocked(map, 96.0, 32.0));
+    assert!(Town::blocked(map, -20.0, 30.0) && Town::blocked(map, 30.0, 150.0));
+    // A bad map is explained.
+    let bad = |from: &str, to: &str| Pack::parse(&files(&MANIFEST.replace("\"places\": {", &TOWN.replace(from, to)))).err().unwrap();
+    assert!(bad("\"A.S\"", "\"A.SS\"").contains("same length"));
+    assert!(bad("\"A.S\"", "\"AxS\"").contains("marked x"));
+    assert!(bad("\"to\": \"road\"", "\"to\": \"moon\"").contains("moon"));
+}
+
+#[test]
+fn you_drive_from_one_place_to_another_and_it_burns_gas() {
+    let mut g = town_game();
+    let mut s = Screen::new();
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Drive);
+    let t = g.town.as_ref().unwrap();
+    assert_eq!((t.x, t.z, t.heading), (32.0, -4.0, 90.0), "out on the street south of home, facing east");
+    g.draw(&mut s);
+    assert!(t.beside(&g.pack.manifest.maps["grid"]).is_some_and(|b| b.name.as_deref() == Some("Home")));
+
+    // East along the south street to the far corner, north up the east street, and stop beside the strip.
+    let hold = |g: &mut Game, keys: u32, until: &dyn Fn(&Town) -> bool| {
+        for _ in 0..3000 {
+            if until(g.town.as_ref().unwrap()) {
+                return;
+            }
+            g.tick(keys, 0, 0);
+        }
+        panic!("never got there: {:?}", g.town.as_ref().map(|t| (t.x, t.z, t.heading)));
+    };
+    hold(&mut g, KEY_UP, &|t| t.x > 150.0);
+    hold(&mut g, 2, &|t| t.speed < 6.0);
+    hold(&mut g, KEY_UP | 4, &|t| t.heading < 6.0 || t.heading > 354.0);
+    hold(&mut g, KEY_UP, &|t| t.z > 70.0);
+    hold(&mut g, 2, &|t| t.speed == 0.0);
+    g.draw(&mut s);
+    let t = g.town.as_ref().unwrap();
+    assert_eq!(t.dents, 0, "without hitting anything");
+    assert!(t.beside(&g.pack.manifest.maps["grid"]).is_some_and(|b| b.name.as_deref() == Some("Strip")), "{:?}", (t.x, t.z));
+    let gas = g.owned().unwrap().gas;
+    assert!(gas < 8.0 && gas > 7.8, "{gas}");
+    g.tick(0, 0, 0);
+    g.tick(KEY_A, 0, 0);
+    assert_eq!((g.scene, g.state.place.as_str(), g.state.hours), (Scene::Place, "road", 1), "going in is an hour");
+
+    // Gas: a dollar buys three gallons, up to a full tank.
+    g.tick(0, 0, 0);
+    click(&mut g, 250, 10);
+    assert_eq!((g.owned().unwrap().gas, g.state.cash), (17.0, 1000 - 4));
+    click(&mut g, 250, 10);
+    assert_eq!(g.note.as_deref(), Some("It is full."));
+
+    // Into a wall, and out of gas.
+    let map = g.pack.manifest.maps["grid"].clone();
+    let mut t = Town::new("grid", &map, Some("shed"), || 1);
+    t.heading = 0.0;
+    let mut hit = false;
+    for _ in 0..200 {
+        hit |= t.tick(&map, Pedals { go: true, ..Pedals::default() }).1;
+    }
+    assert!(hit && t.dents == 1 && t.z < 12.0, "the building north of the street stops it");
+    g.state.cars[0].gas = 0.31;
+    click(&mut g, 20, 10);
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Drive);
+    for _ in 0..3000 {
+        if g.scene != Scene::Drive { break; }
+        g.tick(KEY_UP, 0, 0);
+        if g.town.as_ref().is_some_and(|t| t.x > 150.0) { g.town.as_mut().unwrap().x = 20.0; }
+    }
+    assert_eq!((g.scene, g.state.place.as_str(), g.note.as_deref()), (Scene::Place, "shed", Some("Out of gas. You walked home.")));
+    click(&mut g, 100, 10);
+    assert_eq!(g.note.as_deref(), Some("You don't got enough gas to cruise."));
 }

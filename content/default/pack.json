@@ -91,7 +91,7 @@
               189
             ],
             "r": 4,
-            "value": 70
+            "reads": "gas"
           }
         ],
         "shift_light": [
@@ -235,7 +235,7 @@
               189
             ],
             "r": 4,
-            "value": 70
+            "reads": "gas"
           }
         ],
         "shift_light": [
@@ -277,8 +277,9 @@
             84,
             108
           ],
-          "label": "Hit the street",
-          "do": "go:lot"
+          "label": "The big door: cruise the town",
+          "do": "drive:town",
+          "needs_car": true
         },
         {
           "rect": [
@@ -327,7 +328,7 @@
             76,
             44
           ],
-          "label": "The door: get in and hit the street",
+          "label": "Get in and go straight to the strip",
           "do": "go:lot",
           "needs_car": true
         },
@@ -371,7 +372,7 @@
           "rect": [
             4,
             178,
-            76,
+            60,
             18
           ],
           "label": "Race whoever this is",
@@ -381,9 +382,9 @@
         },
         {
           "rect": [
-            82,
+            66,
             178,
-            76,
+            60,
             18
           ],
           "label": "Wave them on: see who else is here",
@@ -392,9 +393,9 @@
         },
         {
           "rect": [
-            160,
+            128,
             178,
-            76,
+            60,
             18
           ],
           "label": "A pass on your own",
@@ -404,14 +405,59 @@
         },
         {
           "rect": [
-            238,
+            190,
             178,
-            78,
+            60,
             18
           ],
-          "label": "Back to the garage",
+          "label": "Cruise the town",
+          "do": "drive:town",
+          "button": "Cruise",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            252,
+            178,
+            64,
+            18
+          ],
+          "label": "Straight back to the garage",
           "do": "go:garage",
           "button": "Home"
+        }
+      ]
+    },
+    "station": {
+      "title": "The gas station",
+      "backdrop": "CONCRETE",
+      "car_at": [
+        38,
+        170
+      ],
+      "spots": [
+        {
+          "rect": [
+            4,
+            178,
+            154,
+            18
+          ],
+          "label": "A dollar buys three gallons",
+          "do": "gas",
+          "button": "Fill up",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            162,
+            178,
+            154,
+            18
+          ],
+          "label": "Back out on the road",
+          "do": "drive:town",
+          "button": "Drive off"
         }
       ]
     }
@@ -660,5 +706,56 @@
       "pinks": true,
       "king": true
     }
-  ]
+  ],
+  "maps": {
+    "town": {
+      "title": "Town",
+      "traffic": 8,
+      "rows": [
+        "BOT.CB",
+        "G.BPOT",
+        "TB.GB.",
+        "HCOB.S",
+        "B.TGCB"
+      ],
+      "blocks": {
+        "B": {
+          "wall": "BRICK",
+          "height": 16
+        },
+        "O": {
+          "wall": "CONCRETE",
+          "height": 32
+        },
+        "T": {
+          "wall": "TAN",
+          "height": 24
+        },
+        "C": {
+          "wall": "CREAM",
+          "height": 12
+        },
+        "G": {
+          "wall": "GREY",
+          "height": 20
+        },
+        "H": {
+          "wall": "WOOD",
+          "height": 6,
+          "to": "garage",
+          "name": "Home"
+        },
+        "S": {
+          "to": "lot",
+          "name": "The strip"
+        },
+        "P": {
+          "wall": "RED",
+          "height": 5,
+          "to": "station",
+          "name": "Gas"
+        }
+      }
+    }
+  }
 }

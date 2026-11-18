@@ -159,6 +159,9 @@ pub struct Dial {
     pub r: i32,
     #[serde(default)]
     pub max: f64,
+    /// `"gas"` for a small dial that shows what is in the tank.
+    #[serde(default)]
+    pub reads: Option<String>,
     /// For a dial that only sits there (fuel, temperature): where its needle points, 0 to 100.
     #[serde(default)]
     pub value: f64,
@@ -204,6 +207,10 @@ pub struct Cockpit {
     pub wheel: Option<Wheel>,
 }
 
+fn tank() -> f64 {
+    17.0
+}
+
 fn view_h() -> i32 {
     136
 }
@@ -241,6 +248,9 @@ pub struct Car {
     pub drive: Drive,
     #[serde(default)]
     pub hood: Option<Hood>,
+    /// How many gallons the tank holds.
+    #[serde(default = "tank")]
+    pub tank: f64,
     #[serde(default)]
     pub cockpit: Option<Cockpit>,
     #[serde(default)]
@@ -282,6 +292,89 @@ pub struct Place {
     pub spots: Vec<Spot>,
 }
 
+/// What stands on a block of a map.
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct Block {
+    /// What it is built of, as a colour, and how tall it is in metres. With neither it is grass.
+    #[serde(default)]
+    pub wall: Option<String>,
+    #[serde(default)]
+    pub height: f64,
+    /// Somewhere to go: pull up beside it and you are in this place.
+    #[serde(default)]
+    pub to: Option<String>,
+    /// What it is called on the list of places to go.
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+/// A town to drive round: blocks in rows, with a street between every two and round the outside.
+/// Each letter of a row is a block, looked up in `blocks`; a full stop is grass. The top row is
+/// the north side.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Map {
+    pub title: String,
+    pub rows: Vec<String>,
+    #[serde(default)]
+    pub blocks: BTreeMap<String, Block>,
+    /// Metres from one street to the next, and half the width of a street.
+    #[serde(default = "pitch")]
+    pub pitch: f64,
+    #[serde(default = "road")]
+    pub road: f64,
+    /// How many other cars are about.
+    #[serde(default = "traffic")]
+    pub traffic: usize,
+    #[serde(default = "gas_per_km")]
+    pub gas_per_km: f64,
+}
+
+fn pitch() -> f64 {
+    64.0
+}
+fn road() -> f64 {
+    8.0
+}
+fn traffic() -> usize {
+    8
+}
+fn gas_per_km() -> f64 {
+    0.4
+}
+
+impl Map {
+    pub fn cols(&self) -> i32 {
+        self.rows.first().map_or(0, |r| r.chars().count() as i32)
+    }
+
+    pub fn depth(&self) -> i32 {
+        self.rows.len() as i32
+    }
+
+    /// The block in column `c` from the west and row `r` from the south, if the map goes that far
+    /// and something stands there.
+    pub fn block(&self, c: i32, r: i32) -> Option<&Block> {
+        if c < 0 || r < 0 || c >= self.cols() || r >= self.depth() {
+            return None;
+        }
+        let ch = self.rows[(self.depth() - 1 - r) as usize].chars().nth(c as usize)?;
+        self.blocks.get(&ch.to_string())
+    }
+
+    /// Every block that is somewhere to go: its column, its row from the south, and the block.
+    pub fn places(&self) -> Vec<(i32, i32, &Block)> {
+        let mut out = Vec::new();
+        for r in 0..self.depth() {
+            for c in 0..self.cols() {
+                if let Some(b) = self.block(c, r).filter(|b| b.to.is_some()) {
+                    out.push((c, r, b));
+                }
+            }
+        }
+        out
+    }
+}
+
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Manifest {
     pub name: String,
@@ -301,10 +394,12 @@ pub struct Manifest {
     /// What can be put on a race, in dollars. Left out: 10, 25, 50, 100.
     #[serde(default)]
     pub bets: Vec<i32>,
+    #[serde(default)]
+    pub maps: BTreeMap<String, Map>,
 }
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 10] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo"];
+pub const ACTIONS: [&str; 11] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 
@@ -380,6 +475,23 @@ impl Pack {
                 return Err(format!("the part {id} fits the car {car}, which is not in the pack"));
             }
         }
+        for (id, map) in &m.maps {
+            if map.rows.is_empty() || map.cols() == 0 || map.rows.iter().any(|r| r.chars().count() as i32 != map.cols()) {
+                return Err(format!("the map {id} needs rows of blocks, all the same length"));
+            }
+            if map.pitch < map.road * 2.0 + 16.0 || map.road < 4.0 {
+                return Err(format!("the map {id} needs streets at least 8 metres wide and blocks at least 16 across"));
+            }
+            if let Some(ch) = map.rows.iter().flat_map(|r| r.chars()).find(|ch| *ch != '.' && !map.blocks.contains_key(&ch.to_string())) {
+                return Err(format!("the map {id} has a block marked {ch}, which its blocks do not explain"));
+            }
+            for (ch, b) in &map.blocks {
+                colour(&format!("block {ch} of the map {id}"), &b.wall)?;
+                if let Some(to) = b.to.as_ref().filter(|to| !m.places.contains_key(*to)) {
+                    return Err(format!("block {ch} of the map {id} leads to {to}, which is not a place"));
+                }
+            }
+        }
         for p in &m.paints {
             colour("a car in the paper", &Some(p.clone()))?;
         }
@@ -436,6 +548,10 @@ impl Pack {
                 if let Some(to) = spot.action.strip_prefix("go:") {
                     if !m.places.contains_key(to) {
                         return Err(format!("in {id}, \"{}\" goes to {to}, which is not a place", spot.label));
+                    }
+                } else if let Some(map) = spot.action.strip_prefix("drive:") {
+                    if !m.maps.contains_key(map) {
+                        return Err(format!("in {id}, \"{}\" drives round {map}, which is not a map", spot.label));
                     }
                 } else if !spot.action.starts_with("say:") && !ACTIONS.contains(&spot.action.as_str()) {
                     return Err(format!("in {id}, \"{}\" does \"{}\", which the engine does not know how to do", spot.label, spot.action));

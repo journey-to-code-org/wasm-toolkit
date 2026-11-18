@@ -54,7 +54,13 @@ async function play(shots, packBytes) {
   press(B);
   click(270, 146); run(1, 0, 319, 199);
   r.lamps = screen(); shot("e6-lamps");
-  click(270, 60); run(1, 0, 319, 199);
+  // Out of the big door and round the town: up to speed, left at the corner, and back again.
+  click(270, 60);
+  r.street = screen(); shot("e6b-street");
+  run(60, UP); run(22, UP | 4); run(50, UP);
+  r.town = screen(); shot("e6c-town");
+  press(B);
+  click(150, 130); run(1, 0, 319, 199);
   r.lot = screen(); shot("e7-lot");
   click(40, 186);
   r.bets = screen(); shot("e8-bets");
@@ -90,7 +96,7 @@ const two = await play(null, packBytes);
 const same = (a, b) => a.every((v, i) => v === b[i]);
 const differ = (a, b) => a.reduce((n, v, i) => n + (v !== b[i]), 0);
 check(one.ok === 1, "the default pack loads");
-for (const k of ["title", "empty", "paper", "parts", "garage", "hood", "bolts", "lamps", "lot", "bets", "staged", "slip", "after", "back"]) check(same(one[k], two[k]), `${k} is the same both times`);
+for (const k of ["title", "empty", "paper", "parts", "garage", "hood", "bolts", "lamps", "street", "town", "lot", "bets", "staged", "slip", "after", "back"]) check(same(one[k], two[k]), `${k} is the same both times`);
 check(differ(one.title, one.empty) > 20000 && new Set(one.empty).size > 200, "Enter leaves the title for the garage, which is the pack's painting");
 check(differ(one.empty, one.paper) > 40000, "the bench opens the paper");
 check(differ(one.paper, one.parts) > 2000, "the paper has a parts page");
@@ -98,7 +104,9 @@ check(differ(one.empty, one.garage) > 3000 && differ(one.empty, one.garage) < 20
 check(differ(one.garage, one.hood) > 40000, "the hood opens on the pack's picture of the engine bay");
 check(differ(one.hood, one.bolts) > 10 && differ(one.hood, one.bolts) < 3000, "bolts come undone where you pick them");
 check(differ(one.garage, one.lamps) > 20 && differ(one.garage, one.lamps) < 6000, "the headlamps spot swaps the car's picture");
-check(differ(one.lamps, one.lot) > 20000, "the door goes to the lot");
+check(differ(one.lamps, one.street) > 30000, "the big door is the street, from the seat");
+check(differ(one.street, one.town) > 8000, "and driving changes the view");
+check(differ(one.lamps, one.lot) > 20000, "the car door goes to the lot");
 check(differ(one.lot, one.bets) > 500, "racing someone asks what for");
 check(differ(one.bets, one.staged) > 20000, "a bet he takes puts you on the strip");
 check(one.ticks > 300 && one.ticks < 1000, `the quarter takes a believable while (${one.ticks} ticks)`);

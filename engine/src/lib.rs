@@ -13,6 +13,7 @@ pub mod gfx;
 pub mod host;
 pub mod pack;
 pub mod race;
+pub mod town;
 
 use game::Game;
 use gfx::Screen;
