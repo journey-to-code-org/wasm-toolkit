@@ -15,10 +15,10 @@ start = page.index('<script type="module">')
 end = page.index("</script>", start)
 if game == "engine":
     # The bytes are unpacked in the page, with nothing fetched, so it works where fetching is not allowed.
-    rest = page[page.index("for (const b of", start):end]
+    rest = page[page.index("const buttons =", start):end]
     script = (f'<script type="module">\n{host}\n'
               'const bytes = (b64) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));\n'
-              f'boot(document.getElementById("screen"), bytes("{b64("web/engine.wasm")}"), undefined, bytes("{b64("web/default.pack")}"));\n  {rest}')
+              f'const game = await boot(document.getElementById("screen"), bytes("{b64("web/engine.wasm")}"), undefined, bytes("{b64("web/default.pack")}"));\n  {rest}')
 else:
     script = f'<script type="module">\n{host}\nboot(document.getElementById("screen"), "data:application/wasm;base64,{b64(f"web/{game}.wasm")}");\n'
 open(f"build/{game}.html", "w").write(page[:start] + script + page[end:])

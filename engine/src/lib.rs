@@ -86,6 +86,19 @@ pub extern "C" fn wtk_step() {
     e.game.draw(&mut e.screen);
 }
 
+/// What the game is doing, for a page that shows buttons on a touch screen: 0 the title, 1 pointing
+/// and picking, 2 on the strip, 3 driving round a map, 4 over.
+#[no_mangle]
+pub extern "C" fn wtk_mode() -> i32 {
+    match engine().game.scene {
+        game::Scene::Title => 0,
+        game::Scene::Race => 2,
+        game::Scene::Drive => 3,
+        game::Scene::Over(_) => 4,
+        _ => 1,
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn wtk_screen() -> *const u16 {
     engine().screen.fb.as_ptr()
