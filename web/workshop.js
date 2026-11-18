@@ -4,7 +4,13 @@ import { RAMPS, CLEAR, parsePack, buildPack, picDecode, picEncode, toIndices, gr
 
 const $ = (id) => document.getElementById(id);
 const KEEP = "wtk:workshop:pack";
-const viewer = await makeViewer(await (await fetch("engine.wasm")).arrayBuffer());
+// Whoever serves the workshop may give it a host: `host.js` beside it, asked for with "?host".
+// A host says where the game's own files are (`base`), and may take a finished pack to put in
+// front of its players (`publish(bytes)`, which throws an Error with words for the person if it
+// cannot). Without one the workshop stands alone and a pack is saved as a file.
+const host = new URLSearchParams(location.search).has("host") ? (await import("./host.js")).default : null;
+const beside = (name) => new URL(name, host?.base ?? location.href).href;
+const viewer = await makeViewer(await (await fetch(beside("engine.wasm"))).arrayBuffer());
 const pal = viewer.palette;
 const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
@@ -790,9 +796,9 @@ $("open").onchange = async () => {
   $("open").value = "";
 };
 $("fresh").onclick = async () => {
-  if (!confirm("Throw away the changes and go back to the default pack?")) return;
+  if (!confirm(host ? "Throw away the changes and go back to the pack that is being played now?" : "Throw away the changes and go back to the default pack?")) return;
   localStorage.removeItem(KEEP);
-  await start(new Uint8Array(await (await fetch("default.pack")).arrayBuffer()));
+  await start(new Uint8Array(await (await fetch(beside("default.pack"), { cache: "no-store" })).arrayBuffer()));
 };
 const blob = () => new Blob([buildPack(pack)], { type: "application/octet-stream" });
 $("save").onclick = () => {
@@ -803,8 +809,24 @@ $("save").onclick = () => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 // The game opens in its own tab and reads the pack from this one, so keep this tab open.
-$("play").onclick = () => window.open("engine.html?pack=" + encodeURIComponent(URL.createObjectURL(blob())));
+$("play").onclick = () => window.open(beside("engine.html") + "?pack=" + encodeURIComponent(URL.createObjectURL(blob())));
+if (host?.publish) {
+  // Put the pack in front of everyone who plays where this workshop is kept.
+  const publish = $("publish"), said = $("published");
+  publish.hidden = false;
+  publish.textContent = host.publishLabel ?? "Publish it";
+  publish.onclick = async () => {
+    const { ok } = await viewer.view(buildPack(pack));
+    if (!ok) return void (said.textContent = "The engine will not play this pack as it stands, so it was not published.");
+    if (!confirm(host.publishAsk ?? "Put this pack in front of everyone who plays?")) return;
+    publish.disabled = true;
+    said.textContent = "Publishing…";
+    try { await host.publish(buildPack(pack)); said.textContent = host.publishDone ?? "Published."; }
+    catch (e) { said.textContent = e.message; }
+    publish.disabled = false;
+  };
+}
 
 let kept = null;
 try { kept = Uint8Array.from(atob(localStorage.getItem(KEEP) ?? ""), (ch) => ch.charCodeAt(0)); } catch { /* nothing kept */ }
-try { if (!kept?.length) throw 0; await start(kept); } catch { await start(new Uint8Array(await (await fetch("default.pack")).arrayBuffer())); }
+try { if (!kept?.length) throw 0; await start(kept); } catch { await start(new Uint8Array(await (await fetch(beside("default.pack"), { cache: "no-store" })).arrayBuffer())); }
