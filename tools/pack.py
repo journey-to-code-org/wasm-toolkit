@@ -14,17 +14,22 @@ import struct
 import sys
 from pathlib import Path
 
+import numpy as np
 from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
-from paint import rle, to_indices  # noqa: E402  (the palette and the dither are paint.py's)
+from paint import PAL, rle, to_indices  # noqa: E402  (the palette and the dither are paint.py's)
 
 
 def picture(path):
     img = Image.open(path).convert("RGBA")
     if img.width > 320 or img.height > 240:
         raise SystemExit(f"{path.name} is {img.width}x{img.height}; the screen is 320x240")
-    words = rle(to_indices(img, dither=8))
+    # A picture already in the engine's own colours (tools/pixelate.py makes them) goes in as it is.
+    a = np.asarray(img)
+    seen = np.unique(a[a[..., 3] >= 128][:, :3].astype(np.uint32) @ np.array([65536, 256, 1], np.uint32))
+    ours = np.asarray(PAL[32:], np.float32).round().astype(np.uint32) @ np.array([65536, 256, 1], np.uint32)
+    words = rle(to_indices(img, dither=0 if np.isin(seen, ours).all() else 8))
     return struct.pack(f"<{len(words)}H", *words)
 
 

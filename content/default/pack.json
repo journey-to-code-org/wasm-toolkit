@@ -21,24 +21,32 @@
       "hood": {
         "picture": "bay.pic",
         "slots": {
-          "Intake": [
-            56,
-            98,
-            42,
-            52
-          ],
+          "Intake": {
+            "rect": [
+              56,
+              98,
+              42,
+              52
+            ],
+            "bolts": 2,
+            "stock": "Stock airbox"
+          },
           "Turbo": [
             138,
             128,
             28,
             30
           ],
-          "Exhaust": [
-            168,
-            112,
-            62,
-            36
-          ],
+          "Exhaust": {
+            "rect": [
+              168,
+              112,
+              62,
+              36
+            ],
+            "bolts": 6,
+            "stock": "Cast manifold"
+          },
           "Intercooler": [
             100,
             100,
@@ -177,18 +185,26 @@
       "hood": {
         "picture": "bay.pic",
         "slots": {
-          "Intake": [
-            56,
-            98,
-            42,
-            52
-          ],
-          "Exhaust": [
-            168,
-            112,
-            62,
-            36
-          ]
+          "Intake": {
+            "rect": [
+              56,
+              98,
+              42,
+              52
+            ],
+            "bolts": 2,
+            "stock": "Stock airbox"
+          },
+          "Exhaust": {
+            "rect": [
+              168,
+              112,
+              62,
+              36
+            ],
+            "bolts": 6,
+            "stock": "Cast manifold"
+          }
         }
       },
       "cockpit": {

@@ -48,9 +48,10 @@ async function play(shots, packBytes) {
   r.garage = screen(); shot("e5-garage");
   click(230, 138); run(1, 0, 150, 120);
   r.hood = screen(); shot("e5b-hood");
-  click(61, 103); click(92, 103); run(1, 0, 77, 124);
+  // The intake is held by two bolts, at opposite corners: both out, a look, and both back in.
+  click(61, 103); click(92, 144); run(1, 0, 77, 124);
   r.bolts = screen(); shot("e5c-bolts");
-  click(61, 103); click(92, 103);
+  click(61, 103); click(92, 144);
   press(B);
   click(270, 146); run(1, 0, 319, 199);
   r.lamps = screen(); shot("e6-lamps");
