@@ -66,6 +66,9 @@ in progress is kept in the browser between visits.
 - A second picture, the same size, is the car with its headlamps on.
 - Its price in the paper, and under "What makes it go" its torque curve, gears, weight, grip
   and turbo.
+- From the seat: drop in the cabin painting, its night version, the bonnet, the steering wheel
+  and the car from behind, and say where the dials, shift light and gear gate are. While that
+  section is open, the game beside it is seen from the seat.
 - Under its hood: drop in a picture of the engine bay, add the slots that are worked on there,
   and drag each slot's box to where its part sits.
 
@@ -74,6 +77,14 @@ in progress is kept in the browser between visits.
   whether rivals pull in, and drag the two crosses to where their tyres meet the floor.
 - The things to pick are boxes on the picture: add one, drag it, size it by its corner, and say
   what it is called and what picking it does. A box can be drawn as a button.
+
+**Maps**
+- A map is painted from above: pick a kind of block and click or drag over the grid. Set how
+  many blocks across and down it is.
+- Each kind of block has a colour and a height, or is open ground, and can lead to a room, with
+  the name it goes by on the list in the windscreen.
+- The game beside it shows the map from the seat, beside the first place there is to go.
+- A room gets a way onto a map from the Rooms tab: a thing to pick that goes "out for a drive".
 
 **Parts**: name, slot, price, what the ad says, how much torque it adds or the turbo it is, and
 which cars it fits.
@@ -276,5 +287,4 @@ clear.
 3. ~~Parts, rivals and the paper as data, and the season's rules in the engine.~~
 4. ~~Under the hood as a place where parts come off bolt by bolt. Rooms with their spots
    drawn and edited in the workshop, and parts and rivals edited there too.~~
-5. ~~The view from the seat, the town as a map, and gas.~~ Still to come: a map and cockpit
-   editor in the workshop.
+5. ~~The view from the seat, the town as a map, gas, and both edited in the workshop.~~
