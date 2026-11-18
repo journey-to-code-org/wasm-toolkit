@@ -16,7 +16,7 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["gas", "Fills the tank"], ["online", "The meet: race other people"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
@@ -439,8 +439,9 @@ function hoodSlots(c) {
       h("div", { class: "two" },
         field(`Bolts holding the ${at.slot.toLowerCase()} on (1 to 8)`, boltsOf(slot).length, () => {}, { type: "number", min: 1, max: 8, id: "boltCount", onchange: (e) => { const n = Math.max(1, Math.min(8, Math.floor(+e.target.value) || 4)); if (n === 4) delete slot.bolts; else slot.bolts = n; render(); } }),
         field("What the stock part is called", slot.stock, (v) => { if (v) slot.stock = v; else delete slot.stock; }, { maxlength: 20, placeholder: `Stock ${at.slot.toLowerCase()}` })),
+      choice("It cannot come off until this is off first", slot.behind ?? "", [["", "Nothing is in its way"], ...Object.keys(slots).filter((s) => s !== at.slot).map((s) => [s, s])], (v) => { if (v) slot.behind = v; else delete slot.behind; }),
       h("p", { class: "hint", text: "On the picture, drag the box to where the part is, and drag each bolt to where it really is." }),
-      h("div", { class: "row" }, h("button", { text: `Take ${at.slot} off the picture`, onclick: () => { delete slots[at.slot]; at.slot = null; render(); } }))) : null,
+      h("div", { class: "row" }, h("button", { text: `Take ${at.slot} off the picture`, onclick: () => { for (const other of Object.values(slots)) if (other.behind === at.slot) delete other.behind; delete slots[at.slot]; at.slot = null; render(); } }))) : null,
     h("div", { class: "row", style: "margin-top:10px" }, h("button", { text: "No hood for this car", onclick: () => { delete c.hood; tidy(); render(); } })));
 }
 
@@ -651,6 +652,13 @@ function partsPanel() {
         field("Price", p.price, (v) => { p.price = Math.max(0, Math.floor(v ?? 0)); }, { type: "number", min: 0 }),
         field("More torque, per cent", p.torque, (v) => { if (v) p.torque = Math.floor(v); else delete p.torque; }, { type: "number" })),
       field("What the ad says", p.pitch, (v) => { p.pitch = v; }, { maxlength: 24 }),
+      h("details", { id: `more-${id}` }, h("summary", { text: "What else it changes" }),
+        h("div", { class: "two" },
+          field("More grip, per cent (tyres)", p.grip, (v) => { if (v) p.grip = Math.floor(v); else delete p.grip; }, { type: "number" }),
+          field("Weight it adds, lb (less than 0 saves some)", p.weight_lb, (v) => { if (v) p.weight_lb = v; else delete p.weight_lb; }, { type: "number" }),
+          field("A gearbox: its ratios, first gear first", (p.gears ?? []).join(" "), (v) => { const n = v.split(/[\s,]+/).map(Number).filter((x) => x > 0); if (n.length) p.gears = n; else delete p.gears; }),
+          field("A final drive", p.final, (v) => { if (v > 0) p.final = v; else delete p.final; }, { type: "number", step: "0.01" }),
+          field("A redline, rpm (a built engine)", p.redline, (v) => { if (v > 0) p.redline = v; else delete p.redline; }, { type: "number", step: 100 }))),
       tick("It is a turbo, and replaces the car's own", !!p.boost, (v) => { if (v) p.boost = { from: 3000, psi: 27, lag: 10 }; else delete p.boost; }),
       p.boost ? h("div", { class: "three" },
         field("Wakes at, rpm", p.boost.from, (v) => { p.boost.from = v ?? 3000; }, { type: "number", step: 100 }),
@@ -717,6 +725,9 @@ function gamePanel() {
       field("Days in the season", m.season.days, (v) => { m.season.days = Math.max(1, Math.floor(v ?? 90)); }, { type: "number", min: 1 }),
       field("Hours in a day", m.season.hours_per_day, (v) => { m.season.hours_per_day = Math.max(1, Math.floor(v ?? 12)); }, { type: "number", min: 1 })),
     choice("Starts with", m.start.car ?? "", [["", "No car: buy one from the paper"], ...carChoices()], (v) => { if (v) m.start.car = v; else delete m.start.car; }),
+    h("div", { class: "two" },
+      field("An engine rebuild costs", m.rebuild?.cost ?? 250, (n) => { m.rebuild = { cond: 85, ...m.rebuild, cost: Math.max(0, Math.floor(n ?? 250)) }; }, { type: "number", min: 0 }),
+      field("And brings it back to, per cent", m.rebuild?.cond ?? 85, (n) => { m.rebuild = { cost: 250, ...m.rebuild, cond: Math.max(1, Math.min(100, Math.floor(n ?? 85))) }; }, { type: "number", min: 1, max: 100 })),
     field("What can be bet, in dollars (blank: 10 25 50 100)", (m.bets ?? []).join(" "), (v) => { const n = v.split(/[\s,]+/).map(Number).filter((x) => x > 0).slice(0, 4); if (n.length) m.bets = n; else delete m.bets; }),
     h("p", { class: "hint", text: "Reading the paper takes an hour, taking a part off takes an hour, a race takes two. When the days run out the game is over." }))];
 }

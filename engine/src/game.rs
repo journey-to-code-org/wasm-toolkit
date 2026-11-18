@@ -262,6 +262,40 @@ impl Game {
         ((100 + more) as f64 / 100.0 * o.cond as f64 / 100.0, parts.iter().find_map(|p| p.boost.clone()))
     }
 
+    /// The car as it is set up: its own running gear with what the parts on it change. Tyres and
+    /// the like add grip, light parts take weight off, a gearbox brings its own ratios, and a
+    /// built engine its own redline.
+    pub fn tuned_drive(&self, o: &Owned, car: &Car) -> crate::pack::Drive {
+        let mut d = car.drive.clone();
+        let mut grip = 100;
+        for p in o.fitted.values().filter_map(|id| self.part(id)) {
+            grip += p.grip;
+            d.weight_lb += p.weight_lb;
+            if !p.gears.is_empty() {
+                d.gears = p.gears.clone();
+            }
+            if let Some(f) = p.final_drive {
+                d.final_drive = f;
+            }
+            if let Some(r) = p.redline {
+                d.redline = r;
+            }
+        }
+        d.grip *= grip.max(10) as f64 / 100.0;
+        d.weight_lb = d.weight_lb.max(500.0);
+        d.launch = d.launch.min(d.redline - 400.0);
+        d
+    }
+
+    /// What blowing an engine up does to it: it runs, barely, until it is rebuilt.
+    fn blew(&mut self) {
+        if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+            o.cond = (o.cond - 20).max(25);
+        }
+        self.say("You blew the engine. It needs a rebuild.");
+        self.save();
+    }
+
     /// What a car like this one costs in the paper, and what the dealer gives for yours.
     fn list_price(&self, car: &str, cond: i32) -> i32 {
         self.pack.manifest.cars.get(car).and_then(|c| c.price).unwrap_or(300) * cond / 70
@@ -469,6 +503,21 @@ impl Game {
                 }
                 "yard" => self.scene = Scene::Yard,
                 "online" => self.go_online(),
+                "rebuild" => {
+                    let (cost, cond) = (self.pack.manifest.rebuild.cost, self.pack.manifest.rebuild.cond.clamp(1, 100));
+                    let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
+                    if self.state.cars[cur].cond >= cond {
+                        return self.say("The engine is as good as a rebuild would make it.");
+                    }
+                    if self.state.cash < cost {
+                        return self.no(&format!("A rebuild is ${cost}. You don't have it."));
+                    }
+                    self.state.cash -= cost;
+                    self.state.cars[cur].cond = cond;
+                    self.say(&format!("Rebuilt, for ${cost}. That was four hours."));
+                    tone(700, 120);
+                    self.spend(4);
+                }
                 "gas" => {
                     // A dollar buys three gallons.
                     let Some((o, car)) = self.owned().zip(self.car()) else { return self.no("You have nothing to fill.") };
@@ -525,7 +574,7 @@ impl Game {
     fn start_race(&mut self, rival_et: i32) {
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let (gain, boost) = self.tune(o);
-        let drive = car.drive.clone();
+        let drive = self.tuned_drive(o, car);
         let rt = 280 + (self.rand() % 260) as i32;
         self.burn(0.5);
         self.race = Some(Race::new(&drive, gain, boost, rival_et, rt));
@@ -983,6 +1032,10 @@ impl Game {
                 if tight != 0 {
                     return self.no("It is bolted on. Undo the bolts first.");
                 }
+                // Something in front of it has to come off first.
+                if let Some(front) = place.behind.as_ref().filter(|f| !self.state.cars[cur].off.contains(*f)) {
+                    return self.no(&format!("The {} is in the way.", front.to_lowercase()));
+                }
                 let o = &mut self.state.cars[cur];
                 if let Some(part) = o.fitted.remove(&slot) {
                     self.state.spares.push(part);
@@ -995,6 +1048,11 @@ impl Game {
             (true, Some(l)) => {
                 if self.loose_slot(&l) != slot {
                     return self.no("That does not go there.");
+                }
+                // And what it sits in front of has to be on before it is.
+                let waits = self.car().and_then(|c| c.hood.as_ref()).and_then(|h| h.slots.iter().find(|(name, p)| p.behind.as_deref() == Some(slot.as_str()) && self.state.cars[cur].off.contains(*name)).map(|(name, _)| name.clone()));
+                if let Some(first) = waits {
+                    return self.no(&format!("The {} goes on first.", first.to_lowercase()));
                 }
                 let o = &mut self.state.cars[cur];
                 o.off.retain(|s| *s != slot);
@@ -1045,9 +1103,13 @@ impl Game {
             return self.settle((!alone).then_some(false));
         }
         if race.phase == Phase::Slip && hit & KEY_A != 0 {
-            let won = race.won;
+            let (won, blown) = (race.won, race.blown);
             tone(0, 0);
-            return self.settle((!alone).then_some(won));
+            self.settle((!alone).then_some(won));
+            if blown {
+                self.blew();
+            }
+            return;
         }
         let was = race.phase;
         race.tick(Controls { throttle: keys & KEY_UP != 0, stage: hit & KEY_A != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0 });
@@ -1558,7 +1620,7 @@ impl Game {
                 s.text(164, 110, &match &versus { Some((_, theirs)) => theirs.clone().unwrap_or_else(|| "...".into()), None => ms(r.rival_rt + r.rival_et) }, ink);
                 let (words, c) = if let Some((words, _)) = &versus {
                     (*words, if r.won { shade(ramp("FOREST"), 14) } else { red })
-                } else if r.won { ("YOU WIN.", shade(ramp("FOREST"), 14)) } else if r.red { ("RED LIGHT.", red) } else if r.et > 0 { ("YOU LOSE.", red) } else { ("HE IS GONE.", red) };
+                } else if r.blown { ("IT LET GO.", red) } else if r.won { ("YOU WIN.", shade(ramp("FOREST"), 14)) } else if r.red { ("RED LIGHT.", red) } else if r.et > 0 { ("YOU LOSE.", red) } else { ("HE IS GONE.", red) };
                 s.text(100, 126, words, c);
             }
             if versus.as_ref().is_none_or(|v| v.0 != "WAITING FOR THEM") {

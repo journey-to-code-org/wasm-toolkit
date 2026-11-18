@@ -369,6 +369,18 @@
           "label": "The headlamps",
           "do": "lamps",
           "needs_car": true
+        },
+        {
+          "rect": [
+            4,
+            3,
+            66,
+            16
+          ],
+          "label": "Have the engine rebuilt",
+          "do": "rebuild",
+          "button": "Rebuild",
+          "needs_car": true
         }
       ]
     },
@@ -529,6 +541,37 @@
       "price": 350,
       "pitch": "Cold, dense air",
       "torque": 5,
+      "fits": [
+        "umbra"
+      ]
+    },
+    "sticky-tyres": {
+      "name": "Sticky tyres",
+      "slot": "Tyres",
+      "price": 300,
+      "pitch": "Hooks up off the line",
+      "grip": 15
+    },
+    "short-box": {
+      "name": "Close-ratio gearbox",
+      "slot": "Gearbox",
+      "price": 650,
+      "pitch": "Keeps it on the boil",
+      "gears": [
+        2.85,
+        1.9,
+        1.38,
+        1.03,
+        0.82
+      ],
+      "final": 4.6
+    },
+    "forged": {
+      "name": "Forged bottom end",
+      "slot": "Bottom end",
+      "price": 800,
+      "pitch": "Spins to 8000",
+      "redline": 8000,
       "fits": [
         "umbra"
       ]
@@ -785,5 +828,9 @@
         }
       }
     }
+  },
+  "rebuild": {
+    "cost": 250,
+    "cond": 85
   }
 }
