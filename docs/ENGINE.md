@@ -15,7 +15,7 @@ Pillow and numpy for the pack tool.
 
 ## What is in the engine so far
 
-Steps 1 to 3 of 5 are done. The engine plays a season out of a pack:
+Steps 1 to 4 of 5 are done. The engine plays a season out of a pack:
 
 - **Places**: a picture or backdrop, your car standing in it, spots to pick, and buttons.
 - **The season**: so many days of so many hours. Reading the paper is an hour, bolting a part on
@@ -41,25 +41,43 @@ C game, and come with step 5.
 ## The workshop
 
 `make engine && make serve`, then open http://localhost:8080/workshop.html. It opens the default
-pack, or any `.pack` you give it, and edits its cars in the browser:
+pack, or any `.pack` you give it, and edits it in the browser. The game beside the forms is the
+engine itself, drawing the pack as it stands; if the engine would refuse the pack, it says why
+there. **Save the pack** downloads it, **Play it** opens the game on it in another tab, and work
+in progress is kept in the browser between visits.
 
-- **Add a car** and drop in its picture from the side, nose to the right. Any PNG will do; one
-  wider than the screen is scaled down, and you choose how wide it stands in the game.
-- **Background**: a PNG with a clear background is best. For one saved on a plain colour, tick
-  the box and the corner's colour is made clear.
-- **Ground**: the red line is where the tyres touch. It starts under the lowest pixel; drag it up
-  if the picture has a shadow under the car.
-- **Paint**: click the bodywork in the picture. Everything of about that colour becomes the
-  paint, and the car can then be shown in any of the 31 colours. The slider widens or narrows
-  what counts. Bright highlights that are nearly white are left as they are.
-- **Headlamps**: a second picture, the same size, with the lamps on.
-- The car is shown in the game's garage, by the engine itself, as you change things.
-- **Save the pack** downloads it. **Play it** opens the game on it in another tab. Work in
-  progress is kept in the browser between visits.
+**Cars**
+- Drop in the car's picture from the side, nose to the right. Any PNG will do; one wider than
+  the screen is scaled down, and you choose how wide it stands in the game.
+- A PNG with a clear background is best. For one saved on a plain colour, tick the box and the
+  corner's colour is made clear.
+- The red line is where the tyres touch. It starts under the lowest pixel; drag it up if the
+  picture has a shadow under the car.
+- Click the bodywork in the picture and everything of about that colour becomes the paint; the
+  car can then be shown in any of the 31 colours. Bright highlights that are nearly white are
+  left as they are.
+- A second picture, the same size, is the car with its headlamps on.
+- Its price in the paper, and under "What makes it go" its torque curve, gears, weight, grip
+  and turbo.
+- Under its hood: drop in a picture of the engine bay, add the slots that are worked on there,
+  and drag each slot's box to where its part sits.
 
-The workshop only edits cars so far: their pictures, paint and price. Places, parts, rivals and
-a car's `drive` are still edited in `pack.json`; a car added in the workshop borrows the first
-car's `drive`.
+**Rooms**
+- A room is a picture (320 by 200) or a plain colour. Tick whether your car stands in it and
+  whether rivals pull in, and drag the two crosses to where their tyres meet the floor.
+- The things to pick are boxes on the picture: add one, drag it, size it by its corner, and say
+  what it is called and what picking it does. A box can be drawn as a button.
+
+**Parts**: name, slot, price, what the ad says, how much torque it adds or the turbo it is, and
+which cars it fits.
+
+**Rivals**: in order, each with a car, a paint, a quarter-mile time, the most they will bet and
+whether they race for cars. The last can be the one to beat.
+
+**The game**: the pack's name, the money and car you start with, where you start, how long the
+season is, and what can be bet.
+
+The workshop has no tests of its own in CI; `web/pack.js`, which reads and writes the packs, has.
 
 ## A pack folder
 
@@ -197,6 +215,6 @@ clear.
 2. ~~The workshop: a page where you drop in a car's picture, set its ground line and paint, see it
    in the garage, and save the pack.~~
 3. ~~Parts, rivals and the paper as data, and the season's rules in the engine.~~
-4. ~~Under the hood as a place where parts come off bolt by bolt.~~ Rooms with their spots
-   drawn and edited in the workshop, and parts and rivals edited there too.
+4. ~~Under the hood as a place where parts come off bolt by bolt. Rooms with their spots
+   drawn and edited in the workshop, and parts and rivals edited there too.~~
 5. Maps: the town and the roads, the view from the seat, and gas.
