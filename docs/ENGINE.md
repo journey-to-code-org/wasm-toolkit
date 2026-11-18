@@ -107,6 +107,20 @@ whether they race for cars. The last can be the one to beat.
 **The game**: the pack's name, the money and car you start with, where you start, how long the
 season is, and what can be bet.
 
+**Kept somewhere with players.** Whoever serves the workshop can put a `host.js` beside it and
+open it as `workshop.html?host`. The host's default export says where the game's files are and
+may take a finished pack:
+
+```js
+export default {
+  base: "/wasm/shootout/",              // where engine.wasm, default.pack and engine.html are
+  publishLabel: "Publish to the parlor",
+  async publish(bytes) { /* send the pack; throw new Error("why not") if it cannot be done */ },
+};
+```
+
+With a host, the workshop starts from the pack being played now and shows a Publish button.
+
 The workshop has no tests of its own in CI; `web/pack.js`, which reads and writes the packs, has.
 
 ## A pack folder
