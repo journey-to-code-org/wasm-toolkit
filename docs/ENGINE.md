@@ -31,6 +31,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Under the hood**: a picture of the engine bay with the parts as places on it. A part is
   held by four bolts: undo them, lift it off, pick another up off the floor, set it down, and do
   the bolts up. A car with something off or loose will not race.
+- **Engines that break**: held flat against the redline in gear for a second and a half, an
+  engine lets go. The race is lost, and it runs badly until it is rebuilt, which costs money and
+  four hours.
 - **The bench**: the shelf of spare parts, which are sold from here. For a car with no hood in
   the pack, or a slot its hood does not show, parts go on and off here with one pick.
 - **The yard**: up to sixteen cars; bring one into the bay or sell it to the dealer.
@@ -210,6 +213,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `drive:<map>` | out onto that map, beside the block that leads back here |
   | `gas` | fill the tank, a dollar for three gallons |
   | `online` | the meet: race other people |
+  | `rebuild` | have the engine of the car in the bay rebuilt |
 
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
   picture does not show the thing itself.
@@ -266,7 +270,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 
   A place is its box (x, y, width, height), which has a bolt at each corner; or the box with a
   number of `bolts`, one to eight, laid out for you; or the box with where each bolt is. `stock`
-  is what the part the car came with is called. A place need not match any part in the paper:
+  is what the part the car came with is called. `"behind": "Air filter"` says the part there
+  cannot be lifted until the air filter is off, and the air filter cannot go back until it is on. A place need not match any part in the paper:
   it is then just a stock part that comes off and goes back on, and the car will not run
   without it. Split things as finely as you like: an air filter and an intake pipe can be two
   places, each with its own parts. The floor under the hood shows up to eight loose parts.
@@ -293,6 +298,9 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   Everything but `picture` may be left out.
 - **parts**: one part to a `slot`; the slots are whatever the parts name. `torque` is a
   percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
+  Beyond torque a part can have `grip` (per cent more, for tyres), `weight_lb` (what it adds;
+  less than nothing saves weight), `gears` and `final` (a gearbox in place of the car's own) and
+  `redline` (a built engine's).
   `"picture": "cone.pic"` is what the part looks like bolted on: it is drawn over its place
   under the hood, stretched to the box, in place of the stock part in the bay's picture. Without
   one, a fitted part is marked with a tag.
@@ -300,7 +308,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 - **rivals**: in the order they turn up. `et` is their quarter mile in seconds. `limit` is the
   most money they will race for, `pinks` whether they will race for cars. The one with `king`
   must be last, races for cars only, and beating them wins the game.
-- **bets** and **paints** may be left out.
+- **bets** and **paints** may be left out. So may `"rebuild": { "cost": 250, "cond": 85 }`:
+  what an engine rebuild costs and how healthy it comes back.
 - **cars** may have `"tank": 17`, in gallons. A small dial in the cockpit with `"reads": "gas"`
   shows what is in it.
 

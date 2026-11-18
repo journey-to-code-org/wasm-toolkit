@@ -11,6 +11,8 @@ pub const QUARTER: f64 = 402.0;
 /// Ticks between the lights of the tree.
 pub const TREE_STEP: i32 = 15;
 const IDLE: f64 = 900.0;
+/// Ticks against the redline under load before the engine lets go.
+pub const BLOWS_AT: f64 = 45.0;
 const WHEEL_RADIUS: f64 = 0.3;
 const TO_NM: f64 = 1.3558;
 const KG: f64 = 0.4536;
@@ -65,6 +67,11 @@ pub struct Race {
     pub rival_rt: i32,
     pub rival_pos: f64,
     pub won: bool,
+    /// How long the engine has been held against its redline under load, in ticks, less what it
+    /// has since been given to recover. Too long and it lets go.
+    pub strain: f64,
+    /// It let go. There is no more push, and the race is lost.
+    pub blown: bool,
     /// The other lane is someone real, somewhere else: where they are and who won is told to the
     /// race, not worked out by it.
     pub net: bool,
@@ -78,7 +85,7 @@ impl Race {
             boost_kind: boost.or_else(|| drive.boost.clone()),
             drive: drive.clone(), gain,
             phase: Phase::Stage, gear: 0, rpm: IDLE, boost: 0.0, pos: 0.0, v: 0.0, launch: 0.0, shift: 0, clock: 0, tree: 0,
-            red: false, rt: 0, sixty: 0, et: 0, mph: 0, rival_et, rival_rt, rival_pos: 0.0, won: false, net: false,
+            red: false, rt: 0, sixty: 0, et: 0, mph: 0, rival_et, rival_rt, rival_pos: 0.0, won: false, strain: 0.0, blown: false, net: false,
         }
     }
 
@@ -193,7 +200,19 @@ impl Race {
             return;
         }
         let mut push;
-        if self.shift > 0 {
+        // Held flat against the limiter in gear, an engine does not last: a second and a half of it,
+        // and something lets go. Shifting, or lifting, gives it back.
+        if c.throttle && self.rpm >= self.drive.redline && self.phase == Phase::Run {
+            self.strain += 1.0;
+            if self.strain > BLOWS_AT {
+                self.blown = true;
+            }
+        } else {
+            self.strain = (self.strain - 0.5).max(0.0);
+        }
+        if self.blown {
+            push = -0.6;
+        } else if self.shift > 0 {
             self.shift -= 1;
             push = 0.0;
         } else if c.throttle && self.rpm < self.drive.redline {
@@ -206,6 +225,13 @@ impl Race {
         }
         push -= self.v * self.v * 0.00029 + 0.15;
         self.v = (self.v + push / HZ).max(0.0);
+        if self.blown && self.v == 0.0 {
+            // Rolled to a stop with a hole in the block: there is no timeslip for that.
+            self.et = 0;
+            self.won = false;
+            self.phase = Phase::Slip;
+            return;
+        }
         let before = self.pos;
         self.pos += self.v / HZ;
         let now = self.clock as f64 * 1000.0 / HZ;
@@ -216,7 +242,7 @@ impl Race {
             self.et = (now - if self.v > 0.0 { (self.pos - QUARTER) * 1000.0 / self.v } else { 0.0 }) as i32;
             self.mph = (self.v * 2.237) as i32;
             self.phase = Phase::Slip;
-            self.won = !self.alone() && !self.net && !self.red && self.et < self.rival_rt + self.rival_et;
+            self.won = !self.alone() && !self.net && !self.red && !self.blown && self.et < self.rival_rt + self.rival_et;
         }
     }
 }

@@ -290,7 +290,7 @@ impl Game {
     fn start_versus(&mut self, id: u32, stake: i32) {
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let (gain, boost) = self.tune(o);
-        let drive = car.drive.clone();
+        let drive = self.tuned_drive(o, car);
         self.burn(0.5);
         let mut race = Race::new(&drive, gain, boost, 0, 0);
         race.net = true;
@@ -407,6 +407,13 @@ impl Game {
         race.rival_pos += vs.him_v / crate::race::HZ;
         if matches!(race.phase, Phase::Tree | Phase::Run) && self.ticks % 5 == 0 {
             out.push(json!({ "t": "pos", "to": to, "p": (race.pos * 10.0).round() / 10.0, "v": (race.v * 10.0).round() / 10.0 }));
+        }
+        if race.phase == Phase::Slip && race.blown {
+            // Blown up and rolled to a stop: that is their race.
+            tone(0, 0);
+            self.send(json!({ "t": "quit", "to": to }));
+            self.finish_versus(Outcome::Lost, "");
+            return self.blew();
         }
         if race.phase == Phase::Slip {
             let me = Slip { rt: race.rt, et: race.et, red: race.red };

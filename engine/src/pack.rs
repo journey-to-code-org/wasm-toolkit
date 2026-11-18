@@ -47,6 +47,19 @@ impl Default for Season {
     }
 }
 
+#[derive(Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct Rebuild {
+    pub cost: i32,
+    pub cond: i32,
+}
+
+impl Default for Rebuild {
+    fn default() -> Rebuild {
+        Rebuild { cost: 250, cond: 85 }
+    }
+}
+
 /// A turbo: the engine speed it starts to make boost at, how much it makes, and how slowly it
 /// gets there (bigger is lazier).
 #[derive(Deserialize, Clone, Debug, PartialEq)]
@@ -114,6 +127,20 @@ pub struct Part {
     /// The cars it goes on. Left out, it goes on any.
     #[serde(default)]
     pub fits: Vec<String>,
+    /// How much more the tyres can push, as a percentage: for tyres, a differential, anything that puts it down.
+    #[serde(default)]
+    pub grip: i32,
+    /// What it adds to the car's weight, in pounds. Less than nothing for a part that saves some.
+    #[serde(default)]
+    pub weight_lb: f64,
+    /// A gearbox: its ratios, first gear first, in place of the car's own. And a final drive.
+    #[serde(default)]
+    pub gears: Vec<f64>,
+    #[serde(default, rename = "final")]
+    pub final_drive: Option<f64>,
+    /// A redline, in place of the car's own: for a built bottom end.
+    #[serde(default)]
+    pub redline: Option<f64>,
     /// What it looks like bolted on under the hood: a picture drawn over its slot's box, in place
     /// of the stock part that the engine bay's picture shows there.
     #[serde(default)]
@@ -160,6 +187,9 @@ pub struct Slot {
     pub rect: [i32; 4],
     pub bolts: Vec<[i32; 2]>,
     pub stock: Option<String>,
+    /// The place this one is behind: its part cannot be lifted until that one's is off, and that
+    /// one's cannot go back on until this one's is.
+    pub behind: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -179,6 +209,8 @@ enum SlotIn {
         bolts: Option<BoltsIn>,
         #[serde(default)]
         stock: Option<String>,
+        #[serde(default)]
+        behind: Option<String>,
     },
 }
 
@@ -197,16 +229,16 @@ pub fn bolts_round(rect: [i32; 4], n: usize) -> Vec<[i32; 2]> {
 
 impl From<SlotIn> for Slot {
     fn from(s: SlotIn) -> Slot {
-        let (rect, bolts, stock) = match s {
-            SlotIn::Rect(rect) => (rect, None, None),
-            SlotIn::Full { rect, bolts, stock } => (rect, bolts, stock),
+        let (rect, bolts, stock, behind) = match s {
+            SlotIn::Rect(rect) => (rect, None, None, None),
+            SlotIn::Full { rect, bolts, stock, behind } => (rect, bolts, stock, behind),
         };
         let bolts = match bolts {
             Some(BoltsIn::At(at)) if !at.is_empty() => at.into_iter().take(8).collect(),
             Some(BoltsIn::Count(n)) => bolts_round(rect, n),
             _ => bolts_round(rect, 4),
         };
-        Slot { rect, bolts, stock }
+        Slot { rect, bolts, stock, behind }
     }
 }
 
@@ -458,6 +490,9 @@ pub struct Manifest {
     /// The colours cars in the paper come in. Left out, eight ordinary ones.
     #[serde(default)]
     pub paints: Vec<String>,
+    /// What it costs to have a tired or blown engine rebuilt, and how healthy it comes back, as a percentage.
+    #[serde(default)]
+    pub rebuild: Rebuild,
     /// What can be put on a race, in dollars. Left out: 10, 25, 50, 100.
     #[serde(default)]
     pub bets: Vec<i32>,
@@ -481,7 +516,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 12] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online"];
+pub const ACTIONS: [&str; 13] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 
@@ -624,6 +659,11 @@ impl Pack {
                 need(&format!("the back of the car {id}"), &r.picture)?;
             }
             if let Some(hood) = &car.hood {
+                for (name, place) in &hood.slots {
+                    if let Some(front) = place.behind.as_ref().filter(|f| !hood.slots.contains_key(*f) || *f == name) {
+                        return Err(format!("under the hood of the car {id}, the {name} is behind the {front}, which is not a place there"));
+                    }
+                }
                 need(&format!("under the hood of the car {id}"), &hood.picture)?;
             }
             if let Some(l) = &car.side_lamps {

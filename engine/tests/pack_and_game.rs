@@ -714,3 +714,134 @@ fn you_drive_from_one_place_to_another_and_it_burns_gas() {
     click(&mut g, 100, 10);
     assert_eq!(g.note.as_deref(), Some("You don't got enough gas to cruise."));
 }
+
+#[test]
+fn parts_change_more_than_torque() {
+    let extra = r#""parts": { "tyres": { "name": "Tyres", "slot": "Tyres", "price": 10, "grip": 25 },
+        "box": { "name": "Box", "slot": "Gearbox", "price": 10, "gears": [3.4, 2.0, 1.4, 1.0], "final": 4.5 },
+        "light": { "name": "Light bits", "slot": "Body", "price": 10, "weight_lb": -400 },
+        "forged": { "name": "Forged", "slot": "Bottom end", "price": 10, "redline": 8200 },"#;
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&MANIFEST.replacen("\"parts\": {", extra, 1))));
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    let car = g.car().unwrap().clone();
+    let stock = g.tuned_drive(g.owned().unwrap(), &car);
+    assert_eq!((stock.grip, stock.weight_lb, stock.gears.len(), stock.redline), (12.0, 3060.0, 5, 7200.0));
+    let time = |g: &Game| {
+        let (o, car) = (g.owned().unwrap(), g.car().unwrap());
+        let drive = g.tuned_drive(o, car);
+        let mut r = Race::new(&drive, 1.0, None, 0, 0);
+        r.tick(Controls { stage: true, ..Controls::default() });
+        for _ in 0..3000 {
+            if r.phase == Phase::Slip {
+                break;
+            }
+            let up = (r.gear == 0 && r.tree >= 51) || (r.gear > 0 && r.rpm > drive.redline - 250.0);
+            r.tick(Controls { throttle: true, up, ..Controls::default() });
+        }
+        (r.sixty, r.et)
+    };
+    let before = time(&g);
+    for (slot, part) in [("Tyres", "tyres"), ("Body", "light")] {
+        g.state.cars[0].fitted.insert(slot.into(), part.into());
+    }
+    let d = g.tuned_drive(g.owned().unwrap(), &car);
+    assert_eq!((d.grip, d.weight_lb), (15.0, 2660.0));
+    let after = time(&g);
+    assert!(after.0 < before.0 && after.1 < before.1 - 200, "grip and less weight are quicker: {before:?} then {after:?}");
+    for (slot, part) in [("Gearbox", "box"), ("Bottom end", "forged")] {
+        g.state.cars[0].fitted.insert(slot.into(), part.into());
+    }
+    let d = g.tuned_drive(g.owned().unwrap(), &car);
+    assert_eq!((d.gears.clone(), d.final_drive, d.redline), (vec![3.4, 2.0, 1.4, 1.0], 4.5, 8200.0));
+    assert!(time(&g).1 > 0, "and a four-speed still gets there");
+}
+
+#[test]
+fn an_engine_held_on_the_limiter_lets_go_and_is_rebuilt() {
+    let mut g = game();
+    click(&mut g, 20, 10);
+    click(&mut g, 150, 10);
+    click(&mut g, 4 + 78 * 2 + 30, 185);
+    assert_eq!(g.scene, Scene::Race);
+    // Away on the green, and then never a shift.
+    g.tick(KEY_A, 0, 0);
+    for _ in 0..52 {
+        g.tick(KEY_UP, 0, 0);
+    }
+    g.tick(KEY_UP | KEY_X, 0, 0);
+    for _ in 0..3000 {
+        if g.race.as_ref().is_none_or(|r| r.phase == Phase::Slip) {
+            break;
+        }
+        g.tick(KEY_UP, 0, 0);
+    }
+    let r = g.race.as_ref().unwrap();
+    assert!(r.blown && r.et == 0 && !r.won, "{:?}", (r.blown, r.et, r.pos));
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    g.tick(0, 0, 0);
+    g.tick(KEY_A, 0, 0);
+    assert_eq!((g.scene, g.state.cash, g.owned().unwrap().cond), (Scene::Place, 975, 50), "the bet is lost and so is the engine");
+    assert_eq!(g.note.as_deref(), Some("You blew the engine. It needs a rebuild."));
+
+    // A shift in time saves it: strain is given back.
+    let mut r = Race::new(&g.car().unwrap().drive, 1.0, None, 0, 0);
+    r.tick(Controls { stage: true, ..Controls::default() });
+    for t in 0..400 {
+        let up = (r.gear == 0 && r.tree >= 51) || (r.gear > 0 && r.strain > 20.0);
+        r.tick(Controls { throttle: true, up, ..Controls::default() });
+        assert!(!r.blown, "tick {t}");
+    }
+
+    // The rebuild: four hours and the pack's price, and it is healthy again.
+    let rebuilt = MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"rebuild\"").replace("\"name\": \"Test Pack\",", "\"name\": \"Test Pack\", \"rebuild\": { \"cost\": 300, \"cond\": 90 },");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&rebuilt)));
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    g.state.cars[0].cond = 30;
+    g.state.cash = 100;
+    click(&mut g, 100, 10);
+    assert_eq!((g.owned().unwrap().cond, g.note.as_deref()), (30, Some("A rebuild is $300. You don't have it.")));
+    g.state.cash = 1000;
+    click(&mut g, 100, 10);
+    assert_eq!((g.owned().unwrap().cond, g.state.cash, g.state.hours), (90, 700, 4));
+    click(&mut g, 100, 10);
+    assert_eq!(g.state.cash, 700, "a healthy engine is not rebuilt");
+}
+
+#[test]
+fn a_part_behind_another_waits_for_it() {
+    engine::host::store(b"");
+    let hood = r#""ground": 2, "hood": { "picture": "shed.pic", "slots": {
+        "Filter": { "rect": [200, 50, 30, 30], "bolts": 1 },
+        "Pipe": { "rect": [100, 50, 40, 40], "bolts": 1, "behind": "Filter" } } },"#;
+    let manifest = MANIFEST.replace("\"ground\": 2,", hood).replace("\"do\": \"say:Hello.\"", "\"do\": \"hood\"");
+    assert!(Pack::parse(&files(&manifest.replace("\"behind\": \"Filter\"", "\"behind\": \"Moon\""))).err().unwrap().contains("Moon"));
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    click(&mut g, 100, 10);
+    let (pipe_bolt, pipe, filter_bolt, filter) = ((120, 70), (110, 60), (215, 65), (205, 55));
+    // The pipe's bolt comes out, but the pipe will not lift past the filter.
+    click(&mut g, pipe_bolt.0, pipe_bolt.1);
+    click(&mut g, pipe.0, pipe.1);
+    assert_eq!((g.note.as_deref(), g.owned().unwrap().off.len()), (Some("The filter is in the way."), 0));
+    click(&mut g, filter_bolt.0, filter_bolt.1);
+    click(&mut g, filter.0, filter.1);
+    click(&mut g, pipe.0, pipe.1);
+    assert_eq!(g.owned().unwrap().off, vec!["Filter".to_string(), "Pipe".to_string()]);
+    // Going back together, the filter waits for the pipe.
+    assert_eq!(g.floor(), vec![Loose::Stock("Filter".into()), Loose::Stock("Pipe".into())]);
+    click(&mut g, 20, 182);
+    click(&mut g, filter.0, filter.1);
+    assert_eq!((g.note.as_deref(), g.owned().unwrap().off.len()), (Some("The pipe goes on first."), 2));
+    click(&mut g, 20, 182);
+    click(&mut g, 90, 182);
+    click(&mut g, pipe.0, pipe.1);
+    click(&mut g, 20, 182);
+    click(&mut g, filter.0, filter.1);
+    assert!(g.owned().unwrap().off.is_empty());
+}
