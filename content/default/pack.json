@@ -1,0 +1,41 @@
+{
+  "name": "Road to the Shootout",
+  "start": { "cash": 750, "place": "garage", "car": "umbra" },
+  "cars": {
+    "umbra": {
+      "name": "1990 Kagami Umbra Turbo",
+      "side": "car.pic",
+      "side_lamps": "car-lamps.pic",
+      "ground": 74,
+      "paint": "BLUE",
+      "paint_ramps": { "mid": "BLUE", "dark": "NAVY", "light": "SKY", "glint": "CYAN" }
+    }
+  },
+  "places": {
+    "garage": {
+      "title": "Your garage",
+      "picture": "garage.pic",
+      "car_at": [40, 182],
+      "spots": [
+        { "rect": [232, 14, 84, 108], "label": "Hit the street", "do": "go:lot" },
+        { "rect": [16, 24, 68, 56], "label": "A window. It is daylight.", "do": "" },
+        { "rect": [100, 22, 30, 38], "label": "The calendar", "do": "say:Day 1." },
+        { "rect": [8, 86, 84, 12], "label": "The tool board", "do": "say:Nothing to sell yet." },
+        { "rect": [6, 98, 92, 22], "label": "Check out the newspaper", "do": "say:The paper has not been moved into the engine yet." },
+        { "rect": [128, 118, 76, 44], "label": "The door: get in and hit the street", "do": "go:lot", "needs_car": true },
+        { "rect": [204, 126, 54, 24], "label": "Pop the hood", "do": "say:Under the hood has not been moved into the engine yet.", "needs_car": true },
+        { "rect": [256, 134, 28, 26], "label": "The headlamps", "do": "lamps", "needs_car": true }
+      ]
+    },
+    "lot": {
+      "title": "The lot by the strip",
+      "backdrop": "NAVY",
+      "car_at": [38, 170],
+      "spots": [
+        { "rect": [0, 0, 320, 100], "label": "The strip's lights, over the fence", "do": "say:Racing has not been moved into the engine yet." },
+        { "rect": [0, 172, 320, 28], "label": "Go home", "do": "go:garage" },
+        { "rect": [254, 122, 28, 26], "label": "The headlamps", "do": "lamps", "needs_car": true }
+      ]
+    }
+  }
+}

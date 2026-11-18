@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Road to the Shootout</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  body { display: grid; place-items: center; }
+  /* 320x240 on a 4:3 screen: square pixels, scaled up without smoothing. */
+  canvas { width: min(100vw, 133.33vh); aspect-ratio: 4 / 3; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; }
+</style>
+</head>
+<body>
+<canvas id="screen" aria-label="Road to the Shootout"></canvas>
+<script type="module">
+  import { boot } from "./wtk.js";
+  // The engine, playing a pack. Another pack: engine.html?pack=mine.pack
+  const pack = new URLSearchParams(location.search).get("pack") ?? "default.pack";
+  boot(document.getElementById("screen"), "engine.wasm", undefined, pack);
+</script>
+</body>
+</html>

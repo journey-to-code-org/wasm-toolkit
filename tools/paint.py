@@ -582,4 +582,5 @@ def main():
     print("games/shootout/art.h", len(rle(ib)), len(rle(inn)), iw.shape)
 
 
-main()
+if __name__ == "__main__":
+    main()
