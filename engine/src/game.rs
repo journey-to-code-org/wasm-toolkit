@@ -15,6 +15,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
 pub mod online;
+pub mod roadtrip;
 use online::Net;
 
 pub const KEY_UP: u32 = 1;
@@ -122,6 +123,8 @@ pub enum Scene {
     Race,
     /// Out on a map, behind the wheel.
     Drive,
+    /// Out of town, on a road between two places.
+    Road,
     /// 1 the season ran out, 2 broke, 3 you beat the one to beat.
     Over(u8),
 }
@@ -141,6 +144,11 @@ pub struct Game {
     bet: usize,
     pub race: Option<Race>,
     pub town: Option<Town>,
+    pub trip: Option<crate::road::Trip>,
+    /// The map a trip set out from, if it was not a place; and whether the town was come to by road,
+    /// when there is no turning back to where the day started.
+    trip_from: Option<String>,
+    town_by_road: bool,
     pub net: Net,
     selling: bool,
     pub carrying: Option<Loose>,
@@ -175,7 +183,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, net: Net::default(), selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, net: Net::default(), selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -451,6 +459,8 @@ impl Game {
             self.enter(&to.to_string());
         } else if let Some(words) = action.strip_prefix("say:") {
             self.say(words);
+        } else if let Some(road) = action.strip_prefix("road:") {
+            self.take_road(&road.to_string(), None);
         } else if let Some(map) = action.strip_prefix("drive:") {
             let Some(m) = self.pack.manifest.maps.get(map) else { return };
             if self.state.cur.is_none() {
@@ -471,6 +481,7 @@ impl Game {
             });
             self.rng = rng;
             self.town = Some(town);
+            self.town_by_road = false;
             self.scene = Scene::Drive;
         } else {
             match action {
@@ -681,6 +692,9 @@ impl Game {
         if self.scene == Scene::Drive {
             return self.drive_tick(keys, hit);
         }
+        if self.scene == Scene::Road {
+            return self.road_tick(keys, hit);
+        }
         if (mx, my) != self.last_mouse {
             self.last_mouse = (mx, my);
             self.px = mx;
@@ -795,7 +809,7 @@ impl Game {
             }
             Scene::Online => self.online_tick(pick, back),
             Scene::OnlineBets => self.online_bets_tick(pick, back),
-            Scene::Race | Scene::Drive => {}
+            Scene::Race | Scene::Drive | Scene::Road => {}
         }
     }
 
@@ -805,12 +819,21 @@ impl Game {
         let Some(town) = self.town.as_mut() else { return };
         let Some(map) = self.pack.manifest.maps.get(&town.map) else { return };
         if hit & KEY_B != 0 {
+            if self.town_by_road {
+                // The garage is a road away.
+                self.note = Some("No turning back: pull up somewhere.".into());
+                return;
+            }
             tone(0, 0);
             self.town = None;
             self.scene = Scene::Place;
             return;
         }
         if hit & KEY_A != 0 {
+            if let Some(road) = town.beside(map).and_then(|b| b.road.clone()) {
+                let from = town.map.clone();
+                return self.take_road(&road, Some(&from));
+            }
             if let Some(to) = town.beside(map).and_then(|b| b.to.clone()) {
                 tone(520, 60);
                 self.town = None;
@@ -1196,6 +1219,7 @@ impl Game {
             Scene::Online | Scene::OnlineBets => self.draw_online(s),
             Scene::Race => return self.draw_race(s),
             Scene::Drive => return self.draw_drive(s),
+            Scene::Road => return self.draw_road(s),
             Scene::Over(kind) => return self.draw_over(s, kind),
         }
         if self.scene != Scene::Title {
@@ -1849,7 +1873,7 @@ impl Game {
                 let block = map.block(c, r);
                 let Some(b) = block.filter(|b| b.height > 0.0) else {
                     // Grass, and nothing to hit. Somewhere to go that is only a lot gets a marked kerb.
-                    let name = if block.is_some_and(|b| b.to.is_some()) { "GOLD" } else { "GRASS" };
+                    let name = if block.is_some_and(|b| b.to.is_some() || b.road.is_some()) { "GOLD" } else { "GRASS" };
                     scene.poly(&[[x0, 0.0, z0], [x1, 0.0, z0], [x1, 0.0, z1], [x0, 0.0, z1]], shade(ramp(name), 20), shade(ramp(name), 22), -3500.0);
                     continue;
                 };
@@ -1905,6 +1929,9 @@ impl Game {
             let name = b.name.clone().or_else(|| b.to.as_ref().and_then(|to| self.pack.manifest.places.get(to)).map(|pl| pl.title.clone())).unwrap_or_default();
             let words = format!("ENTER: {}", name.to_uppercase());
             s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, &words, shade(ramp("GOLD"), 28), BLACK);
+        }
+        if let Some(note) = &self.note {
+            s.text_sh(160 - note.len() as i32 * 4, view * 80 / 136, &note.to_uppercase(), shade(ramp("GOLD"), 28), BLACK);
         }
         if town.crash > 0 {
             s.vgrad(108, 50, 104, 22, ramp("RED"), 26, 16);

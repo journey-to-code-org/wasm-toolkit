@@ -500,6 +500,67 @@
           "button": "Drive off"
         }
       ]
+    },
+    "overlook": {
+      "title": "The overlook",
+      "backdrop": "INDIGO",
+      "car_at": [
+        6,
+        138
+      ],
+      "rival_at": [
+        72,
+        174
+      ],
+      "spots": [
+        {
+          "rect": [
+            4,
+            178,
+            60,
+            18
+          ],
+          "label": "Race whoever this is",
+          "do": "race",
+          "button": "Race",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            68,
+            178,
+            60,
+            18
+          ],
+          "label": "Wave them on: see who else is up here",
+          "do": "next",
+          "button": "Next"
+        },
+        {
+          "rect": [
+            132,
+            178,
+            60,
+            18
+          ],
+          "label": "A pass on your own",
+          "do": "solo",
+          "button": "Solo",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            196,
+            178,
+            120,
+            18
+          ],
+          "label": "Ridge road, back down to town",
+          "do": "road:ridge",
+          "button": "Back to town",
+          "needs_car": true
+        }
+      ]
     }
   },
   "season": {
@@ -575,6 +636,13 @@
       "fits": [
         "umbra"
       ]
+    },
+    "radar": {
+      "name": "Radar detector",
+      "slot": "Dash",
+      "price": 120,
+      "pitch": "Beeps when the law is ahead",
+      "radar": true
     }
   },
   "rivals": [
@@ -783,7 +851,7 @@
       "title": "Town",
       "traffic": 8,
       "rows": [
-        "BOT.CB",
+        "BOTRCB",
         "G.BPOT",
         "TB.GB.",
         "HCOB.S",
@@ -825,6 +893,10 @@
           "height": 5,
           "to": "station",
           "name": "Gas"
+        },
+        "R": {
+          "road": "ridge",
+          "name": "Ridge road"
         }
       }
     }
@@ -832,5 +904,106 @@
   "rebuild": {
     "cost": 250,
     "cond": 85
+  },
+  "roads": {
+    "ridge": {
+      "title": "Ridge road",
+      "ends": [
+        "map:town",
+        "overlook"
+      ],
+      "limit": 55,
+      "ticket": 40,
+      "traffic": 7,
+      "cops": 2,
+      "hours": 1,
+      "gas_per_km": 0.25,
+      "parts": [
+        {
+          "len": 240,
+          "curve": 0,
+          "hill": 0,
+          "left": "fields",
+          "right": "fields"
+        },
+        {
+          "len": 300,
+          "curve": 0.35,
+          "hill": 6,
+          "left": "fields",
+          "right": "trees"
+        },
+        {
+          "len": 260,
+          "curve": -0.5,
+          "hill": 14,
+          "left": "trees",
+          "right": "trees"
+        },
+        {
+          "len": 200,
+          "curve": 0,
+          "hill": 10,
+          "left": "rock",
+          "right": "trees"
+        },
+        {
+          "len": 320,
+          "curve": 0.7,
+          "hill": 18,
+          "left": "rock",
+          "right": "drop"
+        },
+        {
+          "len": 180,
+          "curve": 0,
+          "hill": -8,
+          "left": "trees",
+          "right": "drop"
+        },
+        {
+          "len": 300,
+          "curve": -0.8,
+          "hill": 16,
+          "left": "drop",
+          "right": "rock"
+        },
+        {
+          "len": 240,
+          "curve": 0.45,
+          "hill": 12,
+          "left": "rock",
+          "right": "drop"
+        },
+        {
+          "len": 360,
+          "curve": 0,
+          "hill": -14,
+          "left": "trees",
+          "right": "trees"
+        },
+        {
+          "len": 280,
+          "curve": -0.3,
+          "hill": 10,
+          "left": "trees",
+          "right": "posts"
+        },
+        {
+          "len": 260,
+          "curve": 0.6,
+          "hill": 16,
+          "left": "drop",
+          "right": "rock"
+        },
+        {
+          "len": 260,
+          "curve": 0,
+          "hill": 4,
+          "left": "posts",
+          "right": "posts"
+        }
+      ]
+    }
   }
 }

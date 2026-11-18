@@ -46,6 +46,11 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **The town**: a map of blocks and streets, driven from the seat. Buildings are what the map
   says they are; other cars are about; a list shows where there is to go and how many blocks off.
   Pull up beside somewhere, press Enter, and you are in it, an hour later.
+- **Roads**: out of town there are roads between two places: two lanes that bend and climb,
+  through trees, cuttings and along drops, with cars coming the other way and police parked
+  beside them. Pass one well over the limit and he comes after you: stop and it is a ticket, or
+  keep your foot in it and lose him. A bend taken too fast throws the car wide, and what is beside
+  the road decides what that costs. A road takes hours off the day and gas out of the tank.
 - **Gas**: every car has a tank. Cruising burns it, a pass down the strip burns half a gallon,
   and a dollar buys three gallons wherever the pack puts a pump. Run dry in town and you walk.
 - **The meet**: other people, to race. Whoever opens it is in a room with everyone else who
@@ -100,6 +105,16 @@ in progress is kept in the browser between visits.
   the name it goes by on the list in the windscreen.
 - The game beside it shows the map from the seat, beside the first place there is to go.
 - A room gets a way onto a map from the Rooms tab: a thing to pick that goes "out for a drive".
+- A kind of block can be the way onto a road in place of leading to a room.
+
+**Roads**
+- A road has a name, two ends (a room, or the streets of a map), a speed limit, what a ticket
+  costs, how many other cars and police are on it, and how many hours the trip takes.
+- It is built as a list of stretches: a length, a bend, a climb and what is on each side. The
+  road is drawn from above as you type, with how high it runs under it, and the engine shows it
+  from the seat at the start of whichever stretch you pick with "Look from here".
+- Pointing an end at a map makes a kind of block for it there, to be put down under Maps. At a
+  room, add something to pick that "Takes a road out of town".
 
 **Parts**: name, slot, price, what the ad says, how much torque it adds or the turbo it is,
 which cars it fits, and a picture of how it looks bolted on under the hood.
@@ -211,6 +226,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `next` | wave them on and see who else is about |
   | `solo` | a pass down the strip alone |
   | `drive:<map>` | out onto that map, beside the block that leads back here |
+  | `road:<road>` | onto that road, from whichever of its ends this place is |
   | `gas` | fill the tank, a dollar for three gallons |
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
@@ -300,7 +316,7 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
   Beyond torque a part can have `grip` (per cent more, for tyres), `weight_lb` (what it adds;
   less than nothing saves weight), `gears` and `final` (a gearbox in place of the car's own) and
-  `redline` (a built engine's).
+  `redline` (a built engine's). `"radar": true` makes it a radar detector for the road.
   `"picture": "cone.pic"` is what the part looks like bolted on: it is drawn over its place
   under the hood, stretched to the box, in place of the stock part in the bay's picture. Without
   one, a fitted part is marked with a tag.
@@ -338,7 +354,61 @@ is a street between every two blocks and one round the outside, and nothing beyo
 a `wall` colour and a `height` in metres, or neither for open ground. A block with `to` is
 somewhere to go: it gets an awning (or a gold lot, if nothing is built on it), it is on the list
 in the windscreen under `name`, and pulling up beside it and pressing Enter puts you in that
-place. `drive:<map>` from a place starts you beside the block that leads to it.
+place. `drive:<map>` from a place starts you beside the block that leads to it. A block with
+`road` in place of `to` is the way onto that road.
+
+### Roads
+
+```json
+"roads": {
+  "ridge": {
+    "title": "Ridge road", "ends": ["map:town", "overlook"],
+    "limit": 55, "ticket": 40, "traffic": 7, "cops": 2, "hours": 1, "gas_per_km": 0.25,
+    "sky": "SKY", "ground": "GRASS",
+    "parts": [
+      { "len": 240, "left": "fields", "right": "fields" },
+      { "len": 320, "curve": 0.7, "hill": 18, "left": "rock", "right": "drop" }
+    ]
+  }
+}
+```
+
+A road runs between two `ends`. An end is a place, or `map:<map>` for the streets of a map, where
+a block marked `"road": "<this road>"` is the way onto it and where you come out. From a place, a
+spot that does `road:<road>` takes it. It is the same road both ways: driven from its second end,
+the bends and climbs are turned about.
+
+It is made of stretches (`parts`), first end first. Each has a `len` in metres (12 or more; the
+whole road between 200 metres and 30 kilometres), one `curve` from -1 (hard left) to 1 (hard
+right) that eases in and out, one `hill` in metres climbed (less than nothing falls; 80 at most),
+and what is on its `left` and `right`:
+
+| Beside the road | What it is | Leaving the road there |
+| --- | --- | --- |
+| `trees` (if left out) | woods | a crash |
+| `rock` | a cutting | a crash |
+| `drop` | a rail, and the valley | a crash |
+| `fields` | open ground and a fence | only slow |
+| `posts` | open ground and marker posts | only slow |
+
+The rules of the road:
+
+- You drive in the right-hand lane. `traffic` other cars are on it, half of them coming the
+  other way in the left. Hitting one, or the trees, stops you dead for a second and takes three
+  points off the car's health.
+- At speed a bend throws the car to its outside, by the square of the speed: a bend of 1 cannot be
+  held flat out.
+- `cops` police are parked along it. Pass one at more than 10 mph over the `limit` and he comes
+  after you. Stop, and the ticket is `ticket` dollars and two more for every mile an hour over
+  you were seen at. Stay 25 over the limit for twenty seconds and you have lost him. Do neither
+  for forty-five seconds, or crash with him behind you, and it is twice the ticket. He takes
+  what you have if you do not have it all.
+- A part with `"radar": true` fitted to the car is a detector: it beeps, and the screen says
+  so, when police are within 220 metres ahead.
+- Reaching the far end takes `hours` off the day. Escape turns round and puts you back where you
+  set out, unless you are being chased. A town you came to by road has no stepping back out of it:
+  pull up somewhere.
+- It burns `gas_per_km` gallons a kilometre. Run dry and you walk home, as in town.
 
 A pack that names a picture it does not hold, a place that is not there, or a ramp that does not
 exist is refused, and the screen says which.
@@ -383,3 +453,5 @@ clear.
    drawn and edited in the workshop, and parts and rivals edited there too.~~
 5. ~~The view from the seat, the town as a map, gas, and both edited in the workshop.~~
 6. ~~Racing other people on the strip.~~
+7. ~~Parts that change more than torque, engines that break, and an order to the work under the hood.~~
+8. ~~Roads out of town: bends, hills, traffic and police.~~

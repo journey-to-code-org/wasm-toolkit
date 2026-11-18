@@ -65,6 +65,16 @@ impl Scene3 {
     /// A flat shape, in two colours chequered. `bias` pushes it back (negative) or forward in the
     /// drawing order, for things that lie on one another.
     pub fn poly(&mut self, pts: &[V3], a: u16, b: u16, bias: f64) {
+        self.poly_at(pts, a, b, bias, None);
+    }
+
+    /// A polygon drawn in an order that is given, not worked out: the bigger the key, the sooner
+    /// it is drawn and the more goes over it. For a road, which knows what is in front of what.
+    pub fn poly_key(&mut self, pts: &[V3], a: u16, b: u16, key: f64) {
+        self.poly_at(pts, a, b, 0.0, Some(key));
+    }
+
+    fn poly_at(&mut self, pts: &[V3], a: u16, b: u16, bias: f64, key: Option<f64>) {
         let cam: Vec<V3> = pts.iter().map(|&p| self.to_cam(p)).collect();
         let depth = cam.iter().map(|c| c[2]).sum::<f64>() / cam.len() as f64;
         // Cut away what is behind the picture plane.
@@ -86,17 +96,25 @@ impl Scene3 {
         if flat.iter().all(|p| p.0 < 0) || flat.iter().all(|p| p.0 >= W) || flat.iter().all(|p| p.1 < 0) || flat.iter().all(|p| p.1 >= H) {
             return;
         }
-        self.polys.push(Poly { key: depth - bias, pts: flat, a, b });
+        self.polys.push(Poly { key: key.unwrap_or(depth - bias), pts: flat, a, b });
     }
 
     /// A flat shape in one ramp, lit from above, the west and the south.
     pub fn lit(&mut self, pts: &[V3], ramp: usize, bias: f64) {
+        self.lit_at(pts, ramp, bias, None);
+    }
+
+    pub fn lit_key(&mut self, pts: &[V3], ramp: usize, key: f64) {
+        self.lit_at(pts, ramp, 0.0, Some(key));
+    }
+
+    fn lit_at(&mut self, pts: &[V3], ramp: usize, bias: f64, key: Option<f64>) {
         let sub = |a: V3, b: V3| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
         let (u, v) = (sub(pts[1], pts[0]), sub(pts[pts.len() - 1], pts[0]));
         let mut n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
         let len = (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt();
         if len == 0.0 {
-            return self.poly(pts, shade(ramp, 16), shade(ramp, 16), bias);
+            return self.poly_at(pts, shade(ramp, 16), shade(ramp, 16), bias, key);
         }
         // Whichever side faces the camera is the side that is lit.
         let to = sub(self.cam.pos, pts[0]);
@@ -105,7 +123,7 @@ impl Scene3 {
         }
         let d = (n[0] * -0.45 + n[1] * 0.80 + n[2] * -0.40) / len;
         let s = 8.0 + if d > 0.0 { d * 17.0 } else { d * 3.0 } + if n[1] / len > 0.94 { 2.0 } else { 0.0 };
-        self.poly(pts, shade(ramp, s.floor() as i32), shade(ramp, (s + 0.5).floor() as i32), bias);
+        self.poly_at(pts, shade(ramp, s.floor() as i32), shade(ramp, (s + 0.5).floor() as i32), bias, key);
     }
 
     /// Paint everything, far to near. Returns how many shapes there were.
