@@ -15,9 +15,30 @@ Pillow and numpy for the pack tool.
 
 ## What is in the engine so far
 
-This is step 1 of 5. The engine reads a pack, shows its title, and lets you walk between its
+Steps 1 and 2 of 5 are done. The engine reads a pack, shows its title, and lets you walk between its
 places: each place is a picture (or a plain backdrop) with a car standing in it and spots to pick.
 The paper, the hood, the bets, the strip and the cockpit are still only in the C game.
+
+## The workshop
+
+`make engine && make serve`, then open http://localhost:8080/workshop.html. It opens the default
+pack, or any `.pack` you give it, and edits its cars in the browser:
+
+- **Add a car** and drop in its picture from the side, nose to the right. Any PNG will do; one
+  wider than the screen is scaled down, and you choose how wide it stands in the game.
+- **Background**: a PNG with a clear background is best. For one saved on a plain colour, tick
+  the box and the corner's colour is made clear.
+- **Ground**: the red line is where the tyres touch. It starts under the lowest pixel; drag it up
+  if the picture has a shadow under the car.
+- **Paint**: click the bodywork in the picture. Everything of about that colour becomes the
+  paint, and the car can then be shown in any of the 31 colours. The slider widens or narrows
+  what counts. Bright highlights that are nearly white are left as they are.
+- **Headlamps**: a second picture, the same size, with the lamps on.
+- The car is shown in the game's garage, by the engine itself, as you change things.
+- **Save the pack** downloads it. **Play it** opens the game on it in another tab. Work in
+  progress is kept in the browser between visits.
+
+The workshop only edits cars so far. Places are still edited in `pack.json`.
 
 ## A pack folder
 
@@ -91,8 +112,8 @@ clear.
 ## What comes next
 
 1. ~~The pack and its loader, with the garage and the car coming out of it.~~
-2. The workshop: a page where you drop in a car's picture, set its ground line and paint, see it
-   in the garage, and save the pack.
+2. ~~The workshop: a page where you drop in a car's picture, set its ground line and paint, see it
+   in the garage, and save the pack.~~
 3. Parts, rivals and the paper as data, and the season's rules in the engine.
 4. Rooms with their spots drawn and edited in the workshop.
 5. Maps: the town and the roads.
