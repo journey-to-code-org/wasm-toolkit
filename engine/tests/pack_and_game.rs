@@ -3,7 +3,7 @@
 
 use engine::game::{Game, Loose, Owned, Scene, KEY_A, KEY_B, KEY_UP, KEY_X};
 use engine::gfx::{ramp, shade, Picture, Screen, CLEAR};
-use engine::pack::{Boost, Manifest, Pack};
+use engine::pack::{bolts_round, Boost, Manifest, Pack};
 use engine::race::{Controls, Phase, Race};
 use engine::town::{Pedals, Town};
 
@@ -313,6 +313,67 @@ fn under_the_hood_parts_come_off_bolt_by_bolt() {
     click(&mut g, 180, 10);
     click(&mut g, 50, 36);
     assert_eq!(g.note.as_deref(), Some("That one is under the hood."));
+}
+
+#[test]
+fn a_slot_has_its_own_bolts_and_a_part_its_own_picture() {
+    for n in 1..=8 {
+        let at = bolts_round([10, 10, 60, 40], n);
+        assert_eq!(at.len(), n);
+        assert!(at.iter().all(|b| (10..70).contains(&b[0]) && (10..50).contains(&b[1])), "{n}: {at:?}");
+        assert!((0..n).all(|i| (0..i).all(|j| at[i] != at[j])), "no two in one place");
+    }
+    assert_eq!((bolts_round([0, 0, 40, 40], 0).len(), bolts_round([0, 0, 40, 40], 20).len()), (1, 8));
+
+    engine::host::store(b"");
+    // Two places under this hood: the exhaust on two bolts, with a name for the stock one, and a
+    // filter on one bolt that no part in the paper goes in. The loud pipe has a picture of itself.
+    let hood = r#""ground": 2, "hood": { "picture": "shed.pic", "slots": {
+        "Exhaust": { "rect": [100, 50, 40, 40], "bolts": 2, "stock": "Cast manifold" },
+        "Filter": { "rect": [200, 50, 30, 30], "bolts": [[190, 45]] } } },"#;
+    let manifest = MANIFEST.replace("\"ground\": 2,", hood).replace("\"do\": \"say:Hello.\"", "\"do\": \"hood\"").replace("\"pitch\": \"Loud\",", "\"pitch\": \"Loud\", \"picture\": \"box-lit.pic\",");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    let mut s = Screen::new();
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    g.state.spares = vec!["pipe".into()];
+    let slots = &g.car().unwrap().hood.as_ref().unwrap().slots;
+    assert_eq!((slots["Exhaust"].bolts.clone(), slots["Filter"].bolts.clone()), (vec![[105, 55], [134, 84]], vec![[190, 45]]));
+    click(&mut g, 100, 10);
+
+    // The filter comes off with its one bolt, which sits outside its box, and leaves the car unable to run.
+    click(&mut g, 190, 45);
+    click(&mut g, 215, 65);
+    assert_eq!(g.floor(), vec![Loose::Stock("Filter".into()), Loose::Part("pipe".into())]);
+    assert_eq!(g.wont_run().as_deref(), Some("The filter is off. It will not run."));
+    click(&mut g, 20, 182);
+    click(&mut g, 215, 65);
+    click(&mut g, 190, 45);
+    assert_eq!(g.wont_run(), None, "back on, and done up");
+
+    // The exhaust: two bolts, and the stock one goes by its name.
+    click(&mut g, 105, 55);
+    assert_eq!(g.wont_run().as_deref(), Some("The exhaust is not bolted down."));
+    click(&mut g, 120, 70);
+    assert_eq!(g.note.as_deref(), Some("It is bolted on. Undo the bolts first."));
+    click(&mut g, 134, 84);
+    click(&mut g, 120, 70);
+    assert_eq!(g.floor().len(), 2);
+    g.tick(0, 20, 182);
+    g.draw(&mut s);
+    // The pipe goes on, and it is the pipe's own picture that shows there, stretched to the box.
+    click(&mut g, 90, 182);
+    assert_eq!(g.carrying, Some(Loose::Part("pipe".into())));
+    click(&mut g, 120, 70);
+    click(&mut g, 105, 55);
+    click(&mut g, 134, 84);
+    assert_eq!(g.wont_run(), None);
+    g.tick(0, 300, 150);
+    g.draw(&mut s);
+    assert_eq!(s.at(120, 70), shade(ramp("YELLOW"), 24));
+    assert_eq!(g.floor(), vec![Loose::Stock("Exhaust".into())]);
+    g.tick(0, 20, 182);
+    g.draw(&mut s);
 }
 
 #[test]

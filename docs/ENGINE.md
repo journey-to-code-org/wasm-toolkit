@@ -74,8 +74,10 @@ in progress is kept in the browser between visits.
 - From the seat: drop in the cabin painting, its night version, the bonnet, the steering wheel
   and the car from behind, and say where the dials, shift light and gear gate are. While that
   section is open, the game beside it is seen from the seat.
-- Under its hood: drop in a picture of the engine bay, add the slots that are worked on there,
-  and drag each slot's box to where its part sits.
+- Under its hood: drop in a photo of the engine bay as the car came. Add a place for each part
+  that comes off: one for each slot the pack's parts name, and any of your own. For each, set
+  how many bolts hold it (1 to 8) and what the stock part is called, drag its box to where the
+  part is, and drag each bolt to where it really is.
 
 **Rooms**
 - A room is a picture (320 by 200) or a plain colour. Tick whether your car stands in it and
@@ -91,8 +93,8 @@ in progress is kept in the browser between visits.
 - The game beside it shows the map from the seat, beside the first place there is to go.
 - A room gets a way onto a map from the Rooms tab: a thing to pick that goes "out for a drive".
 
-**Parts**: name, slot, price, what the ad says, how much torque it adds or the turbo it is, and
-which cars it fits.
+**Parts**: name, slot, price, what the ad says, how much torque it adds or the turbo it is,
+which cars it fits, and a picture of how it looks bolted on under the hood.
 
 **Rivals**: in order, each with a car, a paint, a quarter-mile time, the most they will bet and
 whether they race for cars. The last can be the one to beat.
@@ -113,6 +115,23 @@ The workshop has no tests of its own in CI; `web/pack.js`, which reads and write
 `tools/pack.py content/default web/default.pack` matches each PNG to the 1,024 colours, stores it
 run-length as `<name>.pic`, and puts everything in one file. PNGs may be any size up to 320x240;
 transparent pixels stay clear.
+
+## Photos
+
+`tools/pixelate.py` turns a photo, or any picture, into a PNG that the engine draws exactly as
+the PNG looks: cut to shape, brought down to size and matched to the 1,024 colours.
+
+    tools/pixelate.py bay.jpg --as bay                  # 320 x 176, for under a hood
+    tools/pixelate.py garage.jpg --as room --pop 1.2    # 320 x 200, with more punch
+    tools/pixelate.py filter.jpg --size 42x52           # a part, the size of its place
+    tools/pixelate.py car.png --as car --width 244      # a car; its background must be clear
+
+`--as` is one of bay, room, cockpit, car, rear, wheel. `--fit cover` (the default) fills the
+shape and cuts what hangs over, keeping the `--focus` part; `contain` keeps all of it. `--dither`
+sets how much the colours are stippled, `--sharpen` crispens a shrunken photo, and `--big 3`
+saves a blown-up copy to look at. A picture it has made goes into a pack untouched, by
+`tools/pack.py` or by the workshop. The workshop does the same conversion itself for anything
+dropped into it, so the script is for doing many, or for seeing the result first.
 
 ## pack.json
 
@@ -214,9 +233,23 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   at full boost if it has a turbo; `boost` is the turbo (`from` the rpm it wakes at, `psi`, and
   `lag`, bigger being lazier) or `null`. A car with no `drive` gets a two-litre turbo four.
   Two cars may share a picture.
-- **cars** may have `"hood": { "picture": "bay.pic", "slots": { "Intake": [56, 98, 42, 52] } }`:
-  the engine bay, up to 320x176, and where each slot's part sits on it (x, y, width, height).
-  The floor under it shows up to eight loose parts.
+- **cars** may have a `hood`: the engine bay, up to 320x176, as the car came, and the places on
+  it where parts sit.
+
+  ```json
+  "hood": { "picture": "bay.pic", "slots": {
+    "Turbo": [138, 128, 28, 30],
+    "Intake": { "rect": [56, 98, 42, 52], "bolts": 2, "stock": "Stock airbox" },
+    "Battery": { "rect": [250, 40, 40, 40], "bolts": [[240, 30], [284, 45], [270, 74]] }
+  } }
+  ```
+
+  A place is its box (x, y, width, height), which has a bolt at each corner; or the box with a
+  number of `bolts`, one to eight, laid out for you; or the box with where each bolt is. `stock`
+  is what the part the car came with is called. A place need not match any part in the paper:
+  it is then just a stock part that comes off and goes back on, and the car will not run
+  without it. Split things as finely as you like: an air filter and an intake pipe can be two
+  places, each with its own parts. The floor under the hood shows up to eight loose parts.
 - **cars** may have a `cockpit`, the view from the seat, and a `rear`, the car from behind for
   when it is ahead of you:
 
@@ -240,6 +273,9 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   Everything but `picture` may be left out.
 - **parts**: one part to a `slot`; the slots are whatever the parts name. `torque` is a
   percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
+  `"picture": "cone.pic"` is what the part looks like bolted on: it is drawn over its place
+  under the hood, stretched to the box, in place of the stock part in the bay's picture. Without
+  one, a fitted part is marked with a tag.
   At most 14 parts.
 - **rivals**: in the order they turn up. `et` is their quarter mile in seconds. `limit` is the
   most money they will race for, `pinks` whether they will race for cars. The one with `king`

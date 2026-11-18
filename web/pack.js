@@ -105,6 +105,11 @@ function hueApart(r, g, b, to) {
 export function toIndices(rgba, w, h, pal, { dither = 8, clear = null, body = null } = {}) {
   const ix = new Uint16Array(w * h).fill(CLEAR);
   const ramp = body ? rampOf(pal, body.rgb) : 0;
+  // A picture already in the engine's own colours (tools/pixelate.py makes them) is left as it is.
+  const ours = new Set(Array.from(pal.subarray(32), (c) => c & 0xffffff));
+  let exact = true;
+  for (let i = 0; i < w * h && exact; i++) if (rgba[i * 4 + 3] >= 128 && !ours.has(rgba[i * 4] | (rgba[i * 4 + 1] << 8) | (rgba[i * 4 + 2] << 16))) exact = false;
+  if (exact) dither = 0;
   const seen = new Map();
   let painted = 0;
   for (let i = 0; i < w * h; i++) {

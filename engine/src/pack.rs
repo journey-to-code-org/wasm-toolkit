@@ -114,6 +114,10 @@ pub struct Part {
     /// The cars it goes on. Left out, it goes on any.
     #[serde(default)]
     pub fits: Vec<String>,
+    /// What it looks like bolted on under the hood: a picture drawn over its slot's box, in place
+    /// of the stock part that the engine bay's picture shows there.
+    #[serde(default)]
+    pub picture: Option<String>,
 }
 
 impl Part {
@@ -144,12 +148,75 @@ pub struct Rival {
     pub king: bool,
 }
 
-/// Under the hood: a picture of the engine bay, and where on it each slot's part sits (x, y,
-/// width, height). A car with one has its parts taken off and put on there, bolt by bolt.
+/// A place under the hood where a part sits: its box on the picture (x, y, width, height), the
+/// bolts that hold the part there, and what the part the car came with is called.
+///
+/// In a pack it is the box alone, `[56, 98, 42, 52]`, which has a bolt at each corner; or
+/// `{ "rect": [...], "bolts": 2 }` for some other number, laid out for you; or
+/// `{ "rect": [...], "bolts": [[60, 100], [90, 140]] }` to say where each bolt is. One to eight.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(from = "SlotIn")]
+pub struct Slot {
+    pub rect: [i32; 4],
+    pub bolts: Vec<[i32; 2]>,
+    pub stock: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum BoltsIn {
+    Count(usize),
+    At(Vec<[i32; 2]>),
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum SlotIn {
+    Rect([i32; 4]),
+    Full {
+        rect: [i32; 4],
+        #[serde(default)]
+        bolts: Option<BoltsIn>,
+        #[serde(default)]
+        stock: Option<String>,
+    },
+}
+
+/// Where `n` bolts go on a box when the pack does not say: the corners first, then the middles of the sides.
+pub fn bolts_round(rect: [i32; 4], n: usize) -> Vec<[i32; 2]> {
+    let [x, y, w, h] = rect;
+    let (l, r, t, b, cx, cy) = (x + 5, x + w - 6, y + 5, y + h - 6, x + w / 2, y + h / 2);
+    let order: &[[i32; 2]] = match n {
+        0 | 1 => &[[cx, cy]],
+        2 => &[[l, t], [r, b]],
+        3 => &[[l, t], [r, t], [cx, b]],
+        _ => &[[l, t], [r, t], [r, b], [l, b], [cx, t], [cx, b], [l, cy], [r, cy]],
+    };
+    order.iter().copied().take(n.clamp(1, 8)).collect()
+}
+
+impl From<SlotIn> for Slot {
+    fn from(s: SlotIn) -> Slot {
+        let (rect, bolts, stock) = match s {
+            SlotIn::Rect(rect) => (rect, None, None),
+            SlotIn::Full { rect, bolts, stock } => (rect, bolts, stock),
+        };
+        let bolts = match bolts {
+            Some(BoltsIn::At(at)) if !at.is_empty() => at.into_iter().take(8).collect(),
+            Some(BoltsIn::Count(n)) => bolts_round(rect, n),
+            _ => bolts_round(rect, 4),
+        };
+        Slot { rect, bolts, stock }
+    }
+}
+
+/// Under the hood: a picture of the engine bay, and the places on it where parts sit. A car with
+/// one has its parts taken off and put on there, bolt by bolt. A slot here need not have any part
+/// in the paper: it is then only the stock part, which still comes off.
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Hood {
     pub picture: String,
-    pub slots: BTreeMap<String, [i32; 4]>,
+    pub slots: BTreeMap<String, Slot>,
 }
 
 /// A dial on the dash: where its needle turns, how long the needle is, and what it reads at full sweep.
@@ -471,6 +538,9 @@ impl Pack {
             return Err(format!("the pack has {} parts; the paper has room for {MOST_PARTS}", m.parts.len()));
         }
         for (id, part) in &m.parts {
+            if let Some(name) = &part.picture {
+                need(&format!("the part {id}"), name)?;
+            }
             if let Some(car) = part.fits.iter().find(|c| !m.cars.contains_key(*c)) {
                 return Err(format!("the part {id} fits the car {car}, which is not in the pack"));
             }

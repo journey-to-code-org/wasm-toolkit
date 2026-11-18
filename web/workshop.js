@@ -67,6 +67,8 @@ function fail(why) { $("problem").textContent = why; }
 
 async function start(bytes) {
   pack = parsePack(bytes);
+  // A place under a hood may be written as its box alone; here each is given its long form.
+  for (const c of Object.values(pack.manifest.cars)) for (const [name, slot] of Object.entries(c.hood?.slots ?? {})) if (Array.isArray(slot)) c.hood.slots[name] = { rect: slot };
   sources.clear();
   const m = pack.manifest;
   Object.assign(at, { car: m.start.car ?? Object.keys(m.cars)[0] ?? null, place: m.start.place, spot: -1, slot: null });
@@ -101,13 +103,21 @@ function scaled(bitmap, width, most = 200) {
 
 // A picture for a room or an engine bay: made to fit the width, and cut to the height if it is taller.
 async function wholePicture(file, most) {
+  return sizedPicture(file, 320, most, true);
+}
+
+// A picture made exactly `w` by `h`: scaled to cover that, and what hangs over the sides or the
+// top and bottom cut away evenly. With `shorter`, a picture too wide for its height is left
+// shorter than `h` and not cut at the sides.
+async function sizedPicture(file, w, h, shorter = false) {
   const bitmap = await createImageBitmap(file);
-  const w = 320, hh = Math.min(most, Math.round(bitmap.height * w / bitmap.width));
-  const c = new OffscreenCanvas(w, hh), g = c.getContext("2d", { willReadFrequently: true });
-  g.imageSmoothingEnabled = bitmap.width > w * 1.5;
+  if (shorter) h = Math.min(h, Math.round(bitmap.height * w / bitmap.width));
+  const scale = Math.max(w / bitmap.width, h / bitmap.height), dw = bitmap.width * scale, dh = bitmap.height * scale;
+  const c = new OffscreenCanvas(w, h), g = c.getContext("2d", { willReadFrequently: true });
+  g.imageSmoothingEnabled = scale < 0.67;
   g.imageSmoothingQuality = "high";
-  g.drawImage(bitmap, 0, 0, w, Math.round(bitmap.height * w / bitmap.width));
-  return picEncode(w, hh, toIndices(g.getImageData(0, 0, w, hh).data, w, hh, pal, { dither: 5 }).ix);
+  g.drawImage(bitmap, (w - dw) / 2, (h - dh) / 2, dw, dh);
+  return picEncode(w, h, toIndices(g.getImageData(0, 0, w, h).data, w, h, pal, { dither: 5 }).ix);
 }
 
 // A small picture, such as a steering wheel or a car from behind: brought down to `most` wide if
@@ -280,6 +290,7 @@ function fileCar() {
 function tidy() {
   const m = pack.manifest, used = new Set();
   for (const c of Object.values(m.cars)) {
+    for (const p of Object.values(m.parts ?? {})) used.add(p.picture);
     for (const name of [c.side, c.side_lamps, c.hood?.picture, c.rear?.picture, c.cockpit?.picture, c.cockpit?.night, c.cockpit?.bonnet, c.cockpit?.wheel?.picture, c.cockpit?.wheel?.night]) used.add(name);
   }
   for (const p of Object.values(m.places)) used.add(p.picture);
@@ -347,7 +358,7 @@ function carsPanel() {
         field("Lag (6 quick, 10 lazy)", turbo.lag, (v) => { turbo.lag = v ?? 6; }, { type: "number" })) : null),
     seatForm(c),
     h("details", { id: "hoodForm", open: !!c.hood }, h("summary", { text: "Under its hood" }),
-      h("p", { class: "hint", text: "A picture of the engine bay, 320 wide and up to 176 tall. Parts are then taken off and put on there, bolt by bolt." }),
+      h("p", { class: "hint", text: "A picture of the engine bay as the car came, with every stock part on it. A photo will do: it is cut to 320 by 176 and brought into the game's colours. Parts are then taken off and put on there, bolt by bolt." }),
       dropZone("The engine bay", async (f) => {
         try { pack.files.set(`${at.car}-bay.pic`, await wholePicture(f, 176)); } catch { return fail("That file is not a picture the browser can read."); }
         c.hood = { picture: `${at.car}-bay.pic`, slots: c.hood?.slots ?? {} };
@@ -397,17 +408,34 @@ function seatForm(c) {
     Object.keys(pack.manifest.maps ?? {}).length ? h("p", { class: "hint", text: "While this is open, the game beside it is seen from this car's seat." }) : null);
 }
 
+// Where a slot's bolts are: where the pack says, or laid out round the box as the engine does it
+// (corners first, then the middles of the sides).
+function boltsOf(slot) {
+  if (Array.isArray(slot.bolts) && slot.bolts.length) return slot.bolts.slice(0, 8).map((b) => [...b]);
+  const [x, y, w, hh] = slot.rect, n = Math.max(1, Math.min(8, slot.bolts ?? 4));
+  const l = x + 5, r = x + w - 6, t = y + 5, b = y + hh - 6, cx = x + (w >> 1), cy = y + (hh >> 1);
+  const order = n === 1 ? [[cx, cy]] : n === 2 ? [[l, t], [r, b]] : n === 3 ? [[l, t], [r, t], [cx, b]] : [[l, t], [r, t], [r, b], [l, b], [cx, t], [cx, b], [l, cy], [r, cy]];
+  return order.slice(0, n);
+}
+
 function hoodSlots(c) {
-  const all = [...new Set(Object.values(pack.manifest.parts ?? {}).map((p) => p.slot))].sort();
-  const free = all.filter((s) => !(s in c.hood.slots));
+  const slots = c.hood.slots, all = [...new Set(Object.values(pack.manifest.parts ?? {}).map((p) => p.slot))].sort();
+  const free = all.filter((s) => !(s in slots)), slot = slots[at.slot];
+  const add = (name) => { slots[name] = { rect: [140, 70, 40, 40] }; at.slot = name; render(); };
+  const named = h("input", { type: "text", id: "newSlot", maxlength: 14, placeholder: "Air filter", style: "flex:1" });
   return h("div", {},
-    h("label", { text: "The slots that are worked on here" }),
-    list(Object.keys(c.hood.slots).map((s) => [s, s]), at.slot, (s) => { at.slot = s; render(); }),
-    h("div", { class: "row" },
-      free.length ? h("button", { text: `Add ${free[0]}`, onclick: () => { c.hood.slots[free[0]] = [140, 70, 40, 40]; at.slot = free[0]; render(); } }) : null,
-      at.slot in c.hood.slots ? h("button", { text: `Take ${at.slot} off the picture`, onclick: () => { delete c.hood.slots[at.slot]; at.slot = null; render(); } }) : null,
-      h("button", { text: "No hood for this car", onclick: () => { delete c.hood; tidy(); render(); } })),
-    all.length ? null : h("p", { class: "hint", text: "There are no parts in the pack yet, so there are no slots. Add parts first." }));
+    h("label", { text: "The places where a part sits" }),
+    list(Object.keys(slots).map((s) => [s, `${s}: ${boltsOf(slots[s]).length} bolt${boltsOf(slots[s]).length === 1 ? "" : "s"}`]), at.slot, (s) => { at.slot = s; render(); }),
+    h("div", { class: "row" }, free.map((name) => h("button", { text: `Add ${name}`, onclick: () => add(name) }))),
+    h("label", { for: "newSlot", text: "Or a place of your own, for a part of the car that only ever comes off and goes back" }),
+    h("div", { class: "row" }, named, h("button", { id: "addSlot", text: "Add it", onclick: () => { const name = named.value.trim(); if (!name) return; if (name in slots) return fail("There is one called that already."); add(name); } })),
+    slot ? h("div", { class: "card" },
+      h("div", { class: "two" },
+        field(`Bolts holding the ${at.slot.toLowerCase()} on (1 to 8)`, boltsOf(slot).length, () => {}, { type: "number", min: 1, max: 8, id: "boltCount", onchange: (e) => { const n = Math.max(1, Math.min(8, Math.floor(+e.target.value) || 4)); if (n === 4) delete slot.bolts; else slot.bolts = n; render(); } }),
+        field("What the stock part is called", slot.stock, (v) => { if (v) slot.stock = v; else delete slot.stock; }, { maxlength: 20, placeholder: `Stock ${at.slot.toLowerCase()}` })),
+      h("p", { class: "hint", text: "On the picture, drag the box to where the part is, and drag each bolt to where it really is." }),
+      h("div", { class: "row" }, h("button", { text: `Take ${at.slot} off the picture`, onclick: () => { delete slots[at.slot]; at.slot = null; render(); } }))) : null,
+    h("div", { class: "row", style: "margin-top:10px" }, h("button", { text: "No hood for this car", onclick: () => { delete c.hood; tidy(); render(); } })));
 }
 
 function drawSide() {
@@ -430,10 +458,23 @@ function drawHood() {
   const g = canvas.getContext("2d"), image = g.createImageData(pic.w, pic.h), out = new Uint32Array(image.data.buffer);
   pic.ix.forEach((v, i) => { out[i] = v === CLEAR ? 0xff000000 : pal[v]; });
   g.putImageData(image, 0, 0);
-  const names = Object.keys(c.hood.slots);
-  boxes(over, 2, () => names.map((s) => ({ rect: c.hood.slots[s], name: s })), {
-    selected: () => names.indexOf(at.slot), select: (i) => { at.slot = names[i] ?? null; },
-    moved: () => keep(), done: () => render(),
+  // The boxes, and the bolts of the one that is chosen, each to drag.
+  const slots = c.hood.slots, names = Object.keys(slots), chosen = slots[at.slot], bolts = chosen ? boltsOf(chosen) : [];
+  let was = chosen ? [...chosen.rect] : null;
+  boxes(over, 2, () => [...names.map((s) => ({ rect: slots[s].rect, name: s })), ...bolts.map((b) => ({ rect: b, name: "", point: true }))], {
+    selected: () => names.indexOf(at.slot), select: (i) => { if (i < names.length) at.slot = names[i] ?? null; },
+    moved: (i) => {
+      if (i >= names.length) chosen.bolts = bolts.map((b) => [...b]);
+      else if (slots[names[i]] === chosen && Array.isArray(chosen.bolts)) {
+        // Bolts that have been put somewhere go with their box.
+        const dx = chosen.rect[0] - was[0], dy = chosen.rect[1] - was[1];
+        for (const b of bolts) { b[0] += dx; b[1] += dy; }
+        chosen.bolts = bolts.map((b) => [...b]);
+        was = [...chosen.rect];
+      }
+      keep();
+    },
+    done: () => render(),
   });
 }
 
@@ -609,6 +650,14 @@ function partsPanel() {
         field("Wakes at, rpm", p.boost.from, (v) => { p.boost.from = v ?? 3000; }, { type: "number", step: 100 }),
         field("Boost, psi", p.boost.psi, (v) => { p.boost.psi = v ?? 27; }, { type: "number" }),
         field("Lag", p.boost.lag, (v) => { p.boost.lag = v ?? 10; }, { type: "number" })) : null,
+      dropZone(p.picture ? "How it looks bolted on under the hood (it has a picture; drop another to change it)" : "How it looks bolted on under the hood: a picture of just this part (optional)", async (f) => {
+        // Made the size of its place under the first hood that has one.
+        const place = Object.values(m.cars).map((c) => c.hood?.slots?.[p.slot]).find(Boolean);
+        if (!place) return fail(`No car has a place for the ${p.slot.toLowerCase()} under its hood yet. Add one under Cars first.`);
+        try { pack.files.set(`${id}-on.pic`, await sizedPicture(f, place.rect[2], place.rect[3])); } catch { return fail("That file is not a picture the browser can read."); }
+        p.picture = `${id}-on.pic`; render();
+      }),
+      p.picture ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "No picture: mark it with a tag", onclick: () => { delete p.picture; tidy(); render(); } })) : null,
       h("label", { text: "Fits (none ticked: every car)" }),
       cars.map(([cid, name]) => tick(name, p.fits?.includes(cid), (v) => { p.fits = (p.fits ?? []).filter((x) => x !== cid); if (v) p.fits.push(cid); if (!p.fits.length) delete p.fits; })),
       h("div", { class: "row", style: "margin-top:10px" }, h("button", { text: "Remove this part", onclick: () => { delete m.parts[id]; render(); } })))),
