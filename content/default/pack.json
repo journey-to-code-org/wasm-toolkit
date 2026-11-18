@@ -17,7 +17,36 @@
         "light": "SKY",
         "glint": "CYAN"
       },
-      "price": 1400
+      "price": 1400,
+      "hood": {
+        "picture": "bay.pic",
+        "slots": {
+          "Intake": [
+            56,
+            98,
+            42,
+            52
+          ],
+          "Turbo": [
+            138,
+            128,
+            28,
+            30
+          ],
+          "Exhaust": [
+            168,
+            112,
+            62,
+            36
+          ],
+          "Intercooler": [
+            100,
+            100,
+            28,
+            56
+          ]
+        }
+      }
     },
     "umbra-base": {
       "name": "1990 Kagami Umbra",
@@ -76,6 +105,23 @@
         "weight_lb": 2700,
         "grip": 9,
         "boost": null
+      },
+      "hood": {
+        "picture": "bay.pic",
+        "slots": {
+          "Intake": [
+            56,
+            98,
+            42,
+            52
+          ],
+          "Exhaust": [
+            168,
+            112,
+            62,
+            36
+          ]
+        }
       }
     }
   },
@@ -125,7 +171,7 @@
             84,
             12
           ],
-          "label": "The tool board: parts on the shelf",
+          "label": "The tool board: the shelf of parts",
           "do": "parts"
         },
         {
@@ -156,8 +202,8 @@
             54,
             24
           ],
-          "label": "Pop the hood: bolt parts on",
-          "do": "parts",
+          "label": "Pop the hood",
+          "do": "hood",
           "needs_car": true
         },
         {
@@ -255,7 +301,10 @@
         "from": 3000,
         "psi": 27,
         "lag": 10
-      }
+      },
+      "fits": [
+        "umbra"
+      ]
     },
     "header": {
       "name": "Tubular header",
@@ -269,7 +318,10 @@
       "slot": "Intercooler",
       "price": 350,
       "pitch": "Cold, dense air",
-      "torque": 5
+      "torque": 5,
+      "fits": [
+        "umbra"
+      ]
     }
   },
   "rivals": [

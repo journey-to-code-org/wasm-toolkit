@@ -137,6 +137,26 @@ impl Screen {
         self.rect(x + w - 1, y, 1, h, c);
     }
 
+    /// A filled circle.
+    pub fn disc(&mut self, cx: i32, cy: i32, r: i32, c: u16) {
+        for j in -r..=r {
+            for i in -r..=r {
+                if i * i + j * j <= r * r + r / 2 {
+                    self.pset(cx + i, cy + j, c);
+                }
+            }
+        }
+    }
+
+    /// A box of two colours, chequered.
+    pub fn dither(&mut self, x: i32, y: i32, w: i32, h: i32, a: u16, b: u16) {
+        for j in y..y + h {
+            for i in x..x + w {
+                self.pset(i, j, if (i + j) & 1 == 0 { a } else { b });
+            }
+        }
+    }
+
     /// A box that fades down a ramp from shade `s0` to `s1`, dithered between shades.
     pub fn vgrad(&mut self, x: i32, y: i32, w: i32, h: i32, ramp: usize, s0: i32, s1: i32) {
         const BAYER: [[i32; 4]; 4] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];

@@ -23,8 +23,11 @@ Steps 1 to 3 of 5 are done. The engine plays a season out of a pack:
   have no car and no way to buy one, or when you beat the one to beat.
 - **The paper**: three cars a day picked from the pack's cars, in differing paint and health,
   and every part in the pack.
-- **The bench**: what is on the car, slot by slot, and what is on the shelf. Parts go on, come
-  off, and are sold from here.
+- **Under the hood**: a picture of the engine bay with the parts as places on it. A part is
+  held by four bolts: undo them, lift it off, pick another up off the floor, set it down, and do
+  the bolts up. A car with something off or loose will not race.
+- **The bench**: the shelf of spare parts, which are sold from here. For a car with no hood in
+  the pack, or a slot its hood does not show, parts go on and off here with one pick.
 - **The yard**: up to sixteen cars; bring one into the bay or sell it to the dealer.
 - **Rivals**: they pull in one at a time, in the pack's order. Race for kicks, for money up to
   what each will take, or for cars. Beating one for money or better brings out the next.
@@ -32,8 +35,8 @@ Steps 1 to 3 of 5 are done. The engine plays a season out of a pack:
   curve, gears, weight, grip and turbo are the pack's; the parts fitted change them.
 - **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
 
-Not in the engine yet: the view from the seat, the drive across town, gas, and taking parts
-off bolt by bolt under the hood. Those are in the C game, and come with steps 4 and 5.
+Not in the engine yet: the view from the seat, the drive across town and gas. Those are in the
+C game, and come with step 5.
 
 ## The workshop
 
@@ -120,6 +123,7 @@ transparent pixels stay clear.
   | `calendar` | say what day it is and how many hours are left |
   | `paper` | open the paper |
   | `parts` | open the bench |
+  | `hood` | open the hood of the car in the bay |
   | `yard` | open the yard |
   | `race` | race whoever has pulled in (the place needs `rival_at`) |
   | `next` | wave them on and see who else is about |
@@ -167,8 +171,12 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   at full boost if it has a turbo; `boost` is the turbo (`from` the rpm it wakes at, `psi`, and
   `lag`, bigger being lazier) or `null`. A car with no `drive` gets a two-litre turbo four.
   Two cars may share a picture.
+- **cars** may have `"hood": { "picture": "bay.pic", "slots": { "Intake": [56, 98, 42, 52] } }`:
+  the engine bay, up to 320x176, and where each slot's part sits on it (x, y, width, height).
+  The floor under it shows up to eight loose parts.
 - **parts**: one part to a `slot`; the slots are whatever the parts name. `torque` is a
-  percentage more. A part with `boost` replaces the car's turbo. At most 14 parts.
+  percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
+  At most 14 parts.
 - **rivals**: in the order they turn up. `et` is their quarter mile in seconds. `limit` is the
   most money they will race for, `pinks` whether they will race for cars. The one with `king`
   must be last, races for cars only, and beating them wins the game.
@@ -189,6 +197,6 @@ clear.
 2. ~~The workshop: a page where you drop in a car's picture, set its ground line and paint, see it
    in the garage, and save the pack.~~
 3. ~~Parts, rivals and the paper as data, and the season's rules in the engine.~~
-4. Rooms with their spots drawn and edited in the workshop, parts and rivals edited there too,
-   and under the hood as a place where parts come off bolt by bolt.
+4. ~~Under the hood as a place where parts come off bolt by bolt.~~ Rooms with their spots
+   drawn and edited in the workshop, and parts and rivals edited there too.
 5. Maps: the town and the roads, the view from the seat, and gas.
