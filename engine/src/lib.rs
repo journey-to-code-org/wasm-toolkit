@@ -11,6 +11,7 @@ pub mod game;
 pub mod gfx;
 pub mod host;
 pub mod pack;
+pub mod race;
 
 use game::Game;
 use gfx::Screen;
@@ -62,9 +63,10 @@ pub extern "C" fn pack_load() -> i32 {
 }
 
 #[no_mangle]
-pub extern "C" fn wtk_init(_seed: u32) {
+pub extern "C" fn wtk_init(seed: u32) {
     let e = engine();
     e.game = Game::new(pack::Pack::parse(&e.pack_bytes));
+    e.game.seed(seed);
     e.game.draw(&mut e.screen);
 }
 

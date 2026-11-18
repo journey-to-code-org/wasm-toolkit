@@ -177,6 +177,29 @@ impl Screen {
         }
     }
 
+    /// A picture at half size, for a car seen from further off.
+    pub fn picture_half(&mut self, pic: &Picture, x: i32, y: i32, tint: Option<&Tint>) {
+        let mut i: i32 = 0;
+        for &(count, value) in &pic.runs {
+            if value != CLEAR {
+                let c = match tint {
+                    Some(t) if value >= 32 => {
+                        let r = (value >> 5) as usize;
+                        shade(t.to[r] as usize, (value & 31) as i32 + t.add[r] as i32)
+                    }
+                    _ => value,
+                };
+                for k in i..i + count as i32 {
+                    let (px, py) = (k % pic.w, k / pic.w);
+                    if px & 1 == 0 && py & 1 == 0 {
+                        self.pset(x + px / 2, y + py / 2, c);
+                    }
+                }
+            }
+            i += count as i32;
+        }
+    }
+
     /// Text in the 8x8 font. Returns the x after the last character.
     pub fn text(&mut self, mut x: i32, y: i32, s: &str, c: u16) -> i32 {
         for ch in s.bytes() {

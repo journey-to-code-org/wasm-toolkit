@@ -4,7 +4,7 @@
 //! which describes the cars and the places, and the pictures it names. `tools/pack.py` makes one
 //! from a folder. The format is in `docs/ENGINE.md`.
 
-use crate::gfx::Picture;
+use crate::gfx::{Picture, RAMPS};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -33,6 +33,108 @@ pub struct PaintRamps {
     pub glint: Option<String>,
 }
 
+/// How long the game runs: so many days, of so many hours. Everything you do takes hours.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct Season {
+    pub days: i32,
+    pub hours_per_day: i32,
+}
+
+impl Default for Season {
+    fn default() -> Season {
+        Season { days: 90, hours_per_day: 12 }
+    }
+}
+
+/// A turbo: the engine speed it starts to make boost at, how much it makes, and how slowly it
+/// gets there (bigger is lazier).
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+pub struct Boost {
+    pub from: f64,
+    pub psi: f64,
+    #[serde(default = "six")]
+    pub lag: f64,
+}
+
+fn six() -> f64 {
+    6.0
+}
+
+/// What makes a car go. Left out, a car gets a two-litre turbo four and five gears.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct Drive {
+    /// Torque at the wheels, in pound-feet, at each engine speed: pairs of rpm and torque, rising.
+    pub torque: Vec<[f64; 2]>,
+    /// The gearbox, first gear first, and the final drive behind it.
+    pub gears: Vec<f64>,
+    #[serde(rename = "final")]
+    pub final_drive: f64,
+    pub redline: f64,
+    /// The engine speed it holds on the line with your foot down.
+    pub launch: f64,
+    pub weight_lb: f64,
+    /// The hardest the tyres can push it, in metres a second, each second.
+    pub grip: f64,
+    pub boost: Option<Boost>,
+}
+
+impl Default for Drive {
+    fn default() -> Drive {
+        Drive {
+            torque: [[800, 60], [2000, 105], [3000, 146], [3400, 190], [3800, 250], [4200, 305], [4400, 314], [4600, 310], [5000, 300],
+                [5400, 285], [5800, 270], [6200, 250], [6450, 240], [7200, 205], [8000, 150]].iter().map(|p| [p[0] as f64, p[1] as f64]).collect(),
+            gears: vec![3.10, 1.85, 1.25, 0.92, 0.72],
+            final_drive: 4.2,
+            redline: 7200.0,
+            launch: 5600.0,
+            weight_lb: 3060.0,
+            grip: 12.0,
+            boost: Some(Boost { from: 2200.0, psi: 20.0, lag: 6.0 }),
+        }
+    }
+}
+
+/// Something to bolt on. It goes in a slot (one part to a slot), and makes more torque, or
+/// changes the turbo, or both.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Part {
+    pub name: String,
+    pub slot: String,
+    pub price: i32,
+    /// What the ad says about it.
+    #[serde(default)]
+    pub pitch: String,
+    /// How much more torque, as a percentage.
+    #[serde(default)]
+    pub torque: i32,
+    #[serde(default)]
+    pub boost: Option<Boost>,
+}
+
+/// Someone to race. They turn up in the order the pack lists them.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Rival {
+    pub name: String,
+    #[serde(default)]
+    pub says: String,
+    pub car: String,
+    #[serde(default)]
+    pub paint: Option<String>,
+    /// What they run the quarter mile in, in seconds.
+    pub et: f64,
+    /// The most money they will race for.
+    #[serde(default)]
+    pub limit: i32,
+    /// Whether they will race for cars.
+    #[serde(default)]
+    pub pinks: bool,
+    /// The one to beat: races for cars and nothing else, and beating them wins the game.
+    #[serde(default)]
+    pub king: bool,
+}
+
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Car {
     pub name: String,
@@ -47,6 +149,11 @@ pub struct Car {
     pub paint: Option<String>,
     #[serde(default)]
     pub paint_ramps: PaintRamps,
+    /// What one in fair shape costs in the paper. A car with no price is never for sale.
+    #[serde(default)]
+    pub price: Option<i32>,
+    #[serde(default)]
+    pub drive: Drive,
 }
 
 /// Something in a place that can be picked: where it is, what it is called, and what picking it does.
@@ -61,6 +168,9 @@ pub struct Spot {
     /// Only there when you have a car.
     #[serde(default)]
     pub needs_car: bool,
+    /// Words to draw the spot as a button with, for a place whose picture does not show it.
+    #[serde(default)]
+    pub button: Option<String>,
 }
 
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -74,6 +184,9 @@ pub struct Place {
     /// Where your car stands: the x of its picture's left edge, and the y of the ground.
     #[serde(default)]
     pub car_at: Option<[i32; 2]>,
+    /// Where whoever you are up against stands. A place with this is where the rivals pull in.
+    #[serde(default)]
+    pub rival_at: Option<[i32; 2]>,
     #[serde(default)]
     pub spots: Vec<Spot>,
 }
@@ -85,7 +198,24 @@ pub struct Manifest {
     #[serde(default)]
     pub cars: BTreeMap<String, Car>,
     pub places: BTreeMap<String, Place>,
+    #[serde(default)]
+    pub season: Season,
+    #[serde(default)]
+    pub parts: BTreeMap<String, Part>,
+    #[serde(default)]
+    pub rivals: Vec<Rival>,
+    /// The colours cars in the paper come in. Left out, eight ordinary ones.
+    #[serde(default)]
+    pub paints: Vec<String>,
+    /// What can be put on a race, in dollars. Left out: 10, 25, 50, 100.
+    #[serde(default)]
+    pub bets: Vec<i32>,
 }
+
+/// What a spot can do. Anything else in a pack is a mistake, and is said to be.
+pub const ACTIONS: [&str; 9] = ["", "lamps", "paper", "parts", "yard", "calendar", "race", "next", "solo"];
+/// The most parts the paper has room to list.
+pub const MOST_PARTS: usize = 14;
 
 #[derive(Default)]
 pub struct Pack {
@@ -142,7 +272,42 @@ impl Pack {
                 return Err(format!("the game starts with the car {car}, which is not in the pack"));
             }
         }
+        let colour = |what: &str, name: &Option<String>| -> Result<(), String> {
+            match name {
+                Some(n) if !RAMPS.iter().skip(1).any(|r| r.eq_ignore_ascii_case(n)) => Err(format!("{what} is in the colour {n}, which is not one of the engine's")),
+                _ => Ok(()),
+            }
+        };
+        if m.season.days < 1 || m.season.hours_per_day < 1 {
+            return Err("the season has to be at least a day of at least an hour".into());
+        }
+        if m.parts.len() > MOST_PARTS {
+            return Err(format!("the pack has {} parts; the paper has room for {MOST_PARTS}", m.parts.len()));
+        }
+        for p in &m.paints {
+            colour("a car in the paper", &Some(p.clone()))?;
+        }
+        for (i, r) in m.rivals.iter().enumerate() {
+            if !m.cars.contains_key(&r.car) {
+                return Err(format!("{} drives the car {}, which is not in the pack", r.name, r.car));
+            }
+            colour(&format!("{}'s car", r.name), &r.paint)?;
+            if r.et <= 0.0 {
+                return Err(format!("{} needs a time for the quarter mile", r.name));
+            }
+            if r.king && i + 1 != m.rivals.len() {
+                return Err(format!("{} is the one to beat, so has to be last of the rivals", r.name));
+            }
+        }
         for (id, car) in &m.cars {
+            colour(&format!("the car {id}"), &car.paint)?;
+            for r in [&car.paint_ramps.mid, &car.paint_ramps.dark, &car.paint_ramps.light, &car.paint_ramps.glint] {
+                colour(&format!("part of the car {id}'s picture"), r)?;
+            }
+            let d = &car.drive;
+            if d.torque.is_empty() || d.gears.is_empty() || d.weight_lb <= 0.0 || d.final_drive <= 0.0 {
+                return Err(format!("the car {id} needs a torque curve, gears, a final drive and a weight"));
+            }
             need(&format!("the car {id}"), &car.side)?;
             if let Some(l) = &car.side_lamps {
                 need(&format!("the car {id}"), l)?;
@@ -152,11 +317,16 @@ impl Pack {
             if let Some(p) = &place.picture {
                 need(&format!("the place {id}"), p)?;
             }
+            colour(&format!("the place {id}"), &place.backdrop)?;
             for spot in &place.spots {
                 if let Some(to) = spot.action.strip_prefix("go:") {
                     if !m.places.contains_key(to) {
                         return Err(format!("in {id}, \"{}\" goes to {to}, which is not a place", spot.label));
                     }
+                } else if !spot.action.starts_with("say:") && !ACTIONS.contains(&spot.action.as_str()) {
+                    return Err(format!("in {id}, \"{}\" does \"{}\", which the engine does not know how to do", spot.label, spot.action));
+                } else if ["race", "next", "solo"].contains(&spot.action.as_str()) && (place.rival_at.is_none() || m.rivals.is_empty()) {
+                    return Err(format!("in {id}, \"{}\" needs rivals in the pack and a rival_at in the place", spot.label));
                 }
             }
         }
