@@ -64,3 +64,8 @@ Put it in `games/<name>/` and build it with `make GAME=<name>`.
 The rules the toolkit keeps, and a game on it should: whole numbers only (`fx` is 16.16), nothing
 from the clock, and every random number from a state the game owns. The same seed and the same keys
 give the same game, pixel for pixel, which is what the tests check and what multiplayer will need.
+
+## The engine
+
+`engine/` is a Rust engine that plays a content pack: a folder of JSON and PNGs made into one file.
+It is the start of moving the game out of the code and into data. See [docs/ENGINE.md](docs/ENGINE.md).

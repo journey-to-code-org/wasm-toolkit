@@ -21,13 +21,33 @@ build/test_native: $(TOOLKIT) toolkit/wtk.h test/test_native.c
 	mkdir -p build
 	$(CC) -O1 -g -fsanitize=undefined -fsanitize-trap=undefined $(WARN) -o $@ $(TOOLKIT) test/test_native.c
 
+# The Rust engine and the pack it plays. The wasm target comes from `rustup target add
+# wasm32-unknown-unknown`; where that is not to be had, ENGINE_FLAGS="-Zbuild-std=std,panic_abort"
+# with RUSTC_BOOTSTRAP=1 builds the standard library from its source.
+PACK ?= default
+ENGINE_FLAGS ?=
+ENGINE_WASM := engine/target/wasm32-unknown-unknown/release/engine.wasm
+
+engine: web/engine.wasm web/$(PACK).pack
+
+web/engine.wasm: engine/Cargo.toml engine/src/*.rs
+	cd engine && cargo build --release --target wasm32-unknown-unknown $(ENGINE_FLAGS)
+	cp $(ENGINE_WASM) $@
+
+web/$(PACK).pack: content/$(PACK)/* tools/pack.py tools/paint.py
+	python3 tools/pack.py content/$(PACK) $@
+
+test-engine: engine
+	cd engine && cargo test
+	node test/engine.mjs web/engine.wasm web/$(PACK).pack
+
 serve: all
 	cd web && python3 -m http.server 8080
 
 clean:
-	rm -rf build web/*.wasm
+	rm -rf build web/*.wasm web/*.pack engine/target
 
 art:
 	python3 tools/paint.py
 
-.PHONY: all test serve clean art
+.PHONY: all test serve clean art engine test-engine

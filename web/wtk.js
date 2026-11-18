@@ -6,7 +6,8 @@ const KEYS = {
   Enter: 16, Space: 16, Escape: 32, Backspace: 32, KeyE: 64, KeyQ: 128,
 };
 
-export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1) {
+// `pack` is the address of a content pack, for an engine that plays one.
+export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, pack = null) {
   let audio = null, osc = null, gain = null, quietAt = 0;
   const speaker = (hz, ms) => {
     if (!audio) return;
@@ -84,6 +85,13 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1) {
     ctx.putImageData(image, 0, 0);
   };
 
+  if (pack && x.pack_alloc) {
+    // Hand the engine its content before it starts.
+    const bytes = new Uint8Array(await (await fetch(pack)).arrayBuffer());
+    const at = x.pack_alloc(bytes.length);
+    new Uint8Array(x.memory.buffer, at, bytes.length).set(bytes);
+    x.pack_load();
+  }
   x.wtk_init(seed);
   show();
   let owed = 0, last = performance.now();

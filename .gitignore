@@ -1,2 +1,5 @@
 build/
 web/*.wasm
+web/*.pack
+engine/target/
+__pycache__/
