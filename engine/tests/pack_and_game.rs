@@ -164,7 +164,7 @@ fn a_place_is_what_the_pack_says() {
     g.draw(&mut s);
     assert_eq!(s.at(10, 48), shade(ramp("YELLOW"), 24));
     click(&mut g, 260, 10);
-    assert_eq!(g.note.as_deref(), Some("Day 1 of 3. 4 hours left today."));
+    assert_eq!(g.note.as_deref(), Some("Day 1 of 3. Won 0, lost 0."));
 
     // Out on the road the first rival has pulled in, and the spot marked as a button is drawn.
     click(&mut g, 20, 10);
@@ -1092,4 +1092,50 @@ fn the_car_is_what_it_is_on_the_road_too() {
     // A quicker rival is quicker down a road as well.
     let (slow, quick) = (engine::road::Rival::new(17.0, "RED"), engine::road::Rival::new(12.0, "RED"));
     assert!(quick.top > slow.top && quick.accel > slow.accel);
+}
+
+#[test]
+fn people_stand_about_and_parts_show_on_the_car() {
+    let green = shade(ramp("GREEN"), 20);
+    let manifest = MANIFEST.replace("\"et\": 30, \"limit\": 25", "\"et\": 30, \"limit\": 25, \"figure\": \"guy.pic\"")
+        .replace("\"pitch\": \"Loud\"", "\"pitch\": \"Loud\", \"side\": \"pipe-side.pic\"")
+        .replace("\"car_at\": [10, 50],", "\"car_at\": [10, 50], \"people\": [ { \"picture\": \"guy.pic\", \"at\": [100, 90] } ],");
+    let with = |manifest: &str| {
+        let mut bytes = files(manifest);
+        // Two more pictures on the end of the pack, and the count at its head put up to match.
+        for (name, data) in [("guy.pic", pic(2, 3, &[(6, green)])), ("pipe-side.pic", pic(4, 2, &[(7, CLEAR), (1, 15)]))] {
+            bytes.extend((name.len() as u16).to_le_bytes());
+            bytes.extend(name.as_bytes());
+            bytes.extend((data.len() as u32).to_le_bytes());
+            bytes.extend(data);
+        }
+        bytes[4..8].copy_from_slice(&6u32.to_le_bytes());
+        bytes
+    };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&with(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    assert_eq!((s.at(100, 88), s.at(101, 89), s.at(102, 88)), (green, green, shade(ramp("WOOD"), 12)), "someone stands in the shed, feet at 90");
+    assert_ne!(s.at(13, 49), 15);
+    g.state.cars[0].fitted.insert("Exhaust".into(), "pipe".into());
+    g.draw(&mut s);
+    assert_eq!(s.at(13, 49), 15, "the pipe shows on the car");
+    // Whoever has pulled in stands by the nose of their car.
+    click(&mut g, 20, 10);
+    g.draw(&mut s);
+    assert_eq!((s.at(17, 150), s.at(18, 149)), (green, green));
+    // A race, and it is on the record.
+    click(&mut g, 150, 10);
+    click(&mut g, 40, 186);
+    drive(&mut g);
+    assert_eq!(g.state.wins + g.state.losses, 1);
+    click(&mut g, 20, 10);
+    click(&mut g, 250, 10);
+    assert_eq!(g.note, Some(format!("Day 1 of 3. Won {}, lost {}.", g.state.wins, g.state.losses)));
+    // Pictures that are named have to be there.
+    assert!(Pack::parse(&files(&manifest)).err().unwrap().contains("which is not in the pack"));
 }

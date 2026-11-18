@@ -45,6 +45,10 @@
   .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0 10px; }
   textarea { width: 100%; min-height: 110px; padding: 7px 8px; background: #0c0e14; color: var(--ink); border: 1px solid var(--line); font: inherit; }
   details { margin-top: 12px; } summary { cursor: pointer; color: var(--gold); }
+  dialog { background: var(--panel); color: var(--ink); border: 1px solid var(--gold); padding: 16px; max-width: min(96vw, 1000px); }
+  dialog::backdrop { background: rgba(0, 0, 0, .7); }
+  #cutSheet { cursor: crosshair; touch-action: none; max-height: 60vh; background: #000; }
+  #cutOut { background: repeating-conic-gradient(#3a3d52 0 25%, #2a2c3c 0 50%) 0 0 / 16px 16px; border: 1px solid var(--line); }
   [hidden] { display: none !important; }
   .swatch { display: inline-block; width: 22px; height: 22px; border: 1px solid #000; vertical-align: middle; }
 </style>

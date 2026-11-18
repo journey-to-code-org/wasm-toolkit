@@ -59,6 +59,8 @@ All five steps are in the engine. The engine plays a season out of a pack:
   engine runs its own car, so the throttle and shifts are as sharp as alone; the tree comes down
   when both have staged, and the winner is worked out from the two timeslips. It needs a server
   to hold the room: see [The meet](#the-meet).
+- **People**: whoever you are up against can stand by their car, and a place can have a crowd.
+- **The record**: races won and lost are counted, and the calendar says so.
 - **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
 
 Everything the C game did is now in the engine, except its 3D car models: other cars in town
@@ -71,6 +73,14 @@ pack, or any `.pack` you give it, and edits it in the browser. The game beside t
 engine itself, drawing the pack as it stands; if the engine would refuse the pack, it says why
 there. **Save the pack** downloads it, **Play it** opens the game on it in another tab, and work
 in progress is kept in the browser between visits.
+
+**Cutting pictures out of a sheet.** Wherever a picture can be dropped there is also "Or cut one
+out of a sheet". Open a sheet of sprites, drag a box round the one you want, and it is cut out,
+its background taken away, trimmed, and used as if you had dropped it. The background is
+whatever runs round the edge of the box, a flat colour or the two greys of a checkerboard, and
+it is taken from the edges inwards, so the same colour inside the picture stays. A slider says
+how alike a colour has to be to count; at 0 nothing is taken away. The sheet stays open for the
+next cut.
 
 **Cars**
 - Drop in the car's picture from the side, nose to the right. Any PNG will do; one wider than
@@ -98,6 +108,8 @@ in progress is kept in the browser between visits.
   whether rivals pull in, and drag the two crosses to where their tyres meet the floor.
 - The things to pick are boxes on the picture: add one, drag it, size it by its corner, and say
   what it is called and what picking it does. A box can be drawn as a button.
+- People standing about: drop or cut a picture, say how tall it is made, and place it by its
+  left edge and its feet.
 
 **Maps**
 - A map is painted from above: pick a kind of block and click or drag over the grid. Set how
@@ -118,9 +130,10 @@ in progress is kept in the browser between visits.
   room, add something to pick that "Takes a road out of town".
 
 **Parts**: name, slot, price, what the ad says, how much torque it adds or the turbo it is,
-which cars it fits, and a picture of how it looks bolted on under the hood.
+which cars it fits, and a picture of how it looks bolted on under the hood. A part can also have a picture of how it
+looks on the car from the side.
 
-**Rivals**: in order, each with a car, a paint, a quarter-mile time, the most they will bet and
+**Rivals**: in order, each with a car, a picture of them if you have one, a paint, a quarter-mile time, the most they will bet and
 whether they race for cars. The last can be the one to beat.
 
 **The game**: the pack's name, the money and car you start with, where you start, how long the
@@ -236,6 +249,8 @@ dropped into it, so the script is for doing many, or for seeing the result first
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
   picture does not show the thing itself.
 - **places** may also have `rival_at`, like `car_at`: where whoever you are up against stands.
+  `"people": [ { "picture": "crowd.pic", "at": [140, 182] } ]` stands pictures in the place,
+  behind the cars: `at` is the left edge and where the feet are. Twelve at most.
 
 Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 
@@ -319,6 +334,9 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   Beyond torque a part can have `grip` (per cent more, for tyres), `weight_lb` (what it adds;
   less than nothing saves weight), `gears` and `final` (a gearbox in place of the car's own) and
   `redline` (a built engine's). `"radar": true` makes it a radar detector for the road.
+  `"side": "wing.pic"` is what it looks like on the car from the side: a picture the size of
+  the car's own side picture, drawn over it in the garage, the yard and on the strip. Its clear
+  pixels leave the car showing, so it can be only the wing, or the whole car again with the wing on.
   `"picture": "cone.pic"` is what the part looks like bolted on: it is drawn over its place
   under the hood, stretched to the box, in place of the stock part in the bay's picture. Without
   one, a fitted part is marked with a tag.
@@ -326,6 +344,7 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 - **rivals**: in the order they turn up. `et` is their quarter mile in seconds. `limit` is the
   most money they will race for, `pinks` whether they will race for cars. The one with `king`
   must be last, races for cars only, and beating them wins the game.
+  `"figure": "skeeter.pic"` is a picture of them, which stands by their car.
 - **bets** and **paints** may be left out. So may `"rebuild": { "cost": 250, "cond": 85 }`:
   what an engine rebuild costs and how healthy it comes back.
 - **cars** may have `"tank": 17`, in gallons. A small dial in the cockpit with `"reads": "gas"`

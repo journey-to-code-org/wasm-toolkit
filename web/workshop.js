@@ -1,6 +1,6 @@
 // The workshop: a pack, edited in the browser. Cars, rooms, parts, rivals and the game's own
 // settings each have a tab; the engine itself draws the result beside them as you go.
-import { RAMPS, CLEAR, parsePack, buildPack, picDecode, picEncode, toIndices, groundOf, slug, makeViewer } from "./pack.js";
+import { RAMPS, CLEAR, parsePack, buildPack, picDecode, picEncode, toIndices, groundOf, slug, makeViewer, knockOut } from "./pack.js";
 
 const $ = (id) => document.getElementById(id);
 const KEEP = "wtk:workshop:pack";
@@ -20,7 +20,7 @@ const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], [
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
-const at = { tab: "cars", car: null, place: null, spot: -1, slot: null, map: null, brush: ".", road: null, stretch: 0 };
+const at = { tab: "cars", car: null, place: null, spot: -1, slot: null, map: null, brush: ".", road: null, stretch: 0, tall: 44 };
 // The pictures dropped in this visit, by car, so they can be matched to the colours again when a
 // setting changes: { side, lamps (ImageBitmaps), width, corner, body: [r, g, b] | null, within }.
 const sources = new Map();
@@ -148,8 +148,90 @@ function dropZone(label, onFile) {
   zone.ondragover = (e) => { e.preventDefault(); zone.classList.add("over"); };
   zone.ondragleave = () => zone.classList.remove("over");
   zone.ondrop = (e) => { e.preventDefault(); zone.classList.remove("over"); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); };
-  return h("div", {}, h("label", { text: label }), zone);
+  return h("div", {}, h("label", { text: label }), zone,
+    h("div", { class: "row", style: "margin-top:6px" }, h("button", { class: "cut", text: "Or cut one out of a sheet", onclick: () => cutter(onFile) })));
 }
+
+// ---- Cutting one picture out of a sheet of them ----
+
+// The sheet last opened stays open, so one after another can be cut from it.
+let sheet = null;
+
+function cutter(onFile) {
+  document.getElementById("cutter")?.remove();
+  const canvas = h("canvas", { id: "cutSheet", "aria-label": "The sheet. Drag a box round the one picture you want." });
+  const small = h("canvas", { id: "cutOut", width: 1, height: 1, style: "max-width:320px;max-height:200px;width:auto" });
+  const said = h("p", { class: "hint", id: "cutSaid", text: "Open a sheet, then drag a box round one picture on it." });
+  const within = h("input", { type: "range", min: 0, max: 120, value: 40, id: "cutWithin", style: "width:160px" });
+  const file = h("input", { type: "file", accept: "image/*", id: "cutFile" });
+  const use = h("button", { class: "main", id: "cutUse", text: "Use it", disabled: true });
+  const box = h("dialog", { id: "cutter", "aria-label": "Cut a picture out of a sheet" },
+    h("h2", { text: "Cut one out of a sheet", style: "margin-top:0" }),
+    h("div", { class: "row" }, file, h("label", { for: "cutWithin", text: "How much like the background counts as background (0: keep it all)", style: "margin:0" }), within),
+    canvas, said,
+    h("div", { class: "row", style: "margin-top:10px;align-items:flex-end" }, small, use, h("button", { text: "Close", onclick: () => box.close() })));
+  document.body.append(box);
+  let pick = null, got = null;
+  const g = canvas.getContext("2d", { willReadFrequently: true });
+  const draw = () => {
+    if (!sheet) return;
+    canvas.width = sheet.width; canvas.height = sheet.height;
+    g.drawImage(sheet, 0, 0);
+    if (pick) { g.strokeStyle = "#f4d24a"; g.lineWidth = Math.max(1, sheet.width / 500); g.setLineDash([4, 3]); g.strokeRect(pick[0] + .5, pick[1] + .5, pick[2], pick[3]); }
+  };
+  const cut = () => {
+    got = null; use.disabled = true;
+    if (!sheet || !pick || pick[2] < 3 || pick[3] < 3) return;
+    const c = new OffscreenCanvas(pick[2], pick[3]), cg = c.getContext("2d", { willReadFrequently: true });
+    cg.drawImage(sheet, -pick[0], -pick[1]);
+    got = knockOut(cg.getImageData(0, 0, pick[2], pick[3]).data, pick[2], pick[3], +within.value);
+    if (!got) return void (said.textContent = "There is nothing in that box but background.");
+    small.width = got.w; small.height = got.h;
+    small.style.width = Math.min(320, got.w * 2) + "px";
+    small.getContext("2d").putImageData(new ImageData(got.rgba, got.w, got.h), 0, 0);
+    said.textContent = `${got.w} by ${got.h}. Drag another box if that is not it.`;
+    use.disabled = false;
+  };
+  const where = (e) => { const r = canvas.getBoundingClientRect(); return [Math.round((e.clientX - r.left) / r.width * canvas.width), Math.round((e.clientY - r.top) / r.height * canvas.height)]; };
+  canvas.onpointerdown = (e) => {
+    if (!sheet) return;
+    canvas.setPointerCapture(e.pointerId);
+    const [x0, y0] = where(e);
+    canvas.onpointermove = (m) => { const [x, y] = where(m); pick = [Math.max(0, Math.min(x0, x)), Math.max(0, Math.min(y0, y)), Math.abs(x - x0), Math.abs(y - y0)]; pick[2] = Math.min(pick[2], sheet.width - pick[0]); pick[3] = Math.min(pick[3], sheet.height - pick[1]); draw(); };
+  };
+  canvas.onpointerup = () => { canvas.onpointermove = null; cut(); };
+  within.oninput = cut;
+  file.onchange = async () => {
+    try { sheet = await createImageBitmap(file.files[0]); } catch { return void (said.textContent = "That file is not a picture the browser can read."); }
+    pick = null; draw(); cut();
+    said.textContent = "Drag a box round one picture. It need not be exact: the background is taken away and the box is trimmed.";
+  };
+  use.onclick = async () => {
+    const c = new OffscreenCanvas(got.w, got.h);
+    c.getContext("2d").putImageData(new ImageData(got.rgba, got.w, got.h), 0, 0);
+    const made = new File([await c.convertToBlob({ type: "image/png" })], "cut.png", { type: "image/png" });
+    box.close();
+    onFile(made);
+  };
+  box.onclose = () => box.remove();
+  box.showModal();
+  draw();
+  // For checking it by script: put a box on the sheet without a mouse.
+  box.pickBox = (rect) => { pick = rect; draw(); cut(); };
+  box.openSheet = async (blob) => { sheet = await createImageBitmap(blob); pick = null; draw(); };
+}
+
+// A picture so many pixels tall, for someone standing about.
+async function tallPicture(file, tall) {
+  const bitmap = await createImageBitmap(file);
+  const hh = Math.max(4, Math.min(120, tall)), w = Math.max(1, Math.min(160, Math.round(bitmap.width * hh / bitmap.height)));
+  const c = new OffscreenCanvas(w, hh), g = c.getContext("2d", { willReadFrequently: true });
+  g.imageSmoothingEnabled = bitmap.height > hh * 1.5;
+  g.imageSmoothingQuality = "high";
+  g.drawImage(bitmap, 0, 0, w, hh);
+  return picEncode(w, hh, toIndices(g.getImageData(0, 0, w, hh).data, w, hh, pal, { dither: 4 }).ix);
+}
+const newName = (kind) => { let n = 1; while (pack.files.has(`${kind}-${n}.pic`)) n++; return `${kind}-${n}.pic`; };
 
 // ---- Boxes drawn over a picture, to drag about ----
 
@@ -296,10 +378,11 @@ function fileCar() {
 function tidy() {
   const m = pack.manifest, used = new Set();
   for (const c of Object.values(m.cars)) {
-    for (const p of Object.values(m.parts ?? {})) used.add(p.picture);
+    for (const p of Object.values(m.parts ?? {})) { used.add(p.picture); used.add(p.side); }
     for (const name of [c.side, c.side_lamps, c.hood?.picture, c.rear?.picture, c.cockpit?.picture, c.cockpit?.night, c.cockpit?.bonnet, c.cockpit?.wheel?.picture, c.cockpit?.wheel?.night]) used.add(name);
   }
-  for (const p of Object.values(m.places)) used.add(p.picture);
+  for (const p of Object.values(m.places)) { used.add(p.picture); for (const who of p.people ?? []) used.add(who.picture); }
+  for (const r of m.rivals ?? []) used.add(r.figure);
   for (const name of [...pack.files.keys()]) if (name.endsWith(".pic") && !used.has(name)) pack.files.delete(name);
 }
 
@@ -549,6 +632,21 @@ function roomsPanel() {
       tick("Only there when you have a car", s.needs_car, (v) => { if (v) s.needs_car = true; else delete s.needs_car; })));
   }
   out.push(spots);
+  p.people ??= [];
+  out.push(h("section", {}, h("h2", { text: "People standing about" }),
+    h("p", { class: "hint", text: "Pictures that stand in the room, behind the cars. Each is placed by its left edge and where its feet are." }),
+    p.people.map((who, i) => h("div", { class: "card" }, h("div", { class: "three" },
+      field("Left edge", who.at[0], (v) => { who.at[0] = Math.max(-40, Math.min(319, Math.floor(v ?? 0))); }, { type: "number", min: -40, max: 319, redo: true }),
+      field("Feet", who.at[1], (v) => { who.at[1] = Math.max(1, Math.min(200, Math.floor(v ?? 0))); }, { type: "number", min: 1, max: 200, redo: true }),
+      h("div", {}, h("label", { text: "\u00a0" }), h("button", { text: "Remove", onclick: () => { p.people.splice(i, 1); tidy(); render(); } }))))),
+    p.people.length >= 12 ? h("p", { class: "hint", text: "A room has space for 12." }) : h("div", {},
+      field("How tall the next one is made, in pixels", at.tall, (v) => { at.tall = Math.max(8, Math.min(120, Math.floor(v ?? 44))); }, { type: "number", min: 8, max: 120 }),
+      dropZone("Someone, or a few people, or anything else that stands there", async (f) => {
+        const name = newName("person");
+        try { pack.files.set(name, await tallPicture(f, at.tall)); } catch { return fail("That file is not a picture the browser can read."); }
+        (p.people ??= []).push({ picture: name, at: [140 + p.people.length * 14 % 120, p.car_at?.[1] ?? 182] }); render();
+      }))));
+  if (!p.people.length) delete p.people;
   return out;
 }
 
@@ -798,6 +896,15 @@ function partsPanel() {
         try { pack.files.set(`${id}-on.pic`, await sizedPicture(f, place.rect[2], place.rect[3])); } catch { return fail("That file is not a picture the browser can read."); }
         p.picture = `${id}-on.pic`; render();
       }),
+      dropZone(p.side ? "How it looks on the car from the side (it has a picture; drop another to change it)" : "How it looks on the car from the side: the car's own picture again with this part on it (optional)", async (f) => {
+        // Made the size of the side picture of the first car it fits, and drawn over that car wherever it is seen.
+        const fit = Object.entries(m.cars).find(([cid]) => !p.fits || p.fits.includes(cid))?.[1], own = fit && pack.files.get(fit.side) && picDecode(pack.files.get(fit.side));
+        if (!own) return fail("There is no car with a picture for this part to go on yet.");
+        const name = p.side ?? newName("kit");
+        try { pack.files.set(name, await sizedPicture(f, own.w, own.h)); } catch { return fail("That file is not a picture the browser can read."); }
+        p.side = name; render();
+      }),
+      p.side ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "It does not show from the side", onclick: () => { delete p.side; tidy(); render(); } })) : null,
       p.picture ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "No picture: mark it with a tag", onclick: () => { delete p.picture; tidy(); render(); } })) : null,
       h("label", { text: "Fits (none ticked: every car)" }),
       cars.map(([cid, name]) => tick(name, p.fits?.includes(cid), (v) => { p.fits = (p.fits ?? []).filter((x) => x !== cid); if (v) p.fits.push(cid); if (!p.fits.length) delete p.fits; })),
@@ -816,6 +923,7 @@ function rivalsPanel() {
   return [h("section", {}, h("h2", { text: "Who there is to race" }),
     h("p", { class: "hint", text: "They pull in in this order, each once the one before is beaten for money. Somewhere in a room has to be marked as where rivals pull in." }),
     cars.length ? null : h("p", { class: "hint bad", text: "There are no cars in the pack for them to drive." }),
+    field("How tall a person's picture is made, in pixels", at.tall, (v) => { at.tall = Math.max(8, Math.min(120, Math.floor(v ?? 44))); }, { type: "number", min: 8, max: 120, id: "tall" }),
     m.rivals.map((r, i) => h("div", { class: "card" },
       h("div", { class: "two" },
         field(`${i + 1}. Name`, r.name, (v) => { r.name = v; }, { maxlength: 20 }),
@@ -824,6 +932,12 @@ function rivalsPanel() {
         choice("In", r.paint ?? "", colours("Its own paint"), (v) => { if (v) r.paint = v; else delete r.paint; }),
         field("Most money they will race for", r.limit, (v) => { r.limit = Math.max(0, Math.floor(v ?? 0)); }, { type: "number", min: 0 })),
       field("What they say", r.says, (v) => { r.says = v; }, { maxlength: 38 }),
+      dropZone(r.figure ? "A picture of them, standing by their car (they have one; drop another to change it)" : "A picture of them, to stand by their car (optional)", async (f) => {
+        const name = r.figure ?? newName("figure");
+        try { pack.files.set(name, await tallPicture(f, at.tall)); } catch { return fail("That file is not a picture the browser can read."); }
+        r.figure = name; render();
+      }),
+      r.figure ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "Nobody stands there", onclick: () => { delete r.figure; tidy(); render(); } })) : null,
       tick("Will race for cars", r.pinks || r.king, (v) => { if (v) r.pinks = true; else { delete r.pinks; delete r.king; } }),
       i === last ? tick("The one to beat: races for cars only, and beating them wins the game", r.king, (v) => { if (v) r.king = true; else delete r.king; }) : null,
       h("div", { class: "row", style: "margin-top:10px" },

@@ -138,6 +138,42 @@ export function groundOf(w, h, ix) {
 }
 
 // A name fit for a file or an id: lower case, digits and dashes.
+// What is left of a box on the sheet once its background is taken away: the pixels, trimmed to
+// what is not background. The background is whatever colours run round the edge of the box
+// (a flat colour, or the two greys of a checkerboard), and it is taken from the edges inwards,
+// so the same grey inside the picture stays.
+export function knockOut(rgba, w, h, within) {
+  const out = new Uint8ClampedArray(rgba), at = (x, y) => (y * w + x) * 4;
+  if (within > 0) {
+    const seen = new Map();
+    const edge = (x, y) => { const i = at(x, y); if (out[i + 3] < 128) return; const k = (out[i] >> 4) << 8 | (out[i + 1] >> 4) << 4 | out[i + 2] >> 4; seen.set(k, (seen.get(k) ?? 0) + 1); };
+    for (let x = 0; x < w; x++) { edge(x, 0); edge(x, h - 1); }
+    for (let y = 0; y < h; y++) { edge(0, y); edge(w - 1, y); }
+    const total = [...seen.values()].reduce((a, b) => a + b, 0);
+    const back = [...seen].sort((a, b) => b[1] - a[1]).slice(0, 4).filter(([, n]) => n >= total * 0.08).map(([k]) => [(k >> 8) * 16 + 8, (k >> 4 & 15) * 16 + 8, (k & 15) * 16 + 8]);
+    const is = (i) => out[i + 3] < 128 || back.some(([r, g, b]) => Math.abs(out[i] - r) + Math.abs(out[i + 1] - g) + Math.abs(out[i + 2] - b) < within);
+    const todo = [];
+    const push = (x, y) => { if (x >= 0 && y >= 0 && x < w && y < h) todo.push(x, y); };
+    for (let x = 0; x < w; x++) { push(x, 0); push(x, h - 1); }
+    for (let y = 0; y < h; y++) { push(0, y); push(w - 1, y); }
+    const done = new Uint8Array(w * h);
+    while (todo.length) {
+      const y = todo.pop(), x = todo.pop(), i = at(x, y);
+      if (done[y * w + x]) continue;
+      done[y * w + x] = 1;
+      if (!is(i)) continue;
+      out[i + 3] = 0;
+      push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
+    }
+  }
+  let [x0, y0, x1, y1] = [w, h, -1, -1];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (out[at(x, y) + 3] >= 128) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  if (x1 < 0) return null;
+  const cw = x1 - x0 + 1, ch = y1 - y0 + 1, cut = new Uint8ClampedArray(cw * ch * 4);
+  for (let y = 0; y < ch; y++) cut.set(out.subarray(at(x0, y0 + y), at(x0, y0 + y) + cw * 4), y * cw * 4);
+  return { w: cw, h: ch, rgba: cut };
+}
+
 export function slug(words) {
   return words.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "car";
 }

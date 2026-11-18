@@ -2,7 +2,7 @@
 // and written in the browser's code still plays, and a picture turned into a car there shows up
 // in the garage in whatever paint the pack gives it.
 import { readFileSync } from "node:fs";
-import { RAMPS, CLEAR, parsePack, buildPack, picDecode, picEncode, toIndices, groundOf, rampOf, slug, makeViewer } from "../web/pack.js";
+import { RAMPS, CLEAR, parsePack, buildPack, picDecode, picEncode, toIndices, groundOf, rampOf, slug, makeViewer, knockOut } from "../web/pack.js";
 
 const [wasm, packPath] = process.argv.slice(2);
 let fails = 0;
@@ -60,6 +60,23 @@ check(!(await viewer.view(buildPack(pack))).ok, "a pack that starts with a missi
 let threw = false;
 try { parsePack(new Uint8Array([1, 2, 3])); } catch { threw = true; }
 check(threw, "a file that is not a pack is refused by the page");
+
+// Cutting a sprite out of a sheet: a red square with a grey middle, on a noisy checkerboard.
+{
+  const w = 40, h = 30, rgba = new Uint8ClampedArray(w * h * 4);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4, board = ((x >> 3) + (y >> 3)) & 1 ? 104 : 72, noise = (x * 7 + y * 3) % 5;
+    const inside = x >= 10 && x < 30 && y >= 8 && y < 22, middle = x >= 16 && x < 24 && y >= 12 && y < 18;
+    rgba.set(middle ? [72, 72, 72, 255] : inside ? [200, 30, 30, 255] : [board + noise, board + noise, board + noise, 255], i);
+  }
+  const cut = knockOut(rgba, w, h, 40);
+  check(cut && cut.w === 20 && cut.h === 14, "a cut is trimmed to the sprite: " + (cut && [cut.w, cut.h]));
+  check(cut.rgba[3] === 255 && cut.rgba[0] === 200, "the sprite is kept");
+  check(cut.rgba[(6 * 20 + 10) * 4 + 3] === 255, "and so is the same grey as the board, inside it");
+  const whole = knockOut(rgba, w, h, 0);
+  check(whole.w === w && whole.h === h, "at 0 nothing is taken away");
+  check(knockOut(new Uint8ClampedArray(16 * 4).fill(90), 4, 4, 40) === null, "a box of nothing but background is nothing");
+}
 
 console.log(fails ? `${fails} FAILED` : "workshop test passes");
 process.exit(fails ? 1 : 0);
