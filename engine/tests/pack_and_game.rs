@@ -856,6 +856,7 @@ const ROADS: &str = r#""roads": { "pass": { "title": "The pass", "ends": ["shed"
 fn road_game() -> Game {
     engine::host::store(b"");
     let manifest = MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"road:pass\"")
+        .replace("\"label\": \"Solo\", \"do\": \"solo\"", "\"label\": \"Run\", \"do\": \"roadrace:pass\"")
         .replace("\"puffer\": {", "\"fuzz\": { \"name\": \"Detector\", \"slot\": \"Dash\", \"price\": 50, \"radar\": true }, \"puffer\": {");
     let mut g = Game::new(Pack::parse(&files(&manifest)));
     g.seed(5);
@@ -1029,4 +1030,66 @@ fn the_road_has_edges_and_other_cars() {
     g.state.cars[0].gas = 0.01;
     cruise(&mut g, 40.0, &|g| g.scene != Scene::Road);
     assert_eq!((g.scene, g.state.place.as_str(), g.note.as_deref()), (Scene::Place, "shed", Some("Out of gas. You walked home.")));
+}
+
+#[test]
+fn a_road_is_somewhere_to_race() {
+    // Out to where the rivals are, and a ten-dollar race down the pass with the slow one.
+    let mut g = road_game();
+    click(&mut g, 20, 10);
+    click(&mut g, 250, 10);
+    assert_eq!(g.scene, Scene::Bets);
+    click(&mut g, 120, 186);
+    assert_eq!(g.scene, Scene::Road);
+    let t = g.trip.as_ref().unwrap();
+    assert!(t.rival.is_some() && t.cops.is_empty() && t.hold == 90 - 1, "no law, and a count before the off: {}", t.hold);
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    for _ in 0..80 {
+        g.tick(KEY_UP, 0, 0);
+    }
+    assert_eq!(g.trip.as_ref().unwrap().z, 0.0, "nobody moves until it is counted down");
+    cruise(&mut g, 80.0, &|g| g.trip.as_ref().is_some_and(|t| t.z > 300.0));
+    g.draw(&mut s);
+    cruise(&mut g, 80.0, &|g| g.scene != Scene::Road);
+    assert_eq!((g.scene, g.state.place.as_str(), g.state.cash, g.state.hours, g.state.rung), (Scene::Place, "road", 1010, 2, 1), "{:?}", g.note);
+
+    // Sit on the line and they get there first; Escape is giving it to them.
+    g.tick(0, 0, 0);
+    g.who = 0;
+    click(&mut g, 250, 10);
+    click(&mut g, 120, 186);
+    for _ in 0..3000 {
+        if g.scene != Scene::Road { break; }
+        g.tick(0, 0, 0);
+    }
+    assert_eq!((g.scene, g.state.cash, g.state.hours), (Scene::Place, 1000, 4));
+    g.who = 0;
+    click(&mut g, 250, 10);
+    click(&mut g, 120, 186);
+    g.tick(0, 0, 0);
+    g.tick(KEY_B, 0, 0);
+    assert_eq!((g.scene, g.state.cash), (Scene::Place, 990));
+    // A place with nobody to race cannot start one.
+    let bad = MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"roadrace:pass\"");
+    assert!(Pack::parse(&files(&bad)).err().unwrap().contains("rival_at"));
+}
+
+#[test]
+fn the_car_is_what_it_is_on_the_road_too() {
+    let mut g = road_game();
+    g.state.cars[0].cond = 100;
+    let stock = g.pace();
+    assert!((stock.accel - 5.0).abs() < 0.6 && (stock.top - 56.0).abs() < 3.0 && stock.slide == 1.0, "{stock:?}");
+    g.state.cars[0].fitted.insert("Exhaust".into(), "pipe".into());
+    let piped = g.pace();
+    assert!(piped.accel > stock.accel && piped.top > stock.top);
+    g.state.cars[0].cond = 50;
+    assert!(g.pace().accel < stock.accel, "a tired engine pulls less");
+    // And the trip is given it.
+    click(&mut g, 100, 10);
+    assert_eq!(g.trip.as_ref().unwrap().pace, g.pace());
+    // A quicker rival is quicker down a road as well.
+    let (slow, quick) = (engine::road::Rival::new(17.0, "RED"), engine::road::Rival::new(12.0, "RED"));
+    assert!(quick.top > slow.top && quick.accel > slow.accel);
 }

@@ -5,7 +5,7 @@
 
 use super::*;
 use crate::pack::Road;
-use crate::road::{Side, Trip, HALF, MPH, SEG};
+use crate::road::{Pace, Side, Trip, HALF, MPH, SEG};
 
 /// How far ahead is drawn, in pieces of road, and how much a full bend turns in one piece.
 const AHEAD: usize = 56;
@@ -21,19 +21,50 @@ impl Game {
         if let Some(why) = self.wont_run() {
             return self.no(&why);
         }
-        if self.owned().is_some_and(|o| o.gas < 0.3) {
-            return self.no("Not enough gas for the road.");
-        }
         let here = from_map.map_or(self.state.place.clone(), |m| format!("map:{m}"));
         let backwards = road.ends[1] == here && road.ends[0] != here;
         let seed = self.rand();
         let Some(road) = self.pack.manifest.roads.get(id) else { return };
-        self.trip = Some(Trip::new(id, road, backwards, seed));
+        let mut trip = Trip::new(id, road, backwards, seed);
+        trip.pace = self.pace();
+        self.trip = Some(trip);
         self.trip_from = from_map.map(str::to_string);
         self.town = None;
         self.note = None;
         self.scene = Scene::Road;
         tone(520, 60);
+    }
+
+    /// What the car in the bay can do on a road: what it makes for what it weighs, and its tyres.
+    pub fn pace(&self) -> Pace {
+        let Some((o, car)) = self.owned().zip(self.car()) else { return Pace::default() };
+        let (d, (gain, turbo)) = (self.tuned_drive(o, car), self.tune(o));
+        // A bigger turbo than the one the curve was measured with makes more; one where there was none, a quarter more.
+        let blown = match (turbo.or(car.drive.boost.clone()), car.drive.boost.as_ref()) {
+            (Some(b), Some(stock)) => (0.45 + 0.55 * b.psi / stock.psi.max(1.0)).min(1.6),
+            (Some(_), None) => 1.25,
+            _ => 1.0,
+        };
+        let hp = d.torque.iter().filter(|p| p[0] <= d.redline).map(|p| p[0] * p[1]).fold(0.0, f64::max) / 5252.0 * gain * blown;
+        Pace { accel: (5.0 * (hp / d.weight_lb / 0.0975).powf(0.7)).clamp(2.0, 9.0), top: (56.0 * (hp / 298.0).cbrt()).clamp(28.0, 76.0), slide: (12.0 / d.grip.max(1.0)).clamp(0.6, 1.6) }
+    }
+
+    /// Down a road against whoever has pulled in, for what was bet: no police, and first to the end.
+    pub(super) fn start_road_race(&mut self, id: &str) {
+        let Some(r) = self.rival().cloned() else { return };
+        let Some(road) = self.pack.manifest.roads.get(id) else { return };
+        let mut road = road.clone();
+        road.cops = 0;
+        let backwards = road.ends[1] == self.state.place && road.ends[0] != self.state.place;
+        let seed = self.rand();
+        let mut trip = Trip::new(id, &road, backwards, seed);
+        trip.pace = self.pace();
+        trip.rival = Some(crate::road::Rival::new(r.et, r.paint.as_deref().unwrap_or("RED")));
+        trip.hold = 90;
+        self.trip = Some(trip);
+        self.trip_from = None;
+        self.note = None;
+        self.scene = Scene::Road;
     }
 
     /// Onto the streets of a map at the block that leads to a road.
@@ -55,6 +86,12 @@ impl Game {
         let Some(trip) = self.trip.as_mut() else { return };
         let Some(road) = self.pack.manifest.roads.get(&trip.road) else { return };
         if hit & KEY_B != 0 {
+            if trip.rival.is_some() {
+                // Lifting is losing.
+                tone(0, 0);
+                self.trip = None;
+                return self.settle(Some(false));
+            }
             if trip.chase.is_some() {
                 self.note = Some("Not with him behind you.".into());
                 return;
@@ -71,9 +108,17 @@ impl Game {
         }
         let h = trip.tick(road, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
         let (speed, chased, stopped, warned) = (trip.speed, trip.chase.is_some(), trip.crash > 0, trip.radar);
+        let (racing, counting) = (trip.rival.is_some(), trip.hold);
         let (per_km, hours, end, id) = (road.gas_per_km, road.hours, road.ends[if trip.backwards { 0 } else { 1 }].clone(), trip.road.clone());
         if h.crashed {
             tone(70, 500);
+        } else if counting > 0 {
+            // Three, two, one, and a higher one for go.
+            if counting % 30 == 0 {
+                tone(440, 120);
+            } else if counting == 1 {
+                tone(880, 250);
+            }
         } else if chased {
             tone(if self.ticks / 9 % 2 == 0 { 760 } else { 570 }, 60);
         } else if warned && self.radar() && self.ticks % 12 == 0 {
@@ -103,6 +148,11 @@ impl Game {
             tone(160, 400);
             self.save();
         }
+        if racing && (h.arrived || h.beaten) {
+            tone(if h.arrived { 990 } else { 160 }, 300);
+            self.trip = None;
+            return self.settle(Some(h.arrived));
+        }
         if h.arrived {
             tone(520, 60);
             self.trip = None;
@@ -120,6 +170,13 @@ impl Game {
             tone(0, 0);
             self.trip = None;
             self.trip_from = None;
+            if racing {
+                // Dry with the race on is the race lost, and then the walk.
+                self.settle(Some(false));
+                if self.owned().is_none() || matches!(self.scene, Scene::Over(_)) {
+                    return;
+                }
+            }
             let home = self.pack.manifest.start.place.clone();
             self.enter(&home);
             self.say("Out of gas. You walked home.");
@@ -281,6 +338,9 @@ impl Game {
         for o in &trip.others {
             on_road(o.z, o.lane, o.speed < 0.0, ramp(o.paint), 0);
         }
+        if let Some(r) = &trip.rival {
+            on_road(r.z, r.x, false, ramp(&r.paint), 0);
+        }
         for c in &trip.cops {
             on_road(c.z, 1.3, false, ramp("RUBBER"), 1);
         }
@@ -299,7 +359,19 @@ impl Game {
         s.text_sh(44, 18, &road.title.to_uppercase().chars().take(20).collect::<String>(), white, BLACK);
         let left = (trip.len() - trip.z).max(0.0);
         s.text_sh(44, 27, &if left >= 1000.0 { format!("{:.1} KM TO GO", left / 1000.0) } else { format!("{} M TO GO", left as i32 / 10 * 10) }, white, BLACK);
-        s.text_sh(44, 36, &format!("LIMIT {}", road.limit as i32), if mph > road.limit + 10.0 { red } else { white }, BLACK);
+        if let Some(r) = &trip.rival {
+            // No law out tonight: only who is in front, and by how much.
+            let (gap, name) = ((r.z - trip.z) as i32, self.rival().map_or("THEM".to_string(), |x| x.name.to_uppercase()));
+            let words = if gap > 2 { format!("{name} +{gap} M") } else if gap < -2 { format!("{name} {gap} M") } else { format!("{name} LEVEL") };
+            s.text_sh(44, 36, &words.chars().take(24).collect::<String>(), if gap > 2 { red } else { gold }, BLACK);
+            if trip.hold > 0 {
+                let n = format!("{}", trip.hold / 30 + 1);
+                s.text_big(150, 50, &n, BLACK, 4);
+                s.text_big(148, 48, &n, gold, 4);
+            }
+        } else {
+            s.text_sh(44, 36, &format!("LIMIT {}", road.limit as i32), if mph > road.limit + 10.0 { red } else { white }, BLACK);
+        }
         let gas = self.owned().map_or(0.0, |o| o.gas);
         s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { red } else { white }, BLACK);
         let blink = self.ticks / 8 % 2 == 0;

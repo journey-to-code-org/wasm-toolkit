@@ -787,6 +787,13 @@ impl Pack {
                     if !m.places.contains_key(to) {
                         return Err(format!("in {id}, \"{}\" goes to {to}, which is not a place", spot.label));
                     }
+                } else if let Some(road) = spot.action.strip_prefix("roadrace:") {
+                    if !m.roads.contains_key(road) {
+                        return Err(format!("in {id}, \"{}\" races down the road {road}, which is not in the pack", spot.label));
+                    }
+                    if place.rival_at.is_none() || m.rivals.is_empty() {
+                        return Err(format!("in {id}, \"{}\" needs rivals in the pack and a rival_at in the place", spot.label));
+                    }
                 } else if let Some(road) = spot.action.strip_prefix("road:") {
                     if !m.roads.contains_key(road) {
                         return Err(format!("in {id}, \"{}\" takes the road {road}, which is not in the pack", spot.label));

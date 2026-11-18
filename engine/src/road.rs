@@ -63,6 +63,39 @@ pub struct Cop {
     pub done: bool,
 }
 
+/// What the car being driven can do on a road: how hard it pulls, in metres a second each second
+/// from rest; how fast it will go, in metres a second; and how much a bend throws it, 1 being usual.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pace {
+    pub accel: f64,
+    pub top: f64,
+    pub slide: f64,
+}
+
+impl Default for Pace {
+    fn default() -> Pace {
+        Pace { accel: 5.0, top: 56.0, slide: 1.0 }
+    }
+}
+
+/// Someone to race down the road: where they are, across and along, and what their car can do.
+pub struct Rival {
+    pub z: f64,
+    pub x: f64,
+    pub speed: f64,
+    pub top: f64,
+    pub accel: f64,
+    pub paint: String,
+}
+
+impl Rival {
+    /// Off the line beside you, in the other lane, in a car that runs the quarter in `et` seconds.
+    pub fn new(et: f64, paint: &str) -> Rival {
+        let quick = 14.0 / et.clamp(8.0, 30.0);
+        Rival { z: 0.0, x: -0.5, speed: 0.0, top: (56.0 * quick.powf(1.3)).clamp(30.0, 76.0), accel: (5.0 * quick * quick).clamp(2.5, 9.0), paint: paint.to_string() }
+    }
+}
+
 /// What a thirtieth of a second brought.
 #[derive(Default, Debug, PartialEq)]
 pub struct Happened {
@@ -74,6 +107,8 @@ pub struct Happened {
     pub ticket: Option<i32>,
     pub lost_him: bool,
     pub arrived: bool,
+    /// Whoever you were racing got to the end first.
+    pub beaten: bool,
 }
 
 pub struct Trip {
@@ -94,6 +129,10 @@ pub struct Trip {
     fled: u32,
     /// Police are waiting not far ahead: what a radar detector would say.
     pub radar: bool,
+    pub pace: Pace,
+    /// A race: who against, and how many ticks until the off.
+    pub rival: Option<Rival>,
+    pub hold: i32,
     rng: u32,
 }
 
@@ -121,7 +160,7 @@ impl Trip {
             y += p.hill;
         }
         let len = segs.len() as f64 * SEG;
-        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, rng: seed | 1 };
+        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), rival: None, hold: 0, rng: seed | 1 };
         for i in 0..road.traffic {
             let z = 80.0 + (trip.rand() % (len - 80.0).max(1.0) as u32) as f64;
             let other = trip.other(z, i);
@@ -169,12 +208,29 @@ impl Trip {
 
     pub fn tick(&mut self, road: &Road, p: Pedals) -> Happened {
         let mut out = Happened::default();
+        if self.hold > 0 {
+            self.hold -= 1;
+            return out;
+        }
+        if let Some(mut r) = self.rival.take() {
+            // They lift for a bend they can see, and no more than they have to.
+            let bend = self.seg(r.z).curve.abs().max(self.seg(r.z + 40.0).curve.abs());
+            let want = r.top * (1.0 - 0.42 * bend);
+            r.speed = if r.speed < want { r.speed + r.accel / HZ * (1.0 - r.speed / r.top) } else { r.speed - 8.0 / HZ };
+            r.z += r.speed / HZ;
+            // Side by side they keep to the lane you are not in; clear of you, to the right one.
+            let gap = r.z - self.z;
+            let lane = if gap.abs() < 9.0 { if self.x > 0.0 { -0.5 } else { 0.5 } } else { 0.5 };
+            r.x += (lane - r.x) * 0.06;
+            out.beaten = r.z >= self.len() - 1.0 && self.z < self.len() - 1.0;
+            self.rival = Some(r);
+        }
         if self.crash > 0 {
             self.crash -= 1;
             return out;
         }
         if p.go {
-            self.speed += 5.0 / HZ * (1.0 - self.speed / 56.0);
+            self.speed += self.pace.accel / HZ * (1.0 - self.speed / self.pace.top);
         } else {
             self.speed -= 1.0 / HZ;
         }
@@ -190,7 +246,7 @@ impl Trip {
         self.steer += (want - self.steer) / 4.0;
         let seg = *self.seg(self.z);
         // The wheel moves the car across the road; a bend taken fast throws it the other way.
-        self.x += self.steer * 0.055 * (self.speed / 15.0).min(1.0) - seg.curve * (self.speed / 56.0).powi(2) * 0.07;
+        self.x += self.steer * 0.055 * (self.speed / 15.0).min(1.0) - seg.curve * (self.speed / 56.0).powi(2) * 0.07 * self.pace.slide;
         let side = if self.x > 0.0 { seg.right } else { seg.left };
         let mut hit = false;
         if self.x.abs() > 1.35 && side.solid() {
@@ -213,6 +269,13 @@ impl Trip {
             if self.others[i].z < self.z - 90.0 || self.others[i].z > self.z + 900.0 {
                 let ahead = self.z + 320.0 + (self.rand() % 480) as f64;
                 self.others[i] = self.other(ahead, i);
+            }
+        }
+        if let Some(r) = self.rival.as_mut() {
+            let gap = r.z - self.z;
+            if gap > -1.0 && gap < 4.5 && (r.x - self.x).abs() < 0.38 {
+                hit = true;
+                r.z += 6.0;
             }
         }
         let over = self.speed * MPH - road.limit;
