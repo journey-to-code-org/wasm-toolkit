@@ -7,6 +7,7 @@
 //! `pack_alloc` and `pack_load`.
 
 pub mod font;
+pub mod g3d;
 pub mod game;
 pub mod gfx;
 pub mod host;

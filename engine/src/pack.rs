@@ -152,6 +152,74 @@ pub struct Hood {
     pub slots: BTreeMap<String, [i32; 4]>,
 }
 
+/// A dial on the dash: where its needle turns, how long the needle is, and what it reads at full sweep.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Dial {
+    pub at: [i32; 2],
+    pub r: i32,
+    #[serde(default)]
+    pub max: f64,
+    /// For a dial that only sits there (fuel, temperature): where its needle points, 0 to 100.
+    #[serde(default)]
+    pub value: f64,
+}
+
+#[derive(Deserialize, Clone, Debug)]
+pub struct Wheel {
+    /// A square picture of the steering wheel, turned about its middle.
+    pub picture: String,
+    #[serde(default)]
+    pub night: Option<String>,
+    pub at: [i32; 2],
+}
+
+/// The view from the seat: a painting of the cabin with the glass left clear, and where on it the
+/// things that move are. A car with one is raced from behind its wheel.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Cockpit {
+    pub picture: String,
+    /// The same at night, the cabin dark and the dials lit.
+    #[serde(default)]
+    pub night: Option<String>,
+    /// The bonnet as seen through the glass, drawn under the painting in the car's paint.
+    #[serde(default)]
+    pub bonnet: Option<String>,
+    /// How much of the screen, from the top, is the view out; the horizon sits partway down it.
+    #[serde(default = "view_h")]
+    pub view_h: i32,
+    #[serde(default)]
+    pub tach: Option<Dial>,
+    #[serde(default)]
+    pub speedo: Option<Dial>,
+    #[serde(default)]
+    pub boost: Option<Dial>,
+    #[serde(default)]
+    pub minis: Vec<Dial>,
+    #[serde(default)]
+    pub shift_light: Option<[i32; 2]>,
+    /// The middle of the gear lever's gate, where the gear in use lights up.
+    #[serde(default)]
+    pub gear_gate: Option<[i32; 2]>,
+    #[serde(default)]
+    pub wheel: Option<Wheel>,
+}
+
+fn view_h() -> i32 {
+    136
+}
+
+/// The car from behind, for when it is ahead of you on the road, and how wide it is in metres.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Rear {
+    pub picture: String,
+    #[serde(default = "car_width")]
+    pub width_m: f64,
+}
+
+fn car_width() -> f64 {
+    1.7
+}
+
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Car {
     pub name: String,
@@ -173,6 +241,10 @@ pub struct Car {
     pub drive: Drive,
     #[serde(default)]
     pub hood: Option<Hood>,
+    #[serde(default)]
+    pub cockpit: Option<Cockpit>,
+    #[serde(default)]
+    pub rear: Option<Rear>,
 }
 
 /// Something in a place that can be picked: where it is, what it is called, and what picking it does.
@@ -333,6 +405,21 @@ impl Pack {
                 return Err(format!("the car {id} needs a torque curve, gears, a final drive and a weight"));
             }
             need(&format!("the car {id}"), &car.side)?;
+            let seat = format!("the cockpit of the car {id}");
+            if let Some(c) = &car.cockpit {
+                need(&seat, &c.picture)?;
+                for name in [&c.night, &c.bonnet, &c.wheel.as_ref().map(|w| w.picture.clone()), &c.wheel.as_ref().and_then(|w| w.night.clone())].into_iter().flatten() {
+                    need(&seat, name)?;
+                }
+                if let Some(w) = &c.wheel {
+                    if self.pictures.get(&w.picture).is_some_and(|p| p.w != p.h) {
+                        return Err(format!("{seat} needs a square picture for its wheel"));
+                    }
+                }
+            }
+            if let Some(r) = &car.rear {
+                need(&format!("the back of the car {id}"), &r.picture)?;
+            }
             if let Some(hood) = &car.hood {
                 need(&format!("under the hood of the car {id}"), &hood.picture)?;
             }
