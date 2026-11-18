@@ -10,6 +10,7 @@ use crate::host::tone;
 use crate::g3d::{Cam, Scene3, V3};
 use crate::pack::{Boost, Car, Cockpit, Dial, Pack, Part, Place, Rival, Spot};
 use crate::race::{Controls, Phase, Race, QUARTER};
+use crate::town::{Pedals, Town};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -44,11 +45,18 @@ pub struct Owned {
     pub off: Vec<String>,
     #[serde(default)]
     pub bolts: BTreeMap<String, u8>,
+    /// Gallons in the tank.
+    #[serde(default = "some_gas")]
+    pub gas: f64,
+}
+
+fn some_gas() -> f64 {
+    8.0
 }
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new() }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0 }
     }
 
     fn tight(&self, slot: &str) -> u8 {
@@ -104,6 +112,8 @@ pub enum Scene {
     Yard,
     Bets,
     Race,
+    /// Out on a map, behind the wheel.
+    Drive,
     /// 1 the season ran out, 2 broke, 3 you beat the one to beat.
     Over(u8),
 }
@@ -122,6 +132,7 @@ pub struct Game {
     pub who: usize,
     bet: usize,
     pub race: Option<Race>,
+    pub town: Option<Town>,
     selling: bool,
     pub carrying: Option<Loose>,
     saved: bool,
@@ -155,7 +166,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -305,6 +316,17 @@ impl Game {
         })
     }
 
+    /// Why the car in the bay cannot make a pass, if it cannot: it will not run, or it is nearly dry.
+    fn cannot_race(&self) -> Option<String> {
+        self.wont_run().or_else(|| self.owned().filter(|o| o.gas < 0.7).map(|_| "Not enough gas to race. Go fill up.".to_string()))
+    }
+
+    fn burn(&mut self, gallons: f64) {
+        if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+            o.gas = (o.gas - gallons).max(0.0);
+        }
+    }
+
     // ---- Time and endings ----
 
     /// Everything takes time. When the days run out, or there is no way to get a car, it is over.
@@ -370,6 +392,27 @@ impl Game {
             self.enter(&to.to_string());
         } else if let Some(words) = action.strip_prefix("say:") {
             self.say(words);
+        } else if let Some(map) = action.strip_prefix("drive:") {
+            let Some(m) = self.pack.manifest.maps.get(map) else { return };
+            if self.state.cur.is_none() {
+                return self.no("You have nothing to drive.");
+            }
+            if let Some(why) = self.wont_run() {
+                return self.no(&why);
+            }
+            if self.owned().is_some_and(|o| o.gas < 0.3) {
+                return self.no("You don't got enough gas to cruise.");
+            }
+            let mut rng = self.rng;
+            let town = Town::new(map, m, Some(&self.state.place), || {
+                rng ^= rng << 13;
+                rng ^= rng >> 17;
+                rng ^= rng << 5;
+                rng
+            });
+            self.rng = rng;
+            self.town = Some(town);
+            self.scene = Scene::Drive;
         } else {
             match action {
                 "lamps" => {
@@ -400,10 +443,30 @@ impl Game {
                     }
                 }
                 "yard" => self.scene = Scene::Yard,
+                "gas" => {
+                    // A dollar buys three gallons.
+                    let Some((o, car)) = self.owned().zip(self.car()) else { return self.no("You have nothing to fill.") };
+                    let want = (car.tank - o.gas).max(0.0);
+                    let cost = (want / 3.0).ceil() as i32;
+                    if want < 0.05 {
+                        return self.say("It is full.");
+                    }
+                    if self.state.cash < 1 {
+                        return self.no("Gas costs money.");
+                    }
+                    let pay = cost.min(self.state.cash);
+                    let (tank, cur) = (car.tank, self.state.cur.unwrap());
+                    let o = &mut self.state.cars[cur];
+                    o.gas = (o.gas + pay as f64 * 3.0).min(tank);
+                    self.state.cash -= pay;
+                    self.say(&format!("{:.1} gallons in the tank. That was ${pay}.", self.state.cars[cur].gas));
+                    tone(700, 80);
+                    self.save();
+                }
                 "race" => {
                     if self.state.cur.is_none() {
                         self.no("You have nothing to race.");
-                    } else if let Some(why) = self.wont_run() {
+                    } else if let Some(why) = self.cannot_race() {
                         self.no(&why);
                     } else {
                         self.scene = Scene::Bets;
@@ -420,7 +483,7 @@ impl Game {
                 "solo" => {
                     if self.state.cur.is_none() {
                         self.no("You have nothing to run.");
-                    } else if let Some(why) = self.wont_run() {
+                    } else if let Some(why) = self.cannot_race() {
                         self.no(&why);
                     } else {
                         self.start_race(0);
@@ -438,6 +501,7 @@ impl Game {
         let (gain, boost) = self.tune(o);
         let drive = car.drive.clone();
         let rt = 280 + (self.rand() % 260) as i32;
+        self.burn(0.5);
         self.race = Some(Race::new(&drive, gain, boost, rival_et, rt));
         self.scene = Scene::Race;
     }
@@ -538,6 +602,9 @@ impl Game {
         }
         if self.scene == Scene::Race {
             return self.race_tick(keys, hit);
+        }
+        if self.scene == Scene::Drive {
+            return self.drive_tick(keys, hit);
         }
         if (mx, my) != self.last_mouse {
             self.last_mouse = (mx, my);
@@ -646,7 +713,48 @@ impl Game {
                     }
                 }
             }
-            Scene::Race => {}
+            Scene::Race | Scene::Drive => {}
+        }
+    }
+
+    /// Out on the map. Escape turns back to where you set out from; pulling up beside somewhere
+    /// and pressing Enter is going in, and that is an hour gone.
+    fn drive_tick(&mut self, keys: u32, hit: u32) {
+        let Some(town) = self.town.as_mut() else { return };
+        let Some(map) = self.pack.manifest.maps.get(&town.map) else { return };
+        if hit & KEY_B != 0 {
+            tone(0, 0);
+            self.town = None;
+            self.scene = Scene::Place;
+            return;
+        }
+        if hit & KEY_A != 0 {
+            if let Some(to) = town.beside(map).and_then(|b| b.to.clone()) {
+                tone(520, 60);
+                self.town = None;
+                self.note = None;
+                self.enter(&to);
+                return self.spend(1);
+            }
+        }
+        let (went, crashed) = town.tick(map, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
+        let (speed, per_km) = (town.speed, map.gas_per_km);
+        if crashed {
+            tone(70, 500);
+        } else if town.crash == 0 {
+            // The engine note: up through each gear and down again at the change.
+            let v = (speed * 10.0) as i32;
+            tone(if speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 }, 60);
+        }
+        self.burn(went / 1000.0 * per_km);
+        if self.owned().is_some_and(|o| o.gas <= 0.0) {
+            // Dry. It is a long walk, and the car comes home on a rope.
+            tone(0, 0);
+            self.town = None;
+            let home = self.pack.manifest.start.place.clone();
+            self.enter(&home);
+            self.say("Out of gas. You walked home.");
+            self.spend(2);
         }
     }
 
@@ -660,7 +768,9 @@ impl Game {
         }
         self.state.cash -= offer.price;
         let paint = (!offer.paint.is_empty()).then_some(offer.paint);
-        self.state.cars.push(Owned::new(&offer.car, paint, offer.cond));
+        let mut bought = Owned::new(&offer.car, paint, offer.cond);
+        bought.gas = 2.0 + (offer.price * 7 % 60) as f64 / 10.0;
+        self.state.cars.push(bought);
         let day = self.day();
         if self.state.sold.0 != day {
             self.state.sold = (day, Vec::new());
@@ -971,6 +1081,7 @@ impl Game {
             Scene::Hood => self.draw_hood(s),
             Scene::Yard => self.draw_yard(s),
             Scene::Race => return self.draw_race(s),
+            Scene::Drive => return self.draw_drive(s),
             Scene::Over(kind) => return self.draw_over(s, kind),
         }
         if self.scene != Scene::Title {
@@ -1225,7 +1336,8 @@ impl Game {
         s.vgrad(0, 0, 320, 200, ramp("GRASS"), 14, 8);
         s.vgrad(0, 0, 320, 26, ramp("SKY"), 20, 27);
         s.text_sh(8, 8, "YOUR CARS", WHITE, BLACK);
-        s.text_sh(192, 8, "ENGINE", shade(ramp("CREAM"), 26), BLACK);
+        s.text_sh(148, 8, "ENGINE", shade(ramp("CREAM"), 26), BLACK);
+        s.text_sh(216, 8, "GAS", shade(ramp("CREAM"), 26), BLACK);
         let over = self.row(8, 312, 34, 10, self.state.cars.len());
         for (i, o) in self.state.cars.iter().enumerate() {
             let y = 34 + i as i32 * 10;
@@ -1236,8 +1348,9 @@ impl Game {
             s.rect(10, y, 12, 8, BLACK);
             s.vgrad(11, y + 1, 10, 6, ramp(o.paint.as_deref().or(car.paint.as_deref()).unwrap_or("GREY")), 27, 16);
             let here = self.state.cur == Some(i);
-            s.text_sh(28, y, &car.name.to_uppercase().chars().take(20).collect::<String>(), if here { shade(ramp("GOLD"), 27) } else { WHITE }, BLACK);
-            s.text_sh(192, y, cond_word(o.cond), WHITE, BLACK);
+            s.text_sh(28, y, &car.name.to_uppercase().chars().take(14).collect::<String>(), if here { shade(ramp("GOLD"), 27) } else { WHITE }, BLACK);
+            s.text_sh(148, y, cond_word(o.cond), WHITE, BLACK);
+            s.text_sh(216, y, &format!("{:.1}", o.gas), WHITE, BLACK);
             s.text_sh(264, y, "SELL", if over == Some(i) && self.px >= 264 { shade(ramp("RED"), 28) } else { shade(ramp("CREAM"), 22) }, BLACK);
         }
         if self.state.cars.is_empty() {
@@ -1411,7 +1524,8 @@ impl Game {
             Self::needle(s, d, boost, if d.max > 0.0 { d.max } else { 30.0 });
         }
         for d in &seat.minis {
-            Self::needle(s, d, d.value, 100.0);
+            let value = if d.reads.as_deref() == Some("gas") { o.gas / car.tank.max(1.0) * 100.0 } else { d.value };
+            Self::needle(s, d, value, 100.0);
         }
         if let Some([x, y]) = seat.shift_light {
             s.disc(x, y, 3, shade(ramp("RUBBER"), 2));
@@ -1526,6 +1640,134 @@ impl Game {
         s.clip_off();
         self.draw_cockpit(s, seat, true, r.rpm, r.v * 2.237, r.boost, r.gear, 0.0, r.rpm > r.redline() - 700.0 && r.phase == Phase::Run);
         self.draw_race_over(s, r, seat.view_h * 92 / 136);
+    }
+
+    /// The walls of a box that face the camera.
+    #[allow(clippy::too_many_arguments)]
+    fn box3(scene: &mut Scene3, x0: f64, z0: f64, x1: f64, z1: f64, y0: f64, y1: f64, ramp: usize, bias: f64) {
+        let [ex, _, ez] = scene.cam.pos;
+        if ez < z0 { scene.lit(&[[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]], ramp, bias); }
+        if ez > z1 { scene.lit(&[[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]], ramp, bias); }
+        if ex < x0 { scene.lit(&[[x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0]], ramp, bias); }
+        if ex > x1 { scene.lit(&[[x1, y0, z0], [x1, y0, z1], [x1, y1, z1], [x1, y1, z0]], ramp, bias); }
+    }
+
+    /// The town from the seat, by day: streets, what the map says stands on each block, the other
+    /// cars, and a list of where there is to go.
+    fn draw_drive(&self, s: &mut Screen) {
+        let Some(town) = &self.town else { return };
+        let Some(map) = self.pack.manifest.maps.get(&town.map) else { return };
+        let seat = self.car().and_then(|c| c.cockpit.as_ref());
+        let view = seat.map_or(200, |c| c.view_h);
+        let horizon = view * 60 / 136;
+        const SEE: i32 = 5;
+        let (p, road) = (map.pitch, map.road);
+        s.vgrad(0, 0, 320, horizon, ramp("SKY"), 15, 29);
+        s.vgrad(0, horizon, 320, view - horizon, ramp("GRASS"), 14, 20);
+        s.clip(0, 0, 320, view);
+        let cam = Cam { pos: [town.x, 1.125, town.z], yaw: town.heading.to_radians(), pitch: 0.0, focal: 200.0, cx: 160, cy: horizon };
+        let mut scene = Scene3::new(cam);
+        let (tar, tar2, line) = (shade(ramp("ASPHALT"), 15), shade(ramp("ASPHALT"), 16), shade(ramp("YELLOW"), 23));
+        let (cbx, cbz) = ((town.x / p).floor() as i32, (town.z / p).floor() as i32);
+        let (cols, depth) = (map.cols(), map.depth());
+        for i in -SEE..=SEE + 1 {
+            for j in -SEE..=SEE {
+                // A length of street going north, and one going east, each a block long, with dashes down the middle.
+                let (c, r) = (cbx + i, cbz + j);
+                if (0..=cols).contains(&c) && (0..depth).contains(&r) {
+                    let (sx, sz) = (c as f64 * p, r as f64 * p);
+                    scene.poly(&[[sx - road, 0.0, sz - road], [sx + road, 0.0, sz - road], [sx + road, 0.0, sz + p + road], [sx - road, 0.0, sz + p + road]], tar, tar2, -4000.0);
+                    if i.abs() <= 3 && j.abs() <= 3 {
+                        for a in [16.0, 40.0] {
+                            scene.poly(&[[sx - 0.2, 0.0, sz + a], [sx - 0.2, 0.0, sz + a + 8.0], [sx + 0.2, 0.0, sz + a + 8.0], [sx + 0.2, 0.0, sz + a]], line, line, -3000.0);
+                        }
+                    }
+                }
+                let (c, r) = (cbx + j, cbz + i);
+                if (0..cols).contains(&c) && (0..=depth).contains(&r) {
+                    let (ex, ez) = (c as f64 * p, r as f64 * p);
+                    scene.poly(&[[ex, 0.0, ez - road], [ex + p, 0.0, ez - road], [ex + p, 0.0, ez + road], [ex, 0.0, ez + road]], tar, tar2, -4000.0);
+                    if i.abs() <= 3 && j.abs() <= 3 {
+                        for a in [16.0, 40.0] {
+                            scene.poly(&[[ex + a, 0.0, ez - 0.2], [ex + a + 8.0, 0.0, ez - 0.2], [ex + a + 8.0, 0.0, ez + 0.2], [ex + a, 0.0, ez + 0.2]], line, line, -3000.0);
+                        }
+                    }
+                }
+            }
+        }
+        for i in -SEE..=SEE {
+            for j in -SEE..=SEE {
+                let (c, r) = (cbx + i, cbz + j);
+                if !(0..cols).contains(&c) || !(0..depth).contains(&r) {
+                    continue;
+                }
+                let (x0, z0) = (c as f64 * p + road + 4.0, r as f64 * p + road + 4.0);
+                let (x1, z1) = (x0 + p - 2.0 * road - 8.0, z0 + p - 2.0 * road - 8.0);
+                let block = map.block(c, r);
+                let Some(b) = block.filter(|b| b.height > 0.0) else {
+                    // Grass, and nothing to hit. Somewhere to go that is only a lot gets a marked kerb.
+                    let name = if block.is_some_and(|b| b.to.is_some()) { "GOLD" } else { "GRASS" };
+                    scene.poly(&[[x0, 0.0, z0], [x1, 0.0, z0], [x1, 0.0, z1], [x0, 0.0, z1]], shade(ramp(name), 20), shade(ramp(name), 22), -3500.0);
+                    continue;
+                };
+                let wall = ramp(b.wall.as_deref().unwrap_or("CONCRETE"));
+                Self::box3(&mut scene, x0, z0, x1, z1, 0.0, b.height, wall, 0.0);
+                // Rows of glass, a storey at a time, on the ones near enough to see them.
+                let (near, mid) = (i.abs() <= 1 && j.abs() <= 1, i.abs() <= 3 && j.abs() <= 3);
+                if mid {
+                    let mut f = 0;
+                    while (f * 4 + 4) as f64 <= b.height && f < if near { 9 } else { 3 } {
+                        Self::box3(&mut scene, x0 - 0.05, z0 - 0.05, x1 + 0.05, z1 + 0.05, f as f64 * 4.0 + 1.5, f as f64 * 4.0 + 3.0, ramp("GLASS"), 1.0);
+                        f += 1;
+                    }
+                }
+                // A cap round the top; and somewhere to go has an awning over the pavement.
+                Self::box3(&mut scene, x0 - 0.03, z0 - 0.03, x1 + 0.03, z1 + 0.03, b.height - 0.5, b.height, ramp("RUBBER"), 1.0);
+                if b.to.is_some() {
+                    Self::box3(&mut scene, x0 - 1.5, z0 - 1.5, x1 + 1.5, z1 + 1.5, 3.2, 4.0, ramp("GOLD"), 2.0);
+                }
+            }
+        }
+        for o in &town.others {
+            let (ox, oz) = o.at(map);
+            if (ox - town.x).abs() + (oz - town.z).abs() > SEE as f64 * p {
+                continue;
+            }
+            // A body, and a cabin on it.
+            let (hl, hw) = if o.north { (0.9, 2.1) } else { (2.1, 0.9) };
+            Self::box3(&mut scene, ox - hl, oz - hw, ox + hl, oz + hw, 0.25, 0.9, ramp(o.paint), 0.0);
+            Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, 0.9, 1.4, ramp("GLASS"), 0.5);
+        }
+        scene.end(s);
+        s.clip_off();
+        let v = (town.speed * 10.0) as i32;
+        if let Some(seat) = seat {
+            let rpm = if town.speed > 0.0 { 1500.0 + (v % 110) as f64 * 50.0 } else { 900.0 };
+            self.draw_cockpit(s, seat, false, rpm, town.speed * 2.237, if town.speed > 8.0 { 6.0 } else { 0.0 }, if town.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, town.steer * 90.0, false);
+        } else {
+            self.panel(s, &map.title, &format!("{} mph", (town.speed * 2.237) as i32), "Arrows drive. Escape turns back.");
+        }
+        // Where there is to go, and how many blocks off it is.
+        for (n, (c, r, b)) in map.places().into_iter().enumerate().take(5) {
+            // Counted from the middle of its block, so the one you are beside is simply here.
+            let (dc, dr) = ((((c as f64 + 0.5) * p - town.x) / p).trunc() as i32, (((r as f64 + 0.5) * p - town.z) / p).trunc() as i32);
+            let far = |d: i32, plus: char, minus: char| if d == 0 { String::new() } else { format!(" {}{}", d.abs(), if d > 0 { plus } else { minus }) };
+            let name = b.name.clone().or_else(|| b.to.as_ref().and_then(|to| self.pack.manifest.places.get(to)).map(|pl| pl.title.clone())).unwrap_or_default();
+            let line = format!("{}{}{}", name.to_uppercase().chars().take(16).collect::<String>(), far(dr, 'N', 'S'), far(dc, 'E', 'W'));
+            s.text_sh(44, 18 + n as i32 * 9, &line, shade(ramp("WHITE"), 26), BLACK);
+        }
+        let gas = self.owned().map_or(0.0, |o| o.gas);
+        s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { shade(ramp("RED"), 27) } else { shade(ramp("WHITE"), 26) }, BLACK);
+        if let Some(b) = town.beside(map) {
+            let name = b.name.clone().or_else(|| b.to.as_ref().and_then(|to| self.pack.manifest.places.get(to)).map(|pl| pl.title.clone())).unwrap_or_default();
+            let words = format!("ENTER: {}", name.to_uppercase());
+            s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, &words, shade(ramp("GOLD"), 28), BLACK);
+        }
+        if town.crash > 0 {
+            s.vgrad(108, 50, 104, 22, ramp("RED"), 26, 16);
+            s.frame(108, 50, 104, 22, WHITE);
+            s.text_sh(136, 57, "CRASH!", WHITE, BLACK);
+        }
     }
 
     fn draw_over(&self, s: &mut Screen, kind: u8) {

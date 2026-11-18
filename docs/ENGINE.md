@@ -15,7 +15,7 @@ Pillow and numpy for the pack tool.
 
 ## What is in the engine so far
 
-Steps 1 to 4 of 5 are done. The engine plays a season out of a pack:
+All five steps are in the engine. The engine plays a season out of a pack:
 
 - **Places**: a picture or backdrop, your car standing in it, spots to pick, and buttons.
 - **The season**: so many days of so many hours. Reading the paper is an hour, bolting a part on
@@ -35,10 +35,15 @@ Steps 1 to 4 of 5 are done. The engine plays a season out of a pack:
   cabin is the pack's painting, with live needles, the gear in the gate and the wheel, and the
   road is drawn in depth beyond the glass. A car with no cockpit is raced from the side. The
   car's torque curve, gears, weight, grip and turbo are the pack's; the parts fitted change them.
+- **The town**: a map of blocks and streets, driven from the seat. Buildings are what the map
+  says they are; other cars are about; a list shows where there is to go and how many blocks off.
+  Pull up beside somewhere, press Enter, and you are in it, an hour later.
+- **Gas**: every car has a tank. Cruising burns it, a pass down the strip burns half a gallon,
+  and a dollar buys three gallons wherever the pack puts a pump. Run dry in town and you walk.
 - **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
 
-Not in the engine yet: the drive across town and gas. Those are in the C game, and are the
-rest of step 5.
+Everything the C game did is now in the engine, except its 3D car models: other cars in town
+are plain boxes, and a car ahead on the strip is a picture of its back.
 
 ## The workshop
 
@@ -148,6 +153,8 @@ transparent pixels stay clear.
   | `race` | race whoever has pulled in (the place needs `rival_at`) |
   | `next` | wave them on and see who else is about |
   | `solo` | a pass down the strip alone |
+  | `drive:<map>` | out onto that map, beside the block that leads back here |
+  | `gas` | fill the tank, a dollar for three gallons |
 
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
   picture does not show the thing itself.
@@ -222,6 +229,35 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   most money they will race for, `pinks` whether they will race for cars. The one with `king`
   must be last, races for cars only, and beating them wins the game.
 - **bets** and **paints** may be left out.
+- **cars** may have `"tank": 17`, in gallons. A small dial in the cockpit with `"reads": "gas"`
+  shows what is in it.
+
+### Maps
+
+```json
+"maps": {
+  "town": {
+    "title": "Town",
+    "rows": ["BOT.CB",
+             "G.BPOT",
+             "HCOB.S"],
+    "blocks": {
+      "B": { "wall": "BRICK", "height": 16 },
+      "H": { "wall": "WOOD", "height": 6, "to": "garage", "name": "Home" },
+      "S": { "to": "lot", "name": "The strip" },
+      "P": { "wall": "RED", "height": 5, "to": "station", "name": "Gas" }
+    },
+    "pitch": 64, "road": 8, "traffic": 8, "gas_per_km": 0.4
+  }
+}
+```
+
+Each letter of a row is a block, the top row being the north side; a full stop is grass. There
+is a street between every two blocks and one round the outside, and nothing beyond. A block has
+a `wall` colour and a `height` in metres, or neither for open ground. A block with `to` is
+somewhere to go: it gets an awning (or a gold lot, if nothing is built on it), it is on the list
+in the windscreen under `name`, and pulling up beside it and pressing Enter puts you in that
+place. `drive:<map>` from a place starts you beside the block that leads to it.
 
 A pack that names a picture it does not hold, a place that is not there, or a ramp that does not
 exist is refused, and the screen says which.
@@ -240,4 +276,5 @@ clear.
 3. ~~Parts, rivals and the paper as data, and the season's rules in the engine.~~
 4. ~~Under the hood as a place where parts come off bolt by bolt. Rooms with their spots
    drawn and edited in the workshop, and parts and rivals edited there too.~~
-5. ~~The view from the seat.~~ Maps: the town and the roads, and gas.
+5. ~~The view from the seat, the town as a map, and gas.~~ Still to come: a map and cockpit
+   editor in the workshop.
