@@ -517,7 +517,7 @@
           "rect": [
             4,
             178,
-            60,
+            50,
             18
           ],
           "label": "Race whoever this is",
@@ -527,9 +527,9 @@
         },
         {
           "rect": [
-            68,
+            56,
             178,
-            60,
+            50,
             18
           ],
           "label": "Wave them on: see who else is up here",
@@ -538,9 +538,9 @@
         },
         {
           "rect": [
-            132,
+            108,
             178,
-            60,
+            50,
             18
           ],
           "label": "A pass on your own",
@@ -550,14 +550,26 @@
         },
         {
           "rect": [
-            196,
+            160,
             178,
-            120,
+            70,
+            18
+          ],
+          "label": "Race them down the ridge road",
+          "do": "roadrace:ridge",
+          "button": "Ridge run",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            232,
+            178,
+            84,
             18
           ],
           "label": "Ridge road, back down to town",
           "do": "road:ridge",
-          "button": "Back to town",
+          "button": "To town",
           "needs_car": true
         }
       ]

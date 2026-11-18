@@ -16,7 +16,7 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
@@ -540,11 +540,11 @@ function roomsPanel() {
     const others = Object.entries(m.places).filter(([id]) => id !== at.place).map(([id, pl]) => [id, pl.title]);
     spots.append(h("div", { class: "card" },
       field("What it is called", s.label, (v) => { s.label = v; }, { maxlength: 38, id: "spotLabel" }),
-      choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v === "drive" ? "drive:" + (Object.keys(m.maps ?? {})[0] ?? "") : v === "road" ? "road:" + (Object.keys(m.roads ?? {})[0] ?? "") : v; }),
+      choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v === "drive" ? "drive:" + (Object.keys(m.maps ?? {})[0] ?? "") : v === "road" || v === "roadrace" ? v + ":" + (Object.keys(m.roads ?? {})[0] ?? "") : v; }),
       kind === "say" ? field("What it says", arg, (v) => { s.do = "say:" + v; }, { maxlength: 38, id: "spotSays" }) : null,
       kind === "go" ? choice("Where to", arg, others, (v) => { s.do = "go:" + v; }) : null,
       kind === "drive" ? choice("Which map", arg, Object.entries(m.maps ?? {}).map(([id, mp]) => [id, mp.title]), (v) => { s.do = "drive:" + v; }) : null,
-      kind === "road" ? choice("Which road", arg, Object.entries(m.roads ?? {}).map(([id, r]) => [id, r.title]), (v) => { s.do = "road:" + v; }) : null,
+      kind === "road" || kind === "roadrace" ? choice("Which road", arg, Object.entries(m.roads ?? {}).map(([id, r]) => [id, r.title]), (v) => { s.do = kind + ":" + v; }) : null,
       field("Draw it as a button with this word on it (blank: the picture shows it)", s.button, (v) => { if (v) s.button = v; else delete s.button; }, { maxlength: 9 }),
       tick("Only there when you have a car", s.needs_car, (v) => { if (v) s.needs_car = true; else delete s.needs_car; })));
   }
@@ -662,7 +662,7 @@ function roadsPanel() {
         at.road = id; at.stretch = 0; render();
       } }),
       at.road ? h("button", { text: "Remove this one", onclick: () => {
-        const from = Object.values(m.places).find((p) => p.spots.some((s) => s.do === "road:" + at.road));
+        const from = Object.values(m.places).find((p) => p.spots.some((s) => s.do === "road:" + at.road || s.do === "roadrace:" + at.road));
         if (from) return fail(`${from.title} has a way onto this road. Change that first.`);
         if (!confirm(`Remove ${road().title} from the pack?`)) return;
         for (const mp of Object.values(m.maps ?? {})) for (const b of Object.values(mp.blocks)) if (b.road === at.road) delete b.road;

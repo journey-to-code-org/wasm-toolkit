@@ -149,6 +149,8 @@ pub struct Game {
     /// when there is no turning back to where the day started.
     trip_from: Option<String>,
     town_by_road: bool,
+    /// The road the race being bet on is down, if it is not the strip.
+    road_race: Option<String>,
     pub net: Net,
     selling: bool,
     pub carrying: Option<Loose>,
@@ -183,7 +185,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, net: Net::default(), selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, net: Net::default(), selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -454,7 +456,17 @@ impl Game {
 
     fn act(&mut self, action: &str) {
         self.note = None;
-        if let Some(to) = action.strip_prefix("go:") {
+        self.road_race = None;
+        if let Some(road) = action.strip_prefix("roadrace:") {
+            if self.state.cur.is_none() {
+                self.no("You have nothing to race.");
+            } else if let Some(why) = self.cannot_race() {
+                self.no(&why);
+            } else {
+                self.road_race = Some(road.to_string());
+                self.scene = Scene::Bets;
+            }
+        } else if let Some(to) = action.strip_prefix("go:") {
             tone(520, 60);
             self.enter(&to.to_string());
         } else if let Some(words) = action.strip_prefix("say:") {
@@ -583,6 +595,9 @@ impl Game {
     // ---- Racing ----
 
     fn start_race(&mut self, rival_et: i32) {
+        if let Some(road) = self.road_race.take() {
+            return self.start_road_race(&road);
+        }
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let (gain, boost) = self.tune(o);
         let drive = self.tuned_drive(o, car);
@@ -800,10 +815,12 @@ impl Game {
             Scene::Bets => {
                 if back {
                     self.scene = Scene::Place;
+                    self.road_race = None;
                 } else if pick {
                     if let Some(b) = self.button(self.stakes().len() + 2) {
                         self.scene = Scene::Place;
                         self.offer_bet(b);
+                        self.road_race = None;
                     }
                 }
             }

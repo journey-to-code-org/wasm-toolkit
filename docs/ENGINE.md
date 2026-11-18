@@ -51,6 +51,7 @@ All five steps are in the engine. The engine plays a season out of a pack:
   beside them. Pass one well over the limit and he comes after you: stop and it is a ticket, or
   keep your foot in it and lose him. A bend taken too fast throws the car wide, and what is beside
   the road decides what that costs. A road takes hours off the day and gas out of the tank.
+  Rivals can be raced down one as well as on the strip.
 - **Gas**: every car has a tank. Cruising burns it, a pass down the strip burns half a gallon,
   and a dollar buys three gallons wherever the pack puts a pump. Run dry in town and you walk.
 - **The meet**: other people, to race. Whoever opens it is in a room with everyone else who
@@ -227,6 +228,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `solo` | a pass down the strip alone |
   | `drive:<map>` | out onto that map, beside the block that leads back here |
   | `road:<road>` | onto that road, from whichever of its ends this place is |
+  | `roadrace:<road>` | race whoever has pulled in down that road, for a bet |
   | `gas` | fill the tank, a dollar for three gallons |
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
@@ -409,6 +411,18 @@ The rules of the road:
   set out, unless you are being chased. A town you came to by road has no stepping back out of it:
   pull up somewhere.
 - It burns `gas_per_km` gallons a kilometre. Run dry and you walk home, as in town.
+- The car is the one in the bay: what its engine makes for what it weighs, with its parts and
+  its health, is how hard it pulls and how fast it will go, and its tyres are how much a bend
+  throws it. The default car with nothing done to it pulls 5 metres a second each second from
+  rest and runs out at 125 mph.
+
+**Racing down a road.** A spot that does `roadrace:<road>`, in a place where rivals pull in, is
+a race against whoever is there, bet on like a race on the strip: kicks, money, or cars. It is
+counted down from three, side by side; there are no police, the other cars are still about, and
+the first to the end wins. Escape, or running dry, loses it. How quick a rival is down a road
+comes from their `et`: one who runs the quarter in 12 is some way quicker than one who runs it
+in 17, and all of them lift for the bends. It takes two hours, as a race on the strip does, and
+you are back where you set out. Winning for money counts as beating them.
 
 A pack that names a picture it does not hold, a place that is not there, or a ramp that does not
 exist is refused, and the screen says which.
@@ -455,3 +469,4 @@ clear.
 6. ~~Racing other people on the strip.~~
 7. ~~Parts that change more than torque, engines that break, and an order to the work under the hood.~~
 8. ~~Roads out of town: bends, hills, traffic and police.~~
+9. ~~Racing rivals down a road, in a car that is as quick there as its parts make it.~~
