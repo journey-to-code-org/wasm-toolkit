@@ -7,7 +7,8 @@
 
 use crate::gfx::{ramp, shade, Screen, Tint, BLACK, WHITE};
 use crate::host::tone;
-use crate::pack::{Boost, Car, Pack, Part, Place, Rival, Spot};
+use crate::g3d::{Cam, Scene3, V3};
+use crate::pack::{Boost, Car, Cockpit, Dial, Pack, Part, Place, Rival, Spot};
 use crate::race::{Controls, Phase, Race, QUARTER};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -900,22 +901,28 @@ impl Game {
 
     // ---- Drawing ----
 
-    /// A car from the pack in a paint, its tyres on `ground`. Half size for one seen from further off.
-    fn draw_car(&self, s: &mut Screen, id: &str, paint: Option<&str>, lamps: bool, x: i32, ground: i32, half: bool) {
-        let Some(car) = self.pack.manifest.cars.get(id) else { return };
-        let name = if lamps { car.side_lamps.as_ref().unwrap_or(&car.side) } else { &car.side };
-        let Some(pic) = self.pack.pictures.get(name) else { return };
-        // The picture is painted in one colour; its paint ramps are moved to the car's own.
+    /// A car's picture is painted in one colour; this moves its paint ramps to the paint it is in,
+    /// `darker` shades down for the night.
+    fn tint(car: &Car, paint: Option<&str>, darker: i8) -> Tint {
         let mut tint = Tint::none();
         if let Some(paint) = paint.or(car.paint.as_deref()) {
             let to = ramp(paint) as u8;
             for (from, add) in [(&car.paint_ramps.mid, 0i8), (&car.paint_ramps.dark, -9), (&car.paint_ramps.light, 4), (&car.paint_ramps.glint, 2)] {
                 if let Some(from) = from {
                     tint.to[ramp(from)] = to;
-                    tint.add[ramp(from)] = add;
+                    tint.add[ramp(from)] = add - darker;
                 }
             }
         }
+        tint
+    }
+
+    /// A car from the pack in a paint, its tyres on `ground`. Half size for one seen from further off.
+    fn draw_car(&self, s: &mut Screen, id: &str, paint: Option<&str>, lamps: bool, x: i32, ground: i32, half: bool) {
+        let Some(car) = self.pack.manifest.cars.get(id) else { return };
+        let name = if lamps { car.side_lamps.as_ref().unwrap_or(&car.side) } else { &car.side };
+        let Some(pic) = self.pack.pictures.get(name) else { return };
+        let tint = Self::tint(car, paint, 0);
         if half {
             s.picture_half(pic, x, ground - (car.ground + 1) / 2, Some(&tint));
         } else {
@@ -1240,9 +1247,8 @@ impl Game {
         self.panel(s, "The yard", self.note.as_deref().or(worth.as_deref()).unwrap_or("Pick one to bring it into the bay."), "The gold one is in the bay. Escape.");
     }
 
-    /// The strip from the side, at night: your lane nearest, the tree, and the dash along the bottom.
-    fn draw_race(&self, s: &mut Screen) {
-        let Some(r) = &self.race else { return };
+    /// The strip from the side, for a car with no cockpit in the pack.
+    fn draw_race_side(&self, s: &mut Screen, r: &Race) {
         const PER_M: f64 = 27.0;
         const NOSE: i32 = 172;
         let at = |metres: f64| NOSE + ((metres - r.pos) * PER_M) as i32;
@@ -1292,22 +1298,6 @@ impl Game {
                 s.rect(290 + k * 12, 10 + row * 12, 8, 8, shade(ramp(name), if on { 29 } else { 5 }));
             }
         }
-        if !r.alone() && r.phase != Phase::Slip {
-            // Who is where: the two of you along a line the length of the strip.
-            s.rect(40, 12, 201, 1, shade(ramp("CHROME"), 12));
-            s.rect(240, 8, 1, 9, WHITE);
-            let mark = |pos: f64| 40 + ((pos / QUARTER).clamp(0.0, 1.0) * 200.0) as i32 - 2;
-            s.rect(mark(r.rival_pos), 13, 5, 3, shade(ramp(self.rival().and_then(|v| v.paint.as_deref()).unwrap_or("GREY")), 24));
-            s.rect(mark(r.pos), 8, 5, 3, shade(ramp(self.owned().and_then(|o| o.paint.as_deref()).unwrap_or("WHITE")), 26));
-        }
-        let say = match r.phase {
-            Phase::Stage => "ENTER TO STAGE",
-            Phase::Tree if r.gear == 0 => "HOLD UP FOR REVS. E ON THE GREEN.",
-            _ if r.red => "RED LIGHT",
-            _ => "",
-        };
-        s.text_sh(160 - say.len() as i32 * 4, 40, say, if r.red { shade(ramp("RED"), 28) } else { WHITE }, BLACK);
-
         // The dash: the tachometer as a bar with its red end, and what the car is doing.
         s.vgrad(0, 178, 320, 62, ramp("RUBBER"), 7, 2);
         s.frame(0, 178, 320, 62, shade(ramp("CHROME"), 16));
@@ -1333,6 +1323,35 @@ impl Game {
         s.text(141, 209, "SHIFT", if shift { WHITE } else { shade(ramp("RUBBER"), 10) });
         s.text(120, 224, "E UP  Q DOWN", shade(ramp("CHROME"), 14));
 
+        self.draw_race_over(s, r, 40);
+    }
+
+    fn draw_race(&self, s: &mut Screen) {
+        let Some(r) = &self.race else { return };
+        match self.car().and_then(|c| c.cockpit.as_ref()) {
+            Some(seat) => self.draw_race_seat(s, r, seat),
+            None => self.draw_race_side(s, r),
+        }
+    }
+
+    /// What is said over the race whichever way it is seen: who is where, what to do, and the timeslip.
+    fn draw_race_over(&self, s: &mut Screen, r: &Race, say_y: i32) {
+        if !r.alone() && r.phase != Phase::Slip {
+            // Who is where: the two of you along a line the length of the strip.
+            s.rect(40, 12, 201, 1, shade(ramp("CHROME"), 12));
+            s.rect(240, 8, 1, 9, WHITE);
+            let mark = |pos: f64| 40 + ((pos / QUARTER).clamp(0.0, 1.0) * 200.0) as i32 - 2;
+            s.rect(mark(r.rival_pos), 13, 5, 3, shade(ramp(self.rival().and_then(|v| v.paint.as_deref()).unwrap_or("GREY")), 24));
+            s.rect(mark(r.pos), 8, 5, 3, shade(ramp(self.owned().and_then(|o| o.paint.as_deref()).unwrap_or("WHITE")), 26));
+        }
+        let say = match r.phase {
+            Phase::Stage => "ENTER TO STAGE",
+            Phase::Tree if r.gear == 0 => "HOLD UP FOR REVS. E ON THE GREEN.",
+            _ if r.red => "RED LIGHT",
+            _ => "",
+        };
+        s.text_sh(160 - say.len() as i32 * 4, say_y, say, if r.red { shade(ramp("RED"), 28) } else { WHITE }, BLACK);
+
         if r.phase == Phase::Slip {
             // The timeslip.
             let (ink, red) = (shade(ramp("RUBBER"), 4), shade(ramp("RED"), 20));
@@ -1353,6 +1372,160 @@ impl Game {
             }
             s.text(100, 140, "ENTER", shade(ramp("BROWN"), 14));
         }
+    }
+
+    fn needle(s: &mut Screen, dial: &Dial, value: f64, top: f64) {
+        let a = (-140.6 + (value / top.max(1.0)).clamp(0.0, 1.0) * 281.2_f64).to_radians();
+        let [cx, cy] = dial.at;
+        let (ex, ey) = (cx + (a.sin() * dial.r as f64) as i32, cy - (a.cos() * dial.r as f64) as i32);
+        s.line(cx + 1, cy + 1, ex + 1, ey + 1, shade(ramp("RUBBER"), 1));
+        s.line(cx, cy, ex, ey, shade(ramp("ORANGE"), 27));
+        if dial.r > 10 {
+            let k = if ex > cx { 0 } else { 1 };
+            s.line(cx + k, cy + 1, ex + k, ey + 1, shade(ramp("RED"), 24));
+        }
+        s.disc(cx, cy, if dial.r > 10 { 2 } else { 1 }, shade(ramp("RUBBER"), 9));
+        s.pset(cx, cy - 1, shade(ramp("CHROME"), 24));
+    }
+
+    /// The view from the seat: the cabin is the pack's painting, and over it go the things that
+    /// move. Under it, through the glass, is the bonnet in the car's own paint.
+    #[allow(clippy::too_many_arguments)]
+    fn draw_cockpit(&self, s: &mut Screen, seat: &Cockpit, night: bool, rpm: f64, mph: f64, boost: f64, gear: usize, wheel: f64, shift: bool) {
+        let Some((o, car)) = self.owned().zip(self.car()) else { return };
+        let pic = |name: &Option<String>| name.as_ref().and_then(|n| self.pack.pictures.get(n));
+        if let Some(bonnet) = pic(&seat.bonnet) {
+            s.picture_tint(bonnet, 0, 0, Some(&Self::tint(car, o.paint.as_deref(), if night { 17 } else { 0 })));
+        }
+        let cabin = if night { pic(&seat.night) } else { None }.or_else(|| self.pack.pictures.get(&seat.picture));
+        if let Some(cabin) = cabin {
+            s.picture(cabin, 0, 0);
+        }
+        if let Some(d) = &seat.tach {
+            Self::needle(s, d, rpm, if d.max > 0.0 { d.max } else { 9000.0 });
+        }
+        if let Some(d) = &seat.speedo {
+            Self::needle(s, d, mph, if d.max > 0.0 { d.max } else { 160.0 });
+        }
+        if let Some(d) = &seat.boost {
+            Self::needle(s, d, boost, if d.max > 0.0 { d.max } else { 30.0 });
+        }
+        for d in &seat.minis {
+            Self::needle(s, d, d.value, 100.0);
+        }
+        if let Some([x, y]) = seat.shift_light {
+            s.disc(x, y, 3, shade(ramp("RUBBER"), 2));
+            s.disc(x, y, 2, shade(ramp("RED"), if shift { 30 } else { 5 }));
+            if shift {
+                s.pset(x - 1, y - 1, shade(ramp("WHITE"), 30));
+            }
+        }
+        if let Some([x, y]) = seat.gear_gate {
+            // The gear, lit in the gate: neutral in the middle, the gears in an H either side.
+            const GATE: [(i32, i32); 7] = [(0, 0), (-8, -7), (-8, 7), (0, -7), (0, 7), (8, -7), (8, 7)];
+            if let Some(&(dx, dy)) = GATE.get(gear) {
+                s.disc(x + dx, y + dy, 2, shade(ramp("ORANGE"), 28));
+                s.pset(x + dx, y + dy, shade(ramp("WHITE"), 31));
+            }
+        }
+        if let Some(w) = &seat.wheel {
+            let rim = if night { pic(&w.night) } else { None }.or_else(|| self.pack.pictures.get(&w.picture));
+            if let Some(rim) = rim {
+                s.spin(rim, w.at[0], w.at[1], wheel);
+            }
+        }
+    }
+
+    /// The strip from the seat, at night: two lanes, the walls, the floodlights and the tree.
+    fn draw_race_seat(&self, s: &mut Screen, r: &Race, seat: &Cockpit) {
+        let (view, horizon) = (seat.view_h, seat.view_h * 62 / 136);
+        let at = |x: f64, y: f64, z: f64| -> V3 { [x, y, z] };
+        s.vgrad(0, 0, 320, horizon, ramp("NAVY"), 1, 7);
+        s.vgrad(0, horizon, 320, view - horizon, ramp("ASPHALT"), 5, 10);
+        s.clip(0, 0, 320, view);
+        let cam = Cam { pos: [-3.0, 1.125, r.pos], yaw: 0.0, pitch: 0.0, focal: 200.0, cx: 160, cy: horizon };
+        let mut scene = Scene3::new(cam);
+        let (asphalt, rubber, white) = (ramp("ASPHALT"), ramp("RUBBER"), ramp("WHITE"));
+        let here = (r.pos / 20.0).floor() as i32 * 20;
+        let mut z = here - 20;
+        while z < here + 440 {
+            // Two lanes with a dark groove of rubber down each, a wall either side, and the stands behind.
+            let (z0, z1, lit) = (z as f64, z as f64 + 20.0, if z < 80 { 13 } else { 10 });
+            for k in [-1.0, 1.0] {
+                scene.poly(&[at(k * 6.0, 0.0, z0), at(0.0, 0.0, z0), at(0.0, 0.0, z1), at(k * 6.0, 0.0, z1)], shade(asphalt, lit), shade(asphalt, lit + 1), -4000.0);
+                scene.poly(&[at(k * 4.0, 0.0, z0), at(k * 2.0, 0.0, z0), at(k * 2.0, 0.0, z1), at(k * 4.0, 0.0, z1)], shade(rubber, lit - 3), shade(asphalt, lit - 3), -3900.0);
+                let board = ramp(match (z / 20).rem_euclid(4) { 0 => "BLUE", 2 => "RED", _ => "CONCRETE" });
+                scene.poly(&[at(k * 7.0, 0.0, z0), at(k * 7.0, 1.0, z0), at(k * 7.0, 1.0, z1), at(k * 7.0, 0.0, z1)], shade(board, 12), shade(board, 13), -3000.0);
+                if (0..200).contains(&z) && (z / 20) % 2 == 0 {
+                    let chrome = ramp("CHROME");
+                    scene.poly(&[at(k * 14.0, 0.0, z0), at(k * 26.0, 9.0, z0), at(k * 26.0, 9.0, z0 + 40.0), at(k * 14.0, 0.0, z0 + 40.0)], shade(chrome, 5), shade(chrome, 7), -3500.0);
+                }
+            }
+            scene.poly(&[at(-0.125, 0.0, z0), at(-0.125, 0.0, z1), at(0.125, 0.0, z1), at(0.125, 0.0, z0)], shade(white, 20), shade(white, 20), -3800.0);
+            z += 20;
+        }
+        for line in [0.0, QUARTER] {
+            scene.poly(&[at(-6.0, 0.0, line), at(6.0, 0.0, line), at(6.0, 0.0, line + 0.5), at(-6.0, 0.0, line + 0.5)], shade(white, 26), shade(white, 26), -3700.0);
+        }
+        // Whoever is in the other lane, from behind: where he is has to be worked out before the scene is spent.
+        let him = (!r.alone()).then(|| self.rival()).flatten().and_then(|rv| {
+            let (x, _, depth) = scene.point(at(3.0, 0.0, r.rival_pos - 2.0))?;
+            let (_, ground, _) = scene.point(at(3.0, 0.0, r.rival_pos - 2.0))?;
+            (depth < 260.0).then_some((rv, x, ground, depth))
+        });
+        let lights: Vec<_> = (0..8).flat_map(|i| [-1.0, 1.0].map(|k| (20.0 + i as f64 * 60.0, k))).filter_map(|(z, k)| Some((scene.point(at(k * 11.0, 0.0, z))?, scene.point(at(k * 11.0, 15.0, z))?))).collect();
+        let tree = scene.point(at(0.0, 0.0, 12.0)).zip(scene.point(at(0.0, 3.0, 12.0)));
+        scene.end(s);
+        if let Some((rv, x, ground, depth)) = him {
+            let car = self.pack.manifest.cars.get(&rv.car);
+            match car.and_then(|c| c.rear.as_ref()).and_then(|rear| Some((rear, self.pack.pictures.get(&rear.picture)?))) {
+                Some((rear, pic)) => {
+                    let w = (rear.width_m * cam.focal / depth) as i32;
+                    let h = w * pic.h / pic.w;
+                    let tint = car.map(|c| Self::tint(c, rv.paint.as_deref(), 6));
+                    s.picture_sized(pic, x - w / 2, ground - h, w, h, tint.as_ref());
+                }
+                None => {
+                    // No picture of its back: a plain shape in its paint, with two lamps.
+                    let w = (1.7 * cam.focal / depth) as i32;
+                    let (h, paint) = (w * 5 / 8, ramp(rv.paint.as_deref().unwrap_or("GREY")));
+                    s.vgrad(x - w / 2, ground - h, w, h, paint, 20, 8);
+                    s.rect(x - w / 2, ground - h * 2 / 5, w / 4, h / 8 + 1, shade(ramp("RED"), 22));
+                    s.rect(x + w / 2 - w / 4, ground - h * 2 / 5, w / 4, h / 8 + 1, shade(ramp("RED"), 22));
+                }
+            }
+        }
+        // The floodlights: a pole, a hot spot, and the flare it makes on a dirty windscreen.
+        for ((bx, by, depth), (tx, ty, _)) in lights {
+            let rad = (cam.focal * 0.69 / depth) as i32;
+            s.line(bx, by, tx, ty, shade(ramp("CHROME"), 6));
+            for f in 1..=3 {
+                let len = rad * 3 + 3 - f;
+                s.line(tx - len, ty, tx + len, ty, shade(white, 12 + f * 3));
+                s.line(tx, ty - len, tx, ty + len, shade(white, 12 + f * 3));
+            }
+            s.disc(tx, ty, rad + 1, shade(ramp("CREAM"), 28));
+            s.disc(tx, ty, rad, shade(white, 31));
+        }
+        // The tree, between the lanes just past the line.
+        if let Some(((sx, sy, depth), (_, ey, _))) = tree {
+            let unit = (cam.focal / depth) as i32;
+            let rad = unit * 12 / 100 + 1;
+            s.rect(sx - 1, ey, 3, sy - ey, shade(ramp("CHROME"), 8));
+            s.rect(sx - unit * 45 / 100, ey, unit * 90 / 100 + 1, unit * 2, shade(rubber, 3));
+            let light = r.light();
+            for row in 0..6 {
+                let y = ey + unit * (15 + row * 30) / 100;
+                let on = match row { 0 => r.phase != Phase::Stage, 1..=3 => r.phase == Phase::Tree && light == row - 1, 4 => light >= 3 && !r.red, _ => r.red };
+                let name = match row { 0 => "YELLOW", 1..=3 => "ORANGE", 4 => "LIME", _ => "RED" };
+                for k in [-1, 1] {
+                    s.disc(sx + k * unit * 22 / 100, y, if row == 0 { (rad + 1) / 2 } else { rad }, shade(ramp(name), if on { 29 } else { 5 }));
+                }
+            }
+        }
+        s.clip_off();
+        self.draw_cockpit(s, seat, true, r.rpm, r.v * 2.237, r.boost, r.gear, 0.0, r.rpm > r.redline() - 700.0 && r.phase == Phase::Run);
+        self.draw_race_over(s, r, seat.view_h * 92 / 136);
     }
 
     fn draw_over(&self, s: &mut Screen, kind: u8) {

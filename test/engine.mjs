@@ -64,7 +64,8 @@ async function play(shots, packBytes) {
   press(A);
   run(50, UP);
   shot("e10-tree");
-  const SHIFT_LIGHT = 208 * W + 121, LIT = 2 * 32 + 28, PAPER = 60 * W + 100;
+  // The shift light on the dash, and three places the timeslip covers with cream paper.
+  const SHIFT_LIGHT = 170 * W + 121, LIT = 2 * 32 + 30, PAPER = [60 * W + 96, 100 * W + 96, 100 * W + 224];
   run(1, UP | E); run(1, UP);
   let ticks = 0, slip = false, mid = false;
   for (; ticks < 1500 && !slip; ticks++) {
@@ -72,7 +73,7 @@ async function play(shots, packBytes) {
     run(1, lit ? UP | E : UP);
     if (lit) run(1, UP);
     if (ticks === 150 && !mid) { shot("e11-run"); mid = true; }
-    slip = (live()[PAPER] >> 5) === 25; // the timeslip is cream
+    slip = PAPER.every((p) => (live()[p] >> 5) === 25);
   }
   r.ticks = ticks;
   r.slip = screen(); shot("e12-slip");

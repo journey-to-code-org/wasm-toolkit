@@ -465,3 +465,46 @@ fn the_default_pack_is_a_ladder_that_can_be_climbed() {
     }
     assert!(r.phase == Phase::Slip && !r.won && r.et == 0, "he is long gone");
 }
+
+/// The default pack as the tool packs it, if it has been built (`make engine`).
+fn default_pack() -> Option<Vec<u8>> {
+    std::fs::read("../web/default.pack").ok()
+}
+
+#[test]
+fn the_race_is_seen_from_the_seat_when_the_car_has_a_cockpit() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut s = Screen::new();
+    g.seed(3);
+    g.tick(KEY_A, 0, 0);
+    g.tick(0, 0, 0);
+    g.state.cars.push(Owned::new("umbra", Some("RED".into()), 70));
+    g.state.cur = Some(0);
+    assert!(g.car().unwrap().cockpit.is_some());
+    // Out to the lot, and a race for kicks against whoever is there; then sit on the line while he goes.
+    click(&mut g, 270, 60);
+    g.who = 12;
+    click(&mut g, 40, 186);
+    click(&mut g, 30, 185);
+    assert_eq!(g.scene, Scene::Race);
+    g.tick(KEY_A, 0, 0);
+    for _ in 0..110 {
+        g.tick(0, 0, 0);
+    }
+    g.draw(&mut s);
+    let paint = ramp(g.rival().unwrap().paint.as_deref().unwrap()) as u16;
+    let seen = (0..136).flat_map(|y| (160..320).map(move |x| (x, y))).filter(|&(x, y)| s.at(x, y) >> 5 == paint).count();
+    assert!(seen > 30, "he is ahead in the other lane, in his own paint ({seen} pixels)");
+    assert!((0..320).any(|x| s.at(x, 120) >> 5 == ramp("RED") as u16), "your bonnet is in your paint");
+    if let Ok(dir) = std::env::var("SHOTS") {
+        let mut out = b"P6 320 240 255\n".to_vec();
+        out.extend(s.fb.iter().flat_map(|&c| { let v = s.pal[c as usize]; [v as u8, (v >> 8) as u8, (v >> 16) as u8] }));
+        std::fs::write(format!("{dir}/seat-rival.ppm"), out).unwrap();
+    }
+    // A car with no cockpit is raced from the side, as before.
+    g.pack.manifest.cars.get_mut("umbra").unwrap().cockpit = None;
+    g.draw(&mut s);
+    assert_eq!(s.at(300, 230) >> 5, ramp("RUBBER") as u16, "the side view's dash is along the bottom");
+}

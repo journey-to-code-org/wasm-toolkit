@@ -41,6 +41,8 @@ pub struct Picture {
     pub w: i32,
     pub h: i32,
     pub runs: Vec<(u16, u16)>,
+    /// The same picture a pixel at a time, for turning and scaling it.
+    pub ix: Vec<u16>,
 }
 
 impl Picture {
@@ -53,7 +55,11 @@ impl Picture {
         let runs: Vec<(u16, u16)> = words[2..].chunks_exact(2).map(|p| (p[0], p[1])).collect();
         let (w, h) = (words[0] as i32, words[1] as i32);
         let total: i64 = runs.iter().map(|r| r.0 as i64).sum();
-        (total == w as i64 * h as i64).then_some(Picture { w, h, runs })
+        if total != w as i64 * h as i64 {
+            return None;
+        }
+        let ix = runs.iter().flat_map(|&(n, c)| std::iter::repeat_n(c, n as usize)).collect();
+        Some(Picture { w, h, runs, ix })
     }
 }
 
@@ -71,11 +77,21 @@ impl Tint {
         }
         Tint { to, add: [0; 32] }
     }
+
+    pub fn apply(&self, value: u16) -> u16 {
+        if value < 32 {
+            return value;
+        }
+        let r = (value >> 5) as usize;
+        shade(self.to[r] as usize, (value & 31) as i32 + self.add[r] as i32)
+    }
 }
 
 pub struct Screen {
     pub fb: Vec<u16>,
     pub pal: Vec<u32>,
+    /// Drawing is kept inside this box: left, top, right, bottom.
+    clip: [i32; 4],
 }
 
 impl Default for Screen {
@@ -105,15 +121,24 @@ impl Screen {
         for (i, c) in EGA.iter().enumerate() {
             pal[i] = rgb(c[0] as i32, c[1] as i32, c[2] as i32);
         }
-        Screen { fb: vec![0; (W * H) as usize], pal }
+        Screen { fb: vec![0; (W * H) as usize], pal, clip: [0, 0, W, H] }
     }
 
     pub fn clear(&mut self, c: u16) {
         self.fb.fill(c);
     }
 
+    /// Keep drawing inside a box, and let it out again.
+    pub fn clip(&mut self, x: i32, y: i32, w: i32, h: i32) {
+        self.clip = [x.max(0), y.max(0), (x + w).min(W), (y + h).min(H)];
+    }
+
+    pub fn clip_off(&mut self) {
+        self.clip = [0, 0, W, H];
+    }
+
     pub fn pset(&mut self, x: i32, y: i32, c: u16) {
-        if x >= 0 && x < W && y >= 0 && y < H {
+        if x >= self.clip[0] && x < self.clip[2] && y >= self.clip[1] && y < self.clip[3] {
             self.fb[(y * W + x) as usize] = c;
         }
     }
@@ -123,9 +148,105 @@ impl Screen {
     }
 
     pub fn rect(&mut self, x: i32, y: i32, w: i32, h: i32, c: u16) {
-        for j in y.max(0)..(y + h).min(H) {
-            for i in x.max(0)..(x + w).min(W) {
+        for j in y.max(self.clip[1])..(y + h).min(self.clip[3]) {
+            for i in x.max(self.clip[0])..(x + w).min(self.clip[2]) {
                 self.fb[(j * W + i) as usize] = c;
+            }
+        }
+    }
+
+    pub fn line(&mut self, mut x0: i32, mut y0: i32, x1: i32, y1: i32, c: u16) {
+        let (dx, sx) = ((x1 - x0).abs(), if x0 < x1 { 1 } else { -1 });
+        let (dy, sy) = (-(y1 - y0).abs(), if y0 < y1 { 1 } else { -1 });
+        let mut err = dx + dy;
+        for _ in 0..4096 {
+            self.pset(x0, y0, c);
+            if x0 == x1 && y0 == y1 {
+                break;
+            }
+            let e2 = 2 * err;
+            if e2 >= dy {
+                err += dy;
+                x0 += sx;
+            }
+            if e2 <= dx {
+                err += dx;
+                y0 += sy;
+            }
+        }
+    }
+
+    /// A filled shape with no dents in it, in two colours chequered (the same twice for a flat one).
+    pub fn poly(&mut self, pts: &[(i32, i32)], a: u16, b: u16) {
+        let top = pts.iter().map(|p| p.1).min().unwrap_or(0).max(self.clip[1]);
+        let bottom = pts.iter().map(|p| p.1).max().unwrap_or(-1).min(self.clip[3] - 1);
+        if top > bottom {
+            return;
+        }
+        let rows = (bottom - top + 1) as usize;
+        let (mut lo, mut hi) = (vec![i32::MAX; rows], vec![i32::MIN; rows]);
+        let mut mark = |y: i32, x: i32| {
+            let r = (y - top) as usize;
+            lo[r] = lo[r].min(x);
+            hi[r] = hi[r].max(x);
+        };
+        for i in 0..pts.len() {
+            let ((mut x0, mut y0), (mut x1, mut y1)) = (pts[i], pts[(i + 1) % pts.len()]);
+            if y0 > y1 {
+                std::mem::swap(&mut x0, &mut x1);
+                std::mem::swap(&mut y0, &mut y1);
+            }
+            if y0 == y1 {
+                if y0 >= top && y0 <= bottom {
+                    mark(y0, x0);
+                    mark(y0, x1);
+                }
+                continue;
+            }
+            let step = (x1 - x0) as f64 / (y1 - y0) as f64;
+            for y in y0.max(top)..=y1.min(bottom) {
+                mark(y, (x0 as f64 + step * (y - y0) as f64 + 0.5).floor().clamp(-32000.0, 32000.0) as i32);
+            }
+        }
+        for (r, (&l, &h)) in lo.iter().zip(&hi).enumerate() {
+            let y = top + r as i32;
+            for x in l.max(self.clip[0])..=h.min(self.clip[2] - 1) {
+                self.fb[(y * W + x) as usize] = if (x + y) & 1 == 0 { a } else { b };
+            }
+        }
+    }
+
+    /// A square picture turned about its middle, which goes at (cx, cy). The angle is in degrees.
+    pub fn spin(&mut self, pic: &Picture, cx: i32, cy: i32, degrees: f64) {
+        let (s, c) = degrees.to_radians().sin_cos();
+        let half = pic.w / 2;
+        for dy in -half..half {
+            for dx in -half..half {
+                // Where this pixel came from, before the turn.
+                let sx = half + (dx as f64 * c + dy as f64 * s + 0.5).floor() as i32;
+                let sy = half + (dy as f64 * c - dx as f64 * s + 0.5).floor() as i32;
+                if sx < 0 || sy < 0 || sx >= pic.w || sy >= pic.h {
+                    continue;
+                }
+                let v = pic.ix[(sy * pic.w + sx) as usize];
+                if v != CLEAR {
+                    self.pset(cx + dx, cy + dy, v);
+                }
+            }
+        }
+    }
+
+    /// A picture drawn `w` by `h`, whatever size it is: for something seen from a distance.
+    pub fn picture_sized(&mut self, pic: &Picture, x: i32, y: i32, w: i32, h: i32, tint: Option<&Tint>) {
+        if w <= 0 || h <= 0 {
+            return;
+        }
+        for j in 0..h {
+            for i in 0..w {
+                let v = pic.ix[((j * pic.h / h) * pic.w + i * pic.w / w) as usize];
+                if v != CLEAR {
+                    self.pset(x + i, y + j, tint.map_or(v, |t| t.apply(v)));
+                }
             }
         }
     }

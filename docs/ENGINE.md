@@ -31,12 +31,14 @@ Steps 1 to 4 of 5 are done. The engine plays a season out of a pack:
 - **The yard**: up to sixteen cars; bring one into the bay or sell it to the dealer.
 - **Rivals**: they pull in one at a time, in the pack's order. Race for kicks, for money up to
   what each will take, or for cars. Beating one for money or better brings out the next.
-- **The strip**: the quarter mile from the side, with the pack's car pictures. The car's torque
-  curve, gears, weight, grip and turbo are the pack's; the parts fitted change them.
+- **The strip**: the quarter mile from the seat, for a car with a cockpit in the pack: the
+  cabin is the pack's painting, with live needles, the gear in the gate and the wheel, and the
+  road is drawn in depth beyond the glass. A car with no cockpit is raced from the side. The
+  car's torque curve, gears, weight, grip and turbo are the pack's; the parts fitted change them.
 - **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
 
-Not in the engine yet: the view from the seat, the drive across town and gas. Those are in the
-C game, and come with step 5.
+Not in the engine yet: the drive across town and gas. Those are in the C game, and are the
+rest of step 5.
 
 ## The workshop
 
@@ -192,6 +194,27 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 - **cars** may have `"hood": { "picture": "bay.pic", "slots": { "Intake": [56, 98, 42, 52] } }`:
   the engine bay, up to 320x176, and where each slot's part sits on it (x, y, width, height).
   The floor under it shows up to eight loose parts.
+- **cars** may have a `cockpit`, the view from the seat, and a `rear`, the car from behind for
+  when it is ahead of you:
+
+  ```json
+  "cockpit": {
+    "picture": "cockpit.pic", "night": "cockpit-night.pic", "bonnet": "bonnet.pic", "view_h": 136,
+    "tach": { "at": [95, 170], "r": 17, "max": 9000 },
+    "speedo": { "at": [145, 170], "r": 17, "max": 160 },
+    "boost": { "at": [27, 96], "r": 9, "max": 30 },
+    "minis": [{ "at": [120, 151], "r": 4, "value": 46 }],
+    "shift_light": [120, 170], "gear_gate": [286, 224],
+    "wheel": { "picture": "wheel.pic", "night": "wheel-night.pic", "at": [120, 216] }
+  },
+  "rear": { "picture": "rear.pic", "width_m": 1.7 }
+  ```
+
+  `picture` is the cabin, 320 by 240, with the glass left clear; `view_h` is how far down the
+  view out goes. `bonnet` is drawn under it in the car's paint, using the car's `paint_ramps`.
+  Each dial is where its needle turns, the needle's length and what it reads at full sweep;
+  `minis` are dials that only sit there. The wheel is a square picture turned about `at`.
+  Everything but `picture` may be left out.
 - **parts**: one part to a `slot`; the slots are whatever the parts name. `torque` is a
   percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
   At most 14 parts.
@@ -217,4 +240,4 @@ clear.
 3. ~~Parts, rivals and the paper as data, and the season's rules in the engine.~~
 4. ~~Under the hood as a place where parts come off bolt by bolt. Rooms with their spots
    drawn and edited in the workshop, and parts and rivals edited there too.~~
-5. Maps: the town and the roads, the view from the seat, and gas.
+5. ~~The view from the seat.~~ Maps: the town and the roads, and gas.

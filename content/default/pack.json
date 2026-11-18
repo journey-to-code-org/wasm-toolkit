@@ -46,6 +46,74 @@
             56
           ]
         }
+      },
+      "cockpit": {
+        "picture": "cockpit.pic",
+        "night": "cockpit-night.pic",
+        "bonnet": "bonnet.pic",
+        "view_h": 136,
+        "tach": {
+          "at": [
+            95,
+            170
+          ],
+          "r": 17,
+          "max": 9000
+        },
+        "speedo": {
+          "at": [
+            145,
+            170
+          ],
+          "r": 17,
+          "max": 160
+        },
+        "boost": {
+          "at": [
+            27,
+            96
+          ],
+          "r": 9,
+          "max": 30
+        },
+        "minis": [
+          {
+            "at": [
+              120,
+              151
+            ],
+            "r": 4,
+            "value": 46
+          },
+          {
+            "at": [
+              120,
+              189
+            ],
+            "r": 4,
+            "value": 70
+          }
+        ],
+        "shift_light": [
+          120,
+          170
+        ],
+        "gear_gate": [
+          286,
+          224
+        ],
+        "wheel": {
+          "picture": "wheel.pic",
+          "night": "wheel-night.pic",
+          "at": [
+            120,
+            216
+          ]
+        }
+      },
+      "rear": {
+        "picture": "rear.pic",
+        "width_m": 1.7
       }
     },
     "umbra-base": {
@@ -122,6 +190,74 @@
             36
           ]
         }
+      },
+      "cockpit": {
+        "picture": "cockpit.pic",
+        "night": "cockpit-night.pic",
+        "bonnet": "bonnet.pic",
+        "view_h": 136,
+        "tach": {
+          "at": [
+            95,
+            170
+          ],
+          "r": 17,
+          "max": 9000
+        },
+        "speedo": {
+          "at": [
+            145,
+            170
+          ],
+          "r": 17,
+          "max": 160
+        },
+        "boost": {
+          "at": [
+            27,
+            96
+          ],
+          "r": 9,
+          "max": 30
+        },
+        "minis": [
+          {
+            "at": [
+              120,
+              151
+            ],
+            "r": 4,
+            "value": 46
+          },
+          {
+            "at": [
+              120,
+              189
+            ],
+            "r": 4,
+            "value": 70
+          }
+        ],
+        "shift_light": [
+          120,
+          170
+        ],
+        "gear_gate": [
+          286,
+          224
+        ],
+        "wheel": {
+          "picture": "wheel.pic",
+          "night": "wheel-night.pic",
+          "at": [
+            120,
+            216
+          ]
+        }
+      },
+      "rear": {
+        "picture": "rear.pic",
+        "width_m": 1.7
       }
     }
   },
