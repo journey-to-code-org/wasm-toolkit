@@ -31,6 +31,27 @@ worth buying. Other makers' big names of the era get the same treatment: a kind 
 
 A body is a table of cross-sections (`games/shootout/cars.c`), so a new car is a dozen lines.
 
+## What it is built from
+
+The design is taken from the games themselves, by way of people who took them apart. Nothing is
+copied from them: these are read to learn how the originals behaved, and ours is written fresh.
+
+| For | Read | Licence |
+| --- | --- | --- |
+| The garage, the paper, the drive-in, bets, the season | `kylofon/street-rod-sdl3`, `port/spec/game_flow.md`, `garage.md`, `race.md` | MIT |
+| Driving from the seat: stages, radar, police, gas | `kylofon/testdrive-enhanced` | MIT |
+| Open 3D roads: fog, night, draw distance | `kylofon/testdrive3-enhanced`, `ENHANCED.md` | MIT |
+| A real city with traffic and routes | `Vesuri/vette`, `docs/` | none found: read only |
+
+What follows Street Rod so far: $750 and no car at the start, a new game opening on the paper,
+one hour for each thing you do and twelve hours to the day, a season that ends on day 91, going
+broke with no car and too little to buy one, rivals in rising order with a King last, bets of
+kicks, $10, $25, $50, $100 or pink slips that the other driver may refuse, and kicks not counting.
+
+Where it differs for now: one car at a time (theirs was sixteen), a car won for pink slips is sold
+for cash on the spot, there are nine rivals not twenty-two, no gas, no road race, no name on a
+licence, and no saving.
+
 ## Done
 
 - [x] The toolkit: screen, drawing, dither, font, fixed-point maths, 3D with near clipping and
@@ -43,6 +64,9 @@ A body is a table of cross-sections (`games/shootout/cars.c`), so a new car is a
       five gears and a redline, and a timeslip. The torque curve is read off a real dyno sheet
       (Rix Racing: 314 lb-ft, 292 hp at the wheels). Alone against the clock for now.
 - [x] The DSM mark, on the garage wall and the timeslip.
+- [x] The season: cash, the calendar, used cars in the paper, trading yours in, and three endings.
+- [x] The lot: nine regulars who pull up in order, bets they can refuse, pink slips, and a race in
+      the other lane with a timeslip for both.
 - [x] Working on the car: under the hood, four parts each held by four bolts. Undo them, lift the
       part off, set another on, do them up. The car will not start until it is back together.
 - [x] The paper on the bench sells the better parts for cash; a clean pass at the strip pays a
@@ -66,14 +90,14 @@ The cockpit is painted; these are still drawn from boxes at run time and look it
 
 ### 1. The garage game (Street Rod)
 
-- [ ] The paper: classifieds for cars and for parts, bought with cash, a new paper each day.
+- [x] The paper: classifieds for cars and for parts, bought with cash, a new paper each day.
 - [ ] Parts are things: bought, carried home, on the floor until fitted.
 - [ ] The rest of what is under the hood: cam, plugs, oil, the head; and wrenches you have to own.
 - [ ] Under the car: transmission, tyres, with the jack.
 - [ ] Tuning by hand: timing and mixture, with the engine telling you when it is wrong.
 - [ ] Paint, stickers, chopping the top.
 - [ ] Fuel, and a pump.
-- [ ] Days, cash, and the save.
+- [ ] The save, a garage of several cars, and keeping a car you win.
 
 The rules for all of this exist already, in TypeScript, in open.games (`pinkslipscars`,
 `pinkslipsgarage`): the cars, the parts, oil, mixture, wear, tools, Rix Racing, the scrappers.
@@ -82,10 +106,10 @@ They are whole-number and deterministic, so they port to C line for line. Port, 
 ### 2. The meet (Street Rod)
 
 - [ ] The drive-in: cars pull through one at a time; look one over, wave it on or challenge it.
-- [ ] The bet: for fun, for cash, or for the car.
+- [x] The bet: for fun, for cash, or for the car.
 - [ ] The drag against someone: the other lane, and blown engines.
 - [ ] The road race out of town, with the law.
-- [ ] The one to beat, at the end.
+- [x] The one to beat, at the end.
 
 ### 3. The drive (Test Drive)
 

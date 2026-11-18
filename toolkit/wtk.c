@@ -204,6 +204,19 @@ void wtk_rle(const u16 *data, int x, int y, int dim) {
   }
 }
 
+void wtk_rle_tint(const u16 *data, int x, int y, const u8 to[32], const signed char add[32]) {
+  int w = data[0], h = data[1], i = 0, n = w * h;
+  for (const u16 *p = data + 2; i < n; p += 2) {
+    int count = p[0];
+    if (p[1] != 0xFFFF) {
+      int ramp = p[1] >> 5;
+      col c = ramp ? wtk_shade(to[ramp], (p[1] & 31) + add[ramp]) : p[1];
+      for (int k = 0; k < count; k++) wtk_pset(x + (i + k) % w, y + (i + k) / w, c);
+    }
+    i += count;
+  }
+}
+
 void wtk_spin(const col *px, int size, int cx, int cy, int angle, int dim) {
   fx s = fx_sin(angle), c = fx_cos(angle);
   int half = size / 2;
