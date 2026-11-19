@@ -499,6 +499,16 @@ have is drawn as a plain shape. The timeslip is taken at its word, so this is fo
 nothing stops a changed page from sending a time it did not run. Only kicks and money are raced
 for online, not cars.
 
+**Down a road.** When the pack has roads, the screen where a dare's stake is picked has a
+"Where" box: picking it goes round the strip and each road. A dare down a road carries `road`
+(its name in the pack) and `seed` (a number the other cars on it are dealt from, so both see
+the same ones). Someone whose pack has no such road passes. Both drive the road from its first
+end, each in their own engine: `staged` is sent on arriving at the line, the count from three
+starts when the other's has been heard, `pos` carries `x` across the road as well, and `slip`
+carries the time taken as `et`. The quicker time wins; the other car is shown where it last
+said it was and cannot be run into. There are no police and no nitrous. Whoever is first waits
+up to four minutes at the far end for the other.
+
 ## The file
 
 `WPK1`, a u32 count, then for each file: u16 name length, the name, u32 length, the bytes. All
@@ -517,4 +527,5 @@ clear.
 6. ~~Racing other people on the strip.~~
 7. ~~Parts that change more than torque, engines that break, and an order to the work under the hood.~~
 8. ~~Roads out of town: bends, hills, traffic and police.~~
+10. ~~Racing other people down a road.~~
 9. ~~Racing rivals down a road, in a car that is as quick there as its parts make it.~~

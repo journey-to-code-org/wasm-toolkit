@@ -61,6 +61,9 @@ pub struct Versus {
     him_v: f64,
     sent_slip: bool,
     waited: u32,
+    /// The road it is down, if it is not the strip, and how long it took you, in thousandths of a second.
+    pub road: Option<String>,
+    mine: i32,
 }
 
 #[derive(Default)]
@@ -77,6 +80,13 @@ pub struct Net {
     pub dare_in: Option<(u32, i32)>,
     pub versus: Option<Versus>,
     picked: Option<u32>,
+    /// Where a dare is for: 0 the strip, or one of the pack's roads, counted from 1.
+    pub course: usize,
+    /// The road of the dare made, of the dare made to you, and of the race about to start, each
+    /// with the number the other cars on it are dealt from, so both see the same ones.
+    road_out: Option<(String, u32)>,
+    road_in: Option<(String, u32)>,
+    road_now: Option<(String, u32)>,
 }
 
 /// Who wins, from the two timeslips. Leaving before the green loses; both doing it is no race.
@@ -240,6 +250,10 @@ impl Game {
                 let stake = whole(v, "stake").and_then(|s| i32::try_from(s).ok()).unwrap_or(-1);
                 let fair = stake == 0 || self.stakes().contains(&stake);
                 let free = self.scene == Scene::Online && self.net.versus.is_none() && self.net.dare_in.is_none() && self.net.dare_out.is_none();
+                // Down a road, if it is one this pack has too.
+                let road = words(v, "road", 40);
+                let fair = fair && road.as_ref().is_none_or(|r| self.pack.manifest.roads.contains_key(r));
+                self.net.road_in = road.map(|r| (r, whole(v, "seed").unwrap_or(1) as u32));
                 if fair && free && self.state.cash >= stake && self.cannot_race().is_none() {
                     self.net.dare_in = Some((from, stake));
                     self.note = None;
@@ -250,6 +264,7 @@ impl Game {
             }
             "ok" => {
                 if let Some((_, stake)) = self.net.dare_out.filter(|d| d.0 == from) {
+                    self.net.road_now = self.net.road_out.take();
                     self.start_versus(from, stake);
                 }
             }
@@ -268,6 +283,10 @@ impl Game {
             "staged" if racing => self.net.versus.as_mut().unwrap().him_staged = true,
             "pos" if racing => {
                 let (p, speed) = (v.get("p").and_then(|p| p.as_f64()).unwrap_or(0.0), v.get("v").and_then(|p| p.as_f64()).unwrap_or(0.0));
+                let x = v.get("x").and_then(|p| p.as_f64()).filter(|x| x.is_finite()).unwrap_or(-0.5);
+                if let Some(r) = self.trip.as_mut().and_then(|t| t.rival.as_mut()).filter(|r| r.remote && p.is_finite() && speed.is_finite()) {
+                    (r.z, r.speed, r.x) = (p.clamp(0.0, 40000.0), speed.clamp(0.0, 120.0), x.clamp(-2.2, 2.2));
+                }
                 if p.is_finite() && speed.is_finite() {
                     if let Some(race) = self.race.as_mut() {
                         race.rival_pos = p.clamp(0.0, QUARTER * 3.0);
@@ -288,6 +307,9 @@ impl Game {
     }
 
     fn start_versus(&mut self, id: u32, stake: i32) {
+        if let Some((road, seed)) = self.net.road_now.take() {
+            return self.start_versus_road(id, stake, &road, seed);
+        }
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let (gain, boost) = self.tune(o);
         let drive = self.tuned_drive(o, car);
@@ -297,15 +319,146 @@ impl Game {
         self.race = Some(race);
         self.net.dare_in = None;
         self.net.dare_out = None;
-        self.net.versus = Some(Versus { id, stake, me_staged: false, him_staged: false, him: None, him_gone: false, result: None, him_v: 0.0, sent_slip: false, waited: 0 });
+        self.net.versus = Some(Versus { id, stake, me_staged: false, him_staged: false, him: None, him_gone: false, result: None, him_v: 0.0, sent_slip: false, waited: 0, road: None, mine: 0 });
         self.note = None;
         self.scene = Scene::Race;
+    }
+
+    /// Down a road with someone: each drives it in their own engine, among the same other cars,
+    /// and the quicker time wins. They are shown where they last said they were.
+    fn start_versus_road(&mut self, id: u32, stake: i32, road: &str, seed: u32) {
+        let Some(r) = self.pack.manifest.roads.get(road) else { return };
+        let mut r = r.clone();
+        r.cops = 0;
+        let mut trip = crate::road::Trip::new(road, &r, false, seed);
+        trip.pace = self.pace();
+        let mut them = crate::road::Rival::new(14.0, self.person(id).and_then(|p| p.paint.as_deref()).unwrap_or("RED"));
+        them.remote = true;
+        trip.rival = Some(them);
+        // Nobody moves until both are on the line; then it is counted down.
+        trip.hold = i32::MAX / 2;
+        self.trip = Some(trip);
+        self.trip_from = None;
+        self.net.dare_in = None;
+        self.net.dare_out = None;
+        self.net.versus = Some(Versus { id, stake, me_staged: true, him_staged: false, him: None, him_gone: false, result: None, him_v: 0.0, sent_slip: false, waited: 0, road: Some(road.to_string()), mine: 0 });
+        self.send(json!({ "t": "staged", "to": id }));
+        self.note = None;
+        self.scene = Scene::Road;
+    }
+
+    /// A thirtieth of a second of a race down a road with someone.
+    pub(super) fn versus_road_tick(&mut self, keys: u32, hit: u32) {
+        let Some((trip, vs)) = self.trip.as_mut().zip(self.net.versus.as_mut()) else { return };
+        let Some(road) = self.pack.manifest.roads.get(&trip.road) else { return };
+        let to = vs.id;
+        if hit & KEY_B != 0 && vs.result.is_none() {
+            tone(0, 0);
+            self.send(json!({ "t": "quit", "to": to }));
+            return self.finish_versus(Outcome::Lost, "You backed out. Pay the man.");
+        }
+        if vs.him_gone && vs.him.is_none() {
+            tone(0, 0);
+            return self.finish_versus(Outcome::Won, "They are gone. That is a win.");
+        }
+        if vs.him_staged && trip.hold > 90 {
+            trip.hold = 90;
+        }
+        let mut out: Vec<Value> = Vec::new();
+        let (mut crashed, mut went, mut dry) = (false, 0.0, false);
+        if !vs.sent_slip {
+            let counting = trip.hold;
+            trip.spray = 0.0;
+            let h = trip.tick(road, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
+            (crashed, went) = (h.crashed, h.went);
+            if h.crashed {
+                tone(70, 500);
+            } else if counting > 0 && counting <= 90 {
+                if counting % 30 == 0 {
+                    tone(440, 120);
+                } else if counting == 1 {
+                    tone(880, 250);
+                }
+            } else if trip.crash == 0 && counting == 0 {
+                let v = (trip.speed * 10.0) as i32;
+                tone(if trip.speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 }, 60);
+            }
+            if counting == 0 && self.ticks % 5 == 0 {
+                out.push(json!({ "t": "pos", "to": to, "p": (trip.z * 10.0).round() / 10.0, "v": (trip.speed * 10.0).round() / 10.0, "x": (trip.x * 100.0).round() / 100.0 }));
+            }
+            if h.arrived {
+                // Over the line: what it took goes to them, and theirs is waited for.
+                vs.sent_slip = true;
+                vs.mine = (trip.clock as f64 * 1000.0 / 30.0) as i32;
+                trip.speed = 0.0;
+                tone(990, 200);
+                out.push(json!({ "t": "slip", "to": to, "rt": 0, "et": vs.mine, "mph": 0, "red": false }));
+            }
+            dry = went > 0.0 && self.state.cur.and_then(|i| self.state.cars.get(i)).is_some_and(|o| o.gas <= went / 1000.0 * road.gas_per_km);
+        } else if vs.result.is_none() {
+            vs.waited += 1;
+            let me = Slip { rt: 0, et: vs.mine, red: false };
+            vs.result = match vs.him {
+                Some(him) => Some(decide(me, him)),
+                // Gone, or four minutes behind: the road was yours.
+                None if vs.him_gone || vs.waited > PATIENCE * 6 => Some(Outcome::Won),
+                None => None,
+            };
+        }
+        let per_km = road.gas_per_km;
+        let done = (hit & KEY_A != 0).then_some(vs.result).flatten();
+        let stake = vs.stake;
+        for message in out {
+            self.send(message);
+        }
+        self.burn(went / 1000.0 * per_km);
+        if crashed {
+            if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+                o.cond = (o.cond - 3).max(25);
+            }
+        }
+        if dry {
+            tone(0, 0);
+            self.send(json!({ "t": "quit", "to": to }));
+            return self.finish_versus(Outcome::Lost, "Out of gas. That is their race.");
+        }
+        if let Some(outcome) = done {
+            tone(0, 0);
+            let why = match (outcome, stake) {
+                (Outcome::Won, 0) => "You won. It was for kicks.".to_string(),
+                (Outcome::Won, s) => format!("You won ${s}."),
+                (Outcome::Lost, 0) => "You lost. It was for kicks.".to_string(),
+                (Outcome::Lost, s) => format!("You lost ${s}."),
+                (Outcome::NoRace, _) => "A dead heat. Nobody pays.".to_string(),
+            };
+            self.finish_versus(outcome, &why);
+        }
+    }
+
+    /// What is said across the windscreen in a race down a road with someone.
+    pub(super) fn versus_road_says(&self) -> Option<&'static str> {
+        let (vs, trip) = self.net.versus.as_ref().zip(self.trip.as_ref())?;
+        vs.road.as_ref()?;
+        Some(match vs.result {
+            Some(Outcome::Won) => "YOU WIN. ENTER.",
+            Some(Outcome::Lost) => "YOU LOSE. ENTER.",
+            Some(Outcome::NoRace) => "A DEAD HEAT. ENTER.",
+            None if vs.sent_slip => "THERE. WAITING FOR THEM.",
+            None if trip.hold > 90 => "WAITING FOR THEM TO LINE UP",
+            None => return None,
+        })
+    }
+
+    /// The roads a dare can be down, in the pack's order.
+    pub(super) fn courses(&self) -> Vec<(&String, &crate::pack::Road)> {
+        self.pack.manifest.roads.iter().collect()
     }
 
     /// The race is over: the money moves, two hours are gone, and you are back among the others.
     fn finish_versus(&mut self, outcome: Outcome, why: &str) {
         let Some(vs) = self.net.versus.take() else { return };
         self.race = None;
+        self.trip = None;
         self.scene = Scene::Online;
         match outcome {
             Outcome::Won => self.state.cash += vs.stake,
@@ -328,6 +481,7 @@ impl Game {
         if let Some((from, stake)) = self.net.dare_in {
             if pick {
                 self.send(json!({ "t": "ok", "to": from }));
+                self.net.road_now = self.net.road_in.take();
                 self.start_versus(from, stake);
             } else if back {
                 self.send(json!({ "t": "no", "to": from }));
@@ -366,6 +520,10 @@ impl Game {
         };
         if back {
             self.scene = Scene::Online;
+        } else if pick && (150..166).contains(&self.py) && !self.pack.manifest.roads.is_empty() {
+            // Where: the strip, or one of the roads, round and round.
+            self.net.course = (self.net.course + 1) % (self.pack.manifest.roads.len() + 1);
+            tone(520, 50);
         } else if pick {
             if let Some(b) = self.button(stakes.len() + 1) {
                 let stake = if b == 0 { 0 } else { stakes[b - 1] };
@@ -374,7 +532,13 @@ impl Game {
                     return self.no("You don't have that kind of dough.");
                 }
                 self.net.dare_out = Some((to, stake));
-                self.send(json!({ "t": "dare", "to": to, "stake": stake }));
+                let road = self.net.course.checked_sub(1).and_then(|i| self.pack.manifest.roads.keys().nth(i)).cloned();
+                let seed = self.rand() & 0xFFFFF;
+                self.net.road_out = road.clone().map(|r| (r, seed));
+                match road {
+                    Some(road) => self.send(json!({ "t": "dare", "to": to, "stake": stake, "road": road, "seed": seed })),
+                    None => self.send(json!({ "t": "dare", "to": to, "stake": stake })),
+                }
                 self.note = None;
             }
         }
@@ -515,10 +679,21 @@ impl Game {
             let mut labels = vec!["KICKS".to_string()];
             labels.extend(self.stakes().iter().map(|b| format!("${b}")));
             self.buttons(s, &labels);
+            if !self.pack.manifest.roads.is_empty() {
+                let on = (150..166).contains(&self.py);
+                let place = self.net.course.checked_sub(1).and_then(|i| self.courses().get(i).map(|c| c.1.title.to_uppercase())).unwrap_or_else(|| "THE STRIP".into());
+                s.vgrad(4, 150, 312, 16, ramp(if on { "GOLD" } else { "NAVY" }), if on { 26 } else { 12 }, if on { 18 } else { 5 });
+                s.frame(4, 150, 312, 16, shade(ramp("CHROME"), if on { 28 } else { 14 }));
+                s.text(10, 154, &format!("WHERE: {place}. PICK TO CHANGE.").chars().take(37).collect::<String>(), if on { BLACK } else { WHITE });
+            }
             let name = self.net.picked.map(|id| self.name_of(id)).unwrap_or_default();
             self.panel(s, &name, "What are we racing for?", "Escape: never mind");
         } else if let Some((from, stake)) = self.net.dare_in {
-            self.panel(s, &self.name_of(from), &format!("Dares you, {}.", money(stake)), "Enter takes it. Escape passes.");
+            let foot = match self.net.road_in.as_ref().and_then(|r| self.pack.manifest.roads.get(&r.0)) {
+                Some(road) => format!("Down {}. Enter: yes. Esc: no.", road.title).chars().take(38).collect::<String>(),
+                None => "Enter takes it. Escape passes.".to_string(),
+            };
+            self.panel(s, &self.name_of(from), &format!("Dares you, {}.", money(stake)), &foot);
         } else if let Some((to, stake)) = self.net.dare_out {
             self.panel(s, &self.name_of(to), &format!("You dared them, {}.", money(stake)), "Waiting. Escape calls it off.");
         } else {

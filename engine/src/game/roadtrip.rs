@@ -369,7 +369,7 @@ impl Game {
             on_road(o.z, o.lane, o.speed < 0.0, o.paint, 0, None);
         }
         if let Some(r) = &trip.rival {
-            on_road(r.z, r.x, false, &r.paint, 0, self.rival().and_then(|x| cars.get(&x.car)));
+            on_road(r.z, r.x, false, &r.paint, 0, self.opponent().and_then(|x| cars.get(&x.0)));
         }
         for c in &trip.cops {
             on_road(c.z, 1.3, false, "RUBBER", 1, None);
@@ -391,11 +391,14 @@ impl Game {
         s.text_sh(44, 27, &if left >= 1000.0 { format!("{:.1} KM TO GO", left / 1000.0) } else { format!("{} M TO GO", left as i32 / 10 * 10) }, white, BLACK);
         if let Some(r) = &trip.rival {
             // No law out tonight: only who is in front, and by how much.
-            let (gap, name) = ((r.z - trip.z) as i32, self.rival().map_or("THEM".to_string(), |x| x.name.to_uppercase()));
+            let (gap, name) = ((r.z - trip.z) as i32, self.opponent().map_or("THEM".to_string(), |x| x.2.to_uppercase().chars().take(12).collect()));
             let words = if gap > 2 { format!("{name} +{gap} M") } else if gap < -2 { format!("{name} {gap} M") } else { format!("{name} LEVEL") };
             s.text_sh(44, 36, &words.chars().take(24).collect::<String>(), if gap > 2 { red } else { gold }, BLACK);
-            if trip.hold > 0 {
-                let n = format!("{}", trip.hold / 30 + 1);
+            if let Some(words) = self.versus_road_says() {
+                s.text_sh(160 - words.len() as i32 * 4, 60, words, gold, BLACK);
+            }
+            if trip.hold > 0 && trip.hold <= 90 {
+                let n = format!("{}", (trip.hold - 1) / 30 + 1);
                 s.text_big(150, 50, &n, BLACK, 4);
                 s.text_big(148, 48, &n, gold, 4);
             }

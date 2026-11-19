@@ -86,13 +86,15 @@ pub struct Rival {
     pub top: f64,
     pub accel: f64,
     pub paint: String,
+    /// Someone real, driving their own car somewhere else: they are only shown where they say they are.
+    pub remote: bool,
 }
 
 impl Rival {
     /// Off the line beside you, in the other lane, in a car that runs the quarter in `et` seconds.
     pub fn new(et: f64, paint: &str) -> Rival {
         let quick = 14.0 / et.clamp(8.0, 30.0);
-        Rival { z: 0.0, x: -0.5, speed: 0.0, top: (56.0 * quick.powf(1.3)).clamp(30.0, 76.0), accel: (5.0 * quick * quick).clamp(2.5, 9.0), paint: paint.to_string() }
+        Rival { z: 0.0, x: -0.5, speed: 0.0, top: (56.0 * quick.powf(1.3)).clamp(30.0, 76.0), accel: (5.0 * quick * quick).clamp(2.5, 9.0), paint: paint.to_string(), remote: false }
     }
 }
 
@@ -135,6 +137,8 @@ pub struct Trip {
     /// A race: who against, and how many ticks until the off.
     pub rival: Option<Rival>,
     pub hold: i32,
+    /// Ticks since the off.
+    pub clock: u32,
     rng: u32,
 }
 
@@ -162,7 +166,7 @@ impl Trip {
             y += p.hill;
         }
         let len = segs.len() as f64 * SEG;
-        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, rival: None, hold: 0, rng: seed | 1 };
+        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, rival: None, hold: 0, clock: 0, rng: seed | 1 };
         for i in 0..road.traffic {
             let z = 80.0 + (trip.rand() % (len - 80.0).max(1.0) as u32) as f64;
             let other = trip.other(z, i);
@@ -214,7 +218,12 @@ impl Trip {
             self.hold -= 1;
             return out;
         }
-        if let Some(mut r) = self.rival.take() {
+        self.clock += 1;
+        if let Some(r) = self.rival.as_mut().filter(|r| r.remote) {
+            // Between hearing where they are, they carry on as they were.
+            r.z += r.speed / HZ;
+        }
+        if let Some(mut r) = self.rival.take_if(|r| !r.remote) {
             // They lift for a bend they can see, and no more than they have to.
             let bend = self.seg(r.z).curve.abs().max(self.seg(r.z + 40.0).curve.abs());
             let want = r.top * (1.0 - 0.42 * bend);
@@ -273,7 +282,7 @@ impl Trip {
                 self.others[i] = self.other(ahead, i);
             }
         }
-        if let Some(r) = self.rival.as_mut() {
+        if let Some(r) = self.rival.as_mut().filter(|r| !r.remote) {
             let gap = r.z - self.z;
             if gap > -1.0 && gap < 4.5 && (r.x - self.x).abs() < 0.38 {
                 hit = true;
