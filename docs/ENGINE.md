@@ -62,6 +62,8 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Day and night**: the last third of each day is dusk and then dark, on the road and in town:
   the sky goes, the country beyond the lamps is dim, other cars are their lights, and the dash
   is lit if the cockpit has a night picture.
+- **Nitrous**: a kit is a part and a bottle. The bottle is filled where the pack says, lasts
+  seconds, and is more power while the button is held.
 - **The rollers**: the power and torque of the car in the bay as curves, against the car as
   it left the factory, with what it weighs, what it should run the quarter in, how fast it is on
   a road, and what it is worth.
@@ -252,6 +254,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
+  | `nitrous` | fill the bottle of the nitrous kit on the car in the bay |
   | `dyno` | the rollers: the power and torque of the car in the bay, drawn and in numbers |
 
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
@@ -347,6 +350,11 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   less than nothing saves weight), `gears` and `final` (a gearbox in place of the car's own) and
   `redline` (a built engine's). `"curve": [[1000, 120], [4000, 300], [7000, 240]]` is a different
   engine altogether: its torque curve, in place of the car's. `"radar": true` makes it a radar detector for the road.
+  `"nitrous": { "gain": 35, "seconds": 8, "fill": 20 }` makes it a nitrous kit: while N (or
+  Shift, or the N2O button on a phone) is held with the throttle down, the engine makes that
+  much more, on the strip in gear above 2,500 rpm and on a road. A full bottle lasts that many
+  seconds, a kit comes empty, and a spot that does `nitrous` fills it for `fill` dollars. It is
+  not used when racing other people at the meet.
   `"side": "wing.pic"` is what it looks like on the car from the side: a picture the size of
   the car's own side picture, drawn over it in the garage, the yard and on the strip. Its clear
   pixels leave the car showing, so it can be only the wing, or the whole car again with the wing on.

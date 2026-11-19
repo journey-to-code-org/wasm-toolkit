@@ -21,7 +21,7 @@
   #pad .back { left: 1.5%; top: 2%; width: 14%; height: 10%; }
   #pad .fresh { right: 1.5%; top: 2%; width: 26%; height: 10%; }
   #pad .l1 { left: 1.5%; bottom: 2.5%; } #pad .l2 { left: 20%; bottom: 2.5%; }
-  #pad .r1 { right: 1.5%; bottom: 2.5%; } #pad .r2 { right: 20%; bottom: 2.5%; }
+  #pad .r1 { right: 1.5%; bottom: 2.5%; } #pad .r2 { right: 20%; bottom: 2.5%; } #pad .r3 { right: 1.5%; bottom: 20%; height: 11%; }
   #pad .gas { height: 24%; }
   @media (pointer: coarse) { #pad { display: block; } canvas { cursor: auto; } }
 </style>
@@ -38,6 +38,7 @@
     <button data-key="KeyE" data-in="2" class="l2" aria-label="Shift up">E &#9650;</button>
     <button data-key="ArrowDown" data-in="3" class="r2">Brake</button>
     <button data-key="ArrowUp" data-in="23" class="r1 gas">Gas</button>
+    <button data-key="KeyN" data-in="23" class="r3" aria-label="Nitrous">N2O</button>
   </div>
 </div>
 <script type="module">

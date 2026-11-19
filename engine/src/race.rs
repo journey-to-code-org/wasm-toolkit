@@ -36,9 +36,16 @@ pub struct Controls {
     pub stage: bool,
     pub up: bool,
     pub down: bool,
+    /// The button on the wheel: nitrous, if there is a bottle and something in it.
+    pub nitrous: bool,
 }
 
 pub struct Race {
+    /// Nitrous: how much more it makes while it sprays (0.35 is 35 per cent), the seconds left in
+    /// the bottle, and whether it is spraying now.
+    pub shot: f64,
+    pub bottle: f64,
+    pub spraying: bool,
     drive: Drive,
     /// Torque as a fraction of what the car makes stock and healthy.
     gain: f64,
@@ -81,6 +88,7 @@ impl Race {
     /// `boost` is the turbo fitted, if it is not the car's own. `rival_et` of 0 is a pass alone.
     pub fn new(drive: &Drive, gain: f64, boost: Option<Boost>, rival_et: i32, rival_rt: i32) -> Race {
         Race {
+            shot: 0.0, bottle: 0.0, spraying: false,
             stock_psi: drive.boost.as_ref().map(|b| b.psi).unwrap_or(1.0),
             boost_kind: boost.or_else(|| drive.boost.clone()),
             drive: drive.clone(), gain,
@@ -200,6 +208,7 @@ impl Race {
             return;
         }
         let mut push;
+        self.spraying = false;
         // Held flat against the limiter in gear, an engine does not last: a second and a half of it,
         // and something lets go. Shifting, or lifting, gives it back.
         if c.throttle && self.rpm >= self.drive.redline && self.phase == Phase::Run {
@@ -219,7 +228,13 @@ impl Race {
             // Off boost a turbo engine makes under half of what it makes on it.
             let part = if self.boost_kind.is_some() { 0.45 + 0.55 * self.boost / self.stock_psi } else { 1.0 };
             let force = self.torque(self.rpm) * TO_NM * self.ratio() / WHEEL_RADIUS * DRIVELINE;
-            push = (force / (self.drive.weight_lb * KG) * self.gain * part).min(self.drive.grip);
+            // The bottle only opens in gear with the engine pulling: sprayed low down it would go bang.
+            self.spraying = c.nitrous && self.shot > 0.0 && self.bottle > 0.0 && self.gear > 0 && self.rpm > 2500.0;
+            let more = if self.spraying { 1.0 + self.shot } else { 1.0 };
+            if self.spraying {
+                self.bottle = (self.bottle - 1.0 / HZ).max(0.0);
+            }
+            push = (force / (self.drive.weight_lb * KG) * self.gain * part * more).min(self.drive.grip);
         } else {
             push = -1.0;
         }

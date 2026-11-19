@@ -54,6 +54,23 @@ pub struct Rebuild {
     pub cond: i32,
 }
 
+#[derive(Deserialize, Clone, Debug, PartialEq)]
+pub struct Nitrous {
+    pub gain: i32,
+    #[serde(default = "bottle")]
+    pub seconds: f64,
+    /// What a fill costs.
+    #[serde(default = "fill")]
+    pub fill: i32,
+}
+
+fn bottle() -> f64 {
+    8.0
+}
+fn fill() -> i32 {
+    20
+}
+
 /// What a respray costs, and how many hours it takes.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
@@ -159,6 +176,10 @@ pub struct Part {
     /// pound-feet, rising, as for a car.
     #[serde(default)]
     pub curve: Vec<[f64; 2]>,
+    /// A nitrous kit: how much more the engine makes while it sprays, as a percentage, and how
+    /// many seconds a full bottle lasts.
+    #[serde(default)]
+    pub nitrous: Option<Nitrous>,
     /// A radar detector: it warns of police ahead on a road.
     #[serde(default)]
     pub radar: bool,
@@ -644,7 +665,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 15] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno"];
+pub const ACTIONS: [&str; 16] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 
@@ -730,6 +751,9 @@ impl Pack {
             }
             if part.curve.len() == 1 || part.curve.windows(2).any(|w| w[1][0] <= w[0][0]) || part.curve.iter().any(|p| p[1] <= 0.0) {
                 return Err(format!("the part {id} has a torque curve that is not rising pairs of rpm and torque"));
+            }
+            if part.nitrous.as_ref().is_some_and(|n| n.gain < 1 || n.gain > 200 || n.seconds <= 0.0 || n.seconds > 60.0 || n.fill < 0) {
+                return Err(format!("the part {id} is a nitrous kit that has to add 1 to 200 per cent, for up to a minute"));
             }
             if let Some(name) = &part.side {
                 need(&format!("the part {id}"), name)?;

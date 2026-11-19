@@ -16,7 +16,7 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
@@ -886,6 +886,11 @@ function partsPanel() {
           field("A final drive", p.final, (v) => { if (v > 0) p.final = v; else delete p.final; }, { type: "number", step: "0.01" }),
           field("A different engine: its torque curve, as rpm:torque pairs", (p.curve ?? []).map((c) => c.join(":")).join(" "), (v) => { const c = v.split(/[\s,]+/).map((x) => x.split(":").map(Number)).filter((x) => x.length === 2 && x[0] > 0 && x[1] > 0).sort((a, b) => a[0] - b[0]); if (c.length > 1) p.curve = c; else delete p.curve; }, { placeholder: "1000:120 3000:260 5000:300 7000:240" }),
           field("A redline, rpm (a built engine)", p.redline, (v) => { if (v > 0) p.redline = v; else delete p.redline; }, { type: "number", step: 100 }))),
+      tick("It is a nitrous kit: N sprays it, on the strip and on a road", !!p.nitrous, (v) => { if (v) p.nitrous = { gain: 35, seconds: 8, fill: 20 }; else delete p.nitrous; }),
+      p.nitrous ? h("div", { class: "three" },
+        field("More power, per cent", p.nitrous.gain, (v) => { p.nitrous.gain = Math.max(1, Math.min(200, Math.floor(v ?? 35))); }, { type: "number", min: 1, max: 200 }),
+        field("A bottle lasts, seconds", p.nitrous.seconds, (v) => { p.nitrous.seconds = Math.max(1, Math.min(60, v ?? 8)); }, { type: "number", min: 1, max: 60 }),
+        field("A fill costs", p.nitrous.fill ?? 20, (v) => { p.nitrous.fill = Math.max(0, Math.floor(v ?? 20)); }, { type: "number", min: 0 })) : null,
       tick("It is a radar detector: it beeps when police are ahead on a road", !!p.radar, (v) => { if (v) p.radar = true; else delete p.radar; }),
       tick("It is a turbo, and replaces the car's own", !!p.boost, (v) => { if (v) p.boost = { from: 3000, psi: 27, lag: 10 }; else delete p.boost; }),
       p.boost ? h("div", { class: "three" },

@@ -30,6 +30,8 @@ pub const KEY_B: u32 = 32;
 /// E and Q: up a gear and down one.
 pub const KEY_X: u32 = 64;
 pub const KEY_Y: u32 = 128;
+/// N: the button on the wheel.
+pub const KEY_N: u32 = 256;
 
 /// The most cars you can keep.
 pub const MOST_CARS: usize = 16;
@@ -53,6 +55,9 @@ pub struct Owned {
     /// Gallons in the tank.
     #[serde(default = "some_gas")]
     pub gas: f64,
+    /// Seconds of nitrous left in the bottle, if it has a kit.
+    #[serde(default)]
+    pub bottle: f64,
 }
 
 fn some_gas() -> f64 {
@@ -61,7 +66,7 @@ fn some_gas() -> f64 {
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0 }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0 }
     }
 
     /// Which of a slot's `n` bolts are tight, a bit apiece.
@@ -254,6 +259,18 @@ impl Game {
 
     pub fn day(&self) -> i32 {
         self.state.hours / self.pack.manifest.season.hours_per_day + 1
+    }
+
+    /// The nitrous kit on a car, if it has one.
+    pub fn kit(&self, o: &Owned) -> Option<&crate::pack::Nitrous> {
+        o.fitted.values().filter_map(|id| self.part(id)).find_map(|p| p.nitrous.as_ref())
+    }
+
+    /// What is left in the bottle after a run goes back in the car.
+    pub(crate) fn keep_bottle(&mut self, left: f64) {
+        if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+            o.bottle = o.bottle.min(left.max(0.0));
+        }
     }
 
     /// The colours a car can be had in, or sprayed.
@@ -581,6 +598,20 @@ impl Game {
                 }
                 "yard" => self.scene = Scene::Yard,
                 "online" => self.go_online(),
+                "nitrous" => {
+                    let Some((kit, cur)) = self.owned().and_then(|o| self.kit(o)).cloned().zip(self.state.cur) else { return self.no("There is no bottle on this car.") };
+                    if self.state.cars[cur].bottle >= kit.seconds - 0.05 {
+                        return self.say("The bottle is full.");
+                    }
+                    if self.state.cash < kit.fill {
+                        return self.no(&format!("A fill is ${}. You don't have it.", kit.fill));
+                    }
+                    self.state.cash -= kit.fill;
+                    self.state.cars[cur].bottle = kit.seconds;
+                    self.say(&format!("A full bottle: {:.0} seconds. That was ${}.", kit.seconds, kit.fill));
+                    tone(700, 80);
+                    self.save();
+                }
                 "dyno" => {
                     if let Some(why) = self.wont_run() {
                         return self.no(&why);
@@ -672,9 +703,14 @@ impl Game {
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let (gain, boost) = self.tune(o);
         let drive = self.tuned_drive(o, car);
+        let spray = self.kit(o).map(|kit| (kit.gain as f64 / 100.0, o.bottle));
         let rt = 280 + (self.rand() % 260) as i32;
         self.burn(0.5);
-        self.race = Some(Race::new(&drive, gain, boost, rival_et, rt));
+        let mut race = Race::new(&drive, gain, boost, rival_et, rt);
+        if let Some(spray) = spray {
+            (race.shot, race.bottle) = spray;
+        }
+        self.race = Some(race);
         self.scene = Scene::Race;
     }
 
@@ -1241,11 +1277,14 @@ impl Game {
         // Backing out of a race is losing it.
         if hit & KEY_B != 0 {
             tone(0, 0);
+            let left = race.bottle;
+            self.keep_bottle(left);
             return self.settle((!alone).then_some(false));
         }
         if race.phase == Phase::Slip && hit & KEY_A != 0 {
-            let (won, blown) = (race.won, race.blown);
+            let (won, blown, left) = (race.won, race.blown, race.bottle);
             tone(0, 0);
+            self.keep_bottle(left);
             self.settle((!alone).then_some(won));
             if blown {
                 self.blew();
@@ -1253,7 +1292,7 @@ impl Game {
             return;
         }
         let was = race.phase;
-        race.tick(Controls { throttle: keys & KEY_UP != 0, stage: hit & KEY_A != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0 });
+        race.tick(Controls { throttle: keys & KEY_UP != 0, stage: hit & KEY_A != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0, nitrous: keys & KEY_N != 0 });
         if was != Phase::Slip && race.phase == Phase::Slip {
             tone(990, 200);
         } else if was == Phase::Stage && race.phase == Phase::Tree {
@@ -1759,8 +1798,21 @@ impl Game {
         self.draw_race_over(s, r, 40);
     }
 
+    /// What is in the bottle, written where the gas is on a road: gold while it sprays.
+    pub(crate) fn draw_bottle(&self, s: &mut Screen, y: i32, left: f64, spraying: bool) {
+        if self.owned().is_some_and(|o| self.kit(o).is_some()) {
+            let c = if spraying { shade(ramp("GOLD"), 28) } else if left <= 0.0 { shade(ramp("RED"), 27) } else { shade(ramp("CYAN"), 26) };
+            s.text_sh(216, y, &format!("N2O {left:.1}"), c, BLACK);
+        }
+    }
+
     fn draw_race(&self, s: &mut Screen) {
         let Some(r) = &self.race else { return };
+        self.draw_race_view(s, r);
+        self.draw_bottle(s, 30, r.bottle, r.spraying);
+    }
+
+    fn draw_race_view(&self, s: &mut Screen, r: &Race) {
         match self.car().and_then(|c| c.cockpit.as_ref()) {
             Some(seat) => self.draw_race_seat(s, r, seat),
             None => self.draw_race_side(s, r),
