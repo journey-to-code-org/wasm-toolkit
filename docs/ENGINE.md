@@ -27,7 +27,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
   or off is an hour, a race is two, a pass alone is one. It ends when the days run out, when you
   have no car and no way to buy one, or when you beat the one to beat.
 - **The paper**: three cars a day picked from the pack's cars, in differing paint and health,
-  and every part in the pack.
+  and every part in the pack. A car's price can be haggled over: "Haggle" in the corner of
+  its ad asks for five per cent more off. Every seller has a floor between five and twenty-five
+  per cent that they do not tell you; ask past it and they hang up, and the car is gone.
 - **Under the hood**: a picture of the engine bay with the parts as places on it. A part is
   held by four bolts: undo them, lift it off, pick another up off the floor, set it down, and do
   the bolts up. A car with something off or loose will not race.

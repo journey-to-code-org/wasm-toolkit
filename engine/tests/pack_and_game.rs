@@ -1392,3 +1392,41 @@ fn space_shifts_and_some_days_it_rains() {
     click(&mut g, 20, 10);
     g.draw(&mut s);
 }
+
+#[test]
+fn a_car_in_the_paper_can_be_haggled_over() {
+    let mut g = game();
+    click(&mut g, 140, 10);
+    click(&mut g, 200, 40);
+    assert_eq!(g.scene, Scene::Paper(0));
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    // Every ad: ask until they hang up. Each yes is five per cent off the price in the ad, and no seller goes past a quarter.
+    for i in 0..3 {
+        let list = g.offers()[i].as_ref().unwrap().price;
+        let mut yeses = 0;
+        loop {
+            click(&mut g, 270, 54 + i as i32 * 44 + 36);
+            match &g.offers()[i] {
+                Some(o) => {
+                    yeses += 1;
+                    assert_eq!(o.price, list * (100 - yeses * 5) / 100);
+                    assert_eq!(g.note, Some(format!("\"All right. ${}.\"", o.price)));
+                }
+                None => break,
+            }
+            assert!(yeses <= 5);
+        }
+        assert!((1..=5).contains(&yeses), "everyone gives something: {yeses}");
+        assert_eq!(g.note.as_deref(), Some("\"Forget it.\" He hung up."));
+    }
+    assert_eq!((g.state.cash, g.state.cars.len()), (1000, 1), "asking costs nothing, and buys nothing");
+    // The next day's ads are at the price they are printed at.
+    g.state.hours = 4;
+    assert!(g.offers().iter().all(|o| o.is_some()));
+    // Picking the rest of an ad still buys it, at what it was talked down to.
+    click(&mut g, 270, 54 + 36);
+    let price = g.offers()[0].as_ref().unwrap().price;
+    click(&mut g, 100, 60);
+    assert_eq!((g.state.cash, g.state.cars.len()), (1000 - price, 2));
+}
