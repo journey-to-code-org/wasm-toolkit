@@ -143,6 +143,18 @@ impl Screen {
         }
     }
 
+    /// Take a box of the screen down so many shades: the dark coming on.
+    pub fn darken(&mut self, x: i32, y: i32, w: i32, h: i32, by: u16) {
+        for py in y..y + h {
+            for px in x..x + w {
+                let c = self.at(px, py);
+                if c >= 32 {
+                    self.pset(px, py, (c & !31) | (c & 31).saturating_sub(by).max(1));
+                }
+            }
+        }
+    }
+
     pub fn at(&self, x: i32, y: i32) -> u16 {
         self.fb[(y * W + x) as usize]
     }

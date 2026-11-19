@@ -441,6 +441,9 @@ pub struct Place {
     pub rival_at: Option<[i32; 2]>,
     #[serde(default)]
     pub spots: Vec<Spot>,
+    /// Out of doors: it gets dark here when the day does.
+    #[serde(default)]
+    pub outdoors: bool,
     /// Whoever else is standing about: pictures, each with the x of its left edge and the y of its feet.
     #[serde(default)]
     pub people: Vec<Stand>,
@@ -665,7 +668,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 16] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous"];
+pub const ACTIONS: [&str; 17] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 

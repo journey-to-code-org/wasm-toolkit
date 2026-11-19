@@ -374,7 +374,7 @@
           "rect": [
             4,
             3,
-            66,
+            54,
             16
           ],
           "label": "Have the engine rebuilt",
@@ -384,27 +384,38 @@
         },
         {
           "rect": [
-            72,
+            60,
             3,
-            66,
+            54,
             16
           ],
           "label": "A respray: any colour you like",
           "do": "paint",
-          "button": "Respray",
+          "button": "Paint",
           "needs_car": true
         },
         {
           "rect": [
-            140,
+            116,
             3,
-            66,
+            54,
             16
           ],
           "label": "The rollers: what it makes",
           "do": "dyno",
           "button": "Dyno",
           "needs_car": true
+        },
+        {
+          "rect": [
+            172,
+            3,
+            54,
+            16
+          ],
+          "label": "Bed: sleep until morning",
+          "do": "sleep",
+          "button": "Sleep"
         }
       ]
     },
@@ -490,7 +501,8 @@
           "do": "go:garage",
           "button": "Home"
         }
-      ]
+      ],
+      "outdoors": true
     },
     "station": {
       "title": "The gas station",
@@ -535,7 +547,8 @@
           "do": "drive:town",
           "button": "Drive off"
         }
-      ]
+      ],
+      "outdoors": true
     },
     "overlook": {
       "title": "The overlook",
@@ -608,7 +621,8 @@
           "button": "To town",
           "needs_car": true
         }
-      ]
+      ],
+      "outdoors": true
     }
   },
   "season": {

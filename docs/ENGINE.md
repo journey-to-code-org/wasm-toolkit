@@ -60,7 +60,7 @@ All five steps are in the engine. The engine plays a season out of a pack:
   when both have staged, and the winner is worked out from the two timeslips. It needs a server
   to hold the room: see [The meet](#the-meet).
 - **Day and night**: the last third of each day is dusk and then dark, on the road and in town:
-  the sky goes, the country beyond the lamps is dim, other cars are their lights, and the dash
+  the sky goes, places marked as out of doors darken, the country beyond the lamps is dim, other cars are their lights, and the dash
   is lit if the cockpit has a night picture.
 - **Nitrous**: a kit is a part and a bottle. The bottle is filled where the pack says, lasts
   seconds, and is more power while the button is held.
@@ -254,12 +254,14 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
+  | `sleep` | bed: the rest of today is gone and it is morning |
   | `nitrous` | fill the bottle of the nitrous kit on the car in the bay |
   | `dyno` | the rollers: the power and torque of the car in the bay, drawn and in numbers |
 
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
   picture does not show the thing itself.
 - **places** may also have `rival_at`, like `car_at`: where whoever you are up against stands.
+  `"outdoors": true` makes it get dark there late in the day, as it does on the road.
   `"people": [ { "picture": "crowd.pic", "at": [140, 182] } ]` stands pictures in the place,
   behind the cars: `at` is the left edge and where the feet are. Twelve at most.
 
