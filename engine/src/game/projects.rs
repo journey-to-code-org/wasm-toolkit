@@ -43,7 +43,9 @@ impl Game {
             let mut says = Vec::new();
             let done = |o: &mut Owned, slot: &String| {
                 if let Some(id) = o.fitted.get(slot).cloned() {
-                    o.fitted.insert(slot.clone(), worn(&id, 0));
+                    // A battery that has sat is flat, not finished: the cheapest mend there is.
+                    let left = if self.part(&id).is_some_and(|p| p.charges) { 8 } else { 0 };
+                    o.fitted.insert(slot.clone(), worn(&id, left));
                 }
             };
             // What is wrong with it: one thing, or two, or now and then three.

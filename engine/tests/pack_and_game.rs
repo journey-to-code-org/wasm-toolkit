@@ -724,7 +724,12 @@ fn you_drive_from_one_place_to_another_and_it_burns_gas() {
     }
     assert_eq!((g.scene, g.state.place.as_str(), g.note.as_deref()), (Scene::Place, "shed", Some("Out of gas. You walked home.")));
     click(&mut g, 100, 10);
-    assert_eq!(g.note.as_deref(), Some("You don't got enough gas to cruise."));
+    assert_eq!(g.note.as_deref(), Some("A can from the pump: a gallon, $2."));
+    // With no two dollars for the can, that is where it stays.
+    g.state.cars[0].gas = 0.0;
+    g.state.cash = 1;
+    click(&mut g, 100, 10);
+    assert_eq!((g.scene, g.note.as_deref()), (Scene::Place, Some("No gas, and no $2 for a can of it.")));
 }
 
 #[test]
@@ -1938,4 +1943,37 @@ fn a_clutch_slips_before_it_goes() {
     assert_eq!(g.slip(&o), 1.0);
     let broke = (0..200).find_map(|_| g.strain_driveline());
     assert_eq!((broke.as_deref(), cond_of(&g.owned().unwrap().fitted["Clutch"])), (Some("Axle"), 100));
+}
+
+#[test]
+fn a_dry_tank_and_a_flat_battery_are_not_the_end() {
+    // Dry at home: the door out is a walk to the pump with a can, and then it will go.
+    let mut g = town_game();
+    g.state.cars[0].gas = 0.0;
+    click(&mut g, 100, 10);
+    assert_eq!((g.scene, g.owned().unwrap().gas, g.state.cash, g.state.hours, g.note.as_deref()), (Scene::Place, 1.0, 998, 1, Some("A can from the pump: a gallon, $2.")));
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Drive);
+
+    let manifest = MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"charge\"").replace("\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" } }", "\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" }, \"stock\": { \"Battery\": \"cell\" } }")
+        .replace("\"puffer\": {", "\"cell\": { \"name\": \"Battery\", \"slot\": \"Battery\", \"price\": 60, \"charges\": true }, \"puffer\": {")
+        .replace("\"bets\": [10, 25],", "\"bets\": [10, 25], \"faults\": [ { \"says\": \"Ran when parked.\", \"hidden\": [\"Battery\"] } ],");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    // Flat, it will not start; five dollars and two hours on the charger, and it will.
+    g.state.cars[0].fitted.insert("Battery".into(), "cell@10".into());
+    assert_eq!(g.wont_run().as_deref(), Some("The battery is flat. Charge it."));
+    click(&mut g, 100, 10);
+    assert_eq!((g.owned().unwrap().fitted["Battery"].as_str(), g.state.cash, g.state.hours, g.wont_run()), ("cell@90", 995, 2, None));
+    click(&mut g, 100, 10);
+    assert_eq!(g.note.as_deref(), Some("It is charged."));
+    g.state.cars[0].fitted.insert("Battery".into(), "cell@0".into());
+    click(&mut g, 100, 10);
+    assert_eq!(g.note.as_deref(), Some("It will not take a charge. It is done."));
+    // A car sold as it stands whose only trouble is a battery that sat is a charge away from running.
+    let p = g.projects().into_iter().flatten().find(|p| p.owned.fitted.contains_key("Battery")).unwrap();
+    assert_eq!(p.owned.fitted["Battery"], "cell@8");
 }

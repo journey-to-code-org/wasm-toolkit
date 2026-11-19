@@ -64,6 +64,8 @@ All five steps are in the engine. The engine plays a season out of a pack:
   keep your foot in it and lose him. A bend taken too fast throws the car wide, and what is beside
   the road decides what that costs. A road takes hours off the day and gas out of the tank.
   Rivals can be raced down one as well as on the strip.
+- **A can of gas**: a car with too little in it to leave home is not stuck: trying to drive
+  off walks you to the pump with a can instead, a gallon for two dollars and an hour.
 - **Gas**: every car has a tank. Cruising burns it, a pass down the strip burns half a gallon,
   and a dollar buys three gallons wherever the pack puts a pump. Run dry in town and you walk.
 - **The meet**: other people, to race. Whoever opens it is in a room with everyone else who
@@ -316,6 +318,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
   | `shootout` | enter the shootout, on a day it is held |
+  | `charge` | put the battery of the car in the bay on the charger: 5 dollars, two hours |
   | `bodywork` | straighten the body of the car in the bay: 20 dollars and 4 for each point of damage |
   | `tyres` | a new set of tyres, 80 dollars |
   | `sleep` | bed: the rest of today is gone and it is morning |
@@ -425,6 +428,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"needs": ["a 4-bolt diff"]` and `"gives": ["a 4-bolt diff"]` tie parts together: a part's
   needs must each be given by something else fitted, or the car will not run, and says which.
   `"holds": 380` is the torque, in pound-feet, a driveline part takes before it can break.
+  `"charges": true` makes it a battery: at 15 per cent or less it is flat and the car will not
+  start, and a spot that does `charge` brings it back to 90. One that is done for takes no charge.
   `"slips": true` makes it a clutch, which does not break but slips: the car gets only what
   the clutch holds, every launch over that burns some of it away, and a worn one holds less.
   A pack can hold 120 parts; the paper and the bench turn over a page at a time.

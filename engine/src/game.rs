@@ -658,6 +658,9 @@ impl Game {
             if cond_of(id) == 0 {
                 return Some(format!("The {} is done for.", p.name.to_lowercase()).chars().take(38).collect());
             }
+            if p.charges && cond_of(id) <= 15 {
+                return Some(format!("The {} is flat. Charge it.", p.name.to_lowercase()).chars().take(38).collect());
+            }
             let has = |need: &String| o.fitted.values().filter_map(|other| self.part(other)).any(|other| other.gives.contains(need));
             if let Some(need) = p.needs.iter().find(|n| !has(n)) {
                 return Some(format!("{} needs {need}.", p.name).chars().take(38).collect());
@@ -797,7 +800,17 @@ impl Game {
                 return self.no(&why);
             }
             if self.owned().is_some_and(|o| o.gas < 0.3) {
-                return self.no("You don't got enough gas to cruise.");
+                // Dry at home: walk to the pump with a can. A gallon, two dollars, and an hour gone.
+                if self.state.cash < 2 {
+                    return self.no("No gas, and no $2 for a can of it.");
+                }
+                self.state.cash -= 2;
+                if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+                    o.gas += 1.0;
+                }
+                self.say("A can from the pump: a gallon, $2.");
+                tone(520, 80);
+                return self.spend(1);
             }
             let mut rng = self.rng;
             let town = Town::new(map, m, Some(&self.state.place), || {
@@ -863,6 +876,24 @@ impl Game {
                     self.state.entered = day;
                     self.bracket = Some(0);
                     self.bracket_round();
+                }
+                "charge" => {
+                    let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
+                    let found = self.state.cars[cur].fitted.iter().find(|(_, id)| self.part(id).is_some_and(|p| p.charges)).map(|(s, id)| (s.clone(), id.clone()));
+                    let Some((slot, id)) = found else { return self.no("There is no battery in it.") };
+                    match cond_of(&id) {
+                        0 => return self.no("It will not take a charge. It is done."),
+                        90.. => return self.say("It is charged."),
+                        _ => {}
+                    }
+                    if self.state.cash < 5 {
+                        return self.no("A charge is $5. You don't have it.");
+                    }
+                    self.state.cash -= 5;
+                    self.state.cars[cur].fitted.insert(slot, worn(&id, 90));
+                    self.say("On the charger for two hours: $5.");
+                    tone(700, 120);
+                    self.spend(2);
                 }
                 "bodywork" => {
                     let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };

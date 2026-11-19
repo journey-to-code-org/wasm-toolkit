@@ -243,6 +243,9 @@ pub struct Part {
     /// what the clutch will pass, and every launch like that wears it, until it is done for.
     #[serde(default)]
     pub slips: bool,
+    /// A battery: run down to 15 per cent or less it is flat, not finished, and a charge brings it back.
+    #[serde(default)]
+    pub charges: bool,
     /// A laptop and a cable: with it the car's fuel, timing and boost can be changed at the rollers.
     #[serde(default)]
     pub tuner: bool,
@@ -814,7 +817,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 20] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tyres"];
+pub const ACTIONS: [&str; 21] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tyres", "charge"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 120;
 
