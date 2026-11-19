@@ -16,7 +16,7 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
@@ -383,6 +383,7 @@ function tidy() {
   }
   for (const p of Object.values(m.places)) { used.add(p.picture); for (const who of p.people ?? []) used.add(who.picture); }
   for (const r of m.rivals ?? []) used.add(r.figure);
+  used.add(m.title);
   for (const name of [...pack.files.keys()]) if (name.endsWith(".pic") && !used.has(name)) pack.files.delete(name);
 }
 
@@ -882,6 +883,7 @@ function partsPanel() {
           field("Weight it adds, lb (less than 0 saves some)", p.weight_lb, (v) => { if (v) p.weight_lb = v; else delete p.weight_lb; }, { type: "number" }),
           field("A gearbox: its ratios, first gear first", (p.gears ?? []).join(" "), (v) => { const n = v.split(/[\s,]+/).map(Number).filter((x) => x > 0); if (n.length) p.gears = n; else delete p.gears; }),
           field("A final drive", p.final, (v) => { if (v > 0) p.final = v; else delete p.final; }, { type: "number", step: "0.01" }),
+          field("A different engine: its torque curve, as rpm:torque pairs", (p.curve ?? []).map((c) => c.join(":")).join(" "), (v) => { const c = v.split(/[\s,]+/).map((x) => x.split(":").map(Number)).filter((x) => x.length === 2 && x[0] > 0 && x[1] > 0).sort((a, b) => a[0] - b[0]); if (c.length > 1) p.curve = c; else delete p.curve; }, { placeholder: "1000:120 3000:260 5000:300 7000:240" }),
           field("A redline, rpm (a built engine)", p.redline, (v) => { if (v > 0) p.redline = v; else delete p.redline; }, { type: "number", step: 100 }))),
       tick("It is a radar detector: it beeps when police are ahead on a road", !!p.radar, (v) => { if (v) p.radar = true; else delete p.radar; }),
       tick("It is a turbo, and replaces the car's own", !!p.boost, (v) => { if (v) p.boost = { from: 3000, psi: 27, lag: 10 }; else delete p.boost; }),
@@ -969,6 +971,15 @@ function gamePanel() {
     h("div", { class: "two" },
       field("An engine rebuild costs", m.rebuild?.cost ?? 250, (n) => { m.rebuild = { cond: 85, ...m.rebuild, cost: Math.max(0, Math.floor(n ?? 250)) }; }, { type: "number", min: 0 }),
       field("And brings it back to, per cent", m.rebuild?.cond ?? 85, (n) => { m.rebuild = { cost: 250, ...m.rebuild, cond: Math.max(1, Math.min(100, Math.floor(n ?? 85))) }; }, { type: "number", min: 1, max: 100 })),
+    h("div", { class: "two" },
+      field("A respray costs", m.respray?.cost ?? 60, (n) => { m.respray = { hours: 3, ...m.respray, cost: Math.max(0, Math.floor(n ?? 60)) }; }, { type: "number", min: 0 }),
+      field("And takes, hours", m.respray?.hours ?? 3, (n) => { m.respray = { cost: 60, ...m.respray, hours: Math.max(0, Math.floor(n ?? 3)) }; }, { type: "number", min: 0 })),
+    dropZone(m.title ? "The title screen (it has a picture; drop another to change it)" : "The title screen: a picture, made 320 by 240 (without one the pack's name is written up)", async (f) => {
+      try { pack.files.set("title.pic", await sizedPicture(f, 320, 240)); } catch { return fail("That file is not a picture the browser can read."); }
+      m.title = "title.pic"; render();
+    }),
+    m.title ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "No picture: write the name up", onclick: () => { delete m.title; tidy(); render(); } })) : null,
+    h("p", { class: "hint", text: "The title is seen with Play it. Leave the bottom fifth of the picture plain: \"Press Enter\" is written there." }),
     field("What can be bet, in dollars (blank: 10 25 50 100)", (m.bets ?? []).join(" "), (v) => { const n = v.split(/[\s,]+/).map(Number).filter((x) => x > 0).slice(0, 4); if (n.length) m.bets = n; else delete m.bets; }),
     h("p", { class: "hint", text: "Reading the paper takes an hour, taking a part off takes an hour, a race takes two. When the days run out the game is over." }))];
 }

@@ -30,12 +30,16 @@ struct Poly {
 
 pub struct Scene3 {
     pub cam: Cam,
+    /// The dark: how many shades everything is taken down, and how far ahead the car's lamps reach,
+    /// in metres. What is nearer than that is lit, and it fades to the dark from there.
+    pub dim: i32,
+    pub lamps: f64,
     polys: Vec<Poly>,
 }
 
 impl Scene3 {
     pub fn new(cam: Cam) -> Scene3 {
-        Scene3 { cam, polys: Vec::new() }
+        Scene3 { cam, dim: 0, lamps: 0.0, polys: Vec::new() }
     }
 
     /// Into the camera's own space: x to its right, y up, z ahead.
@@ -95,6 +99,12 @@ impl Scene3 {
         let flat: Vec<(i32, i32)> = out.iter().map(|&c| self.flat(c)).collect();
         if flat.iter().all(|p| p.0 < 0) || flat.iter().all(|p| p.0 >= W) || flat.iter().all(|p| p.1 < 0) || flat.iter().all(|p| p.1 >= H) {
             return;
+        }
+        let (mut a, mut b) = (a, b);
+        if self.dim > 0 {
+            let by = (self.dim as f64 * if self.lamps > 0.0 { (depth / self.lamps).clamp(0.45, 1.0) } else { 1.0 }) as u16;
+            let down = |c: u16| if c < 32 { c } else { (c & !31) | (c & 31).saturating_sub(by).max(1) };
+            (a, b) = (down(a), down(b));
         }
         self.polys.push(Poly { key: key.unwrap_or(depth - bias), pts: flat, a, b });
     }

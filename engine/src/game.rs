@@ -122,6 +122,8 @@ pub enum Scene {
     Hood,
     Yard,
     Bets,
+    /// Picking a colour for a respray.
+    Paint,
     /// The meet: other people, to race. And picking what a race with one of them is for.
     Online,
     OnlineBets,
@@ -249,6 +251,46 @@ impl Game {
         self.state.hours / self.pack.manifest.season.hours_per_day + 1
     }
 
+    /// The colours a car can be had in, or sprayed.
+    pub fn paints(&self) -> Vec<String> {
+        let m = &self.pack.manifest;
+        if m.paints.is_empty() { PAINTS.iter().map(|p| p.to_string()).collect() } else { m.paints.iter().take(12).cloned().collect() }
+    }
+
+    /// How dark it is out: 0 by day, 1 as the day's last hours come on, 2 in its last sixth.
+    pub fn dark(&self) -> i32 {
+        let per = self.pack.manifest.season.hours_per_day.max(1);
+        let gone = (self.state.hours % per) as f64 / per as f64;
+        if gone >= 0.83 { 2 } else if gone >= 0.66 { 1 } else { 0 }
+    }
+
+    /// The sky and the far ground for how dark it is, and how many shades the world is taken down.
+    pub(crate) fn sky(&self, s: &mut Screen, horizon: i32, view: i32, sky: usize, land: usize) -> i32 {
+        match self.dark() {
+            0 => {
+                s.vgrad(0, 0, 320, horizon, sky, 15, 29);
+                s.vgrad(0, horizon, 320, view - horizon, land, 12, 17);
+                0
+            }
+            1 => {
+                s.vgrad(0, 0, 320, horizon * 2 / 3, ramp("INDIGO"), 8, 16);
+                s.vgrad(0, horizon * 2 / 3, 320, horizon - horizon * 2 / 3, ramp("ORANGE"), 16, 26);
+                s.vgrad(0, horizon, 320, view - horizon, land, 8, 12);
+                5
+            }
+            _ => {
+                s.vgrad(0, 0, 320, horizon, ramp("NAVY"), 2, 9);
+                s.vgrad(0, horizon, 320, view - horizon, land, 3, 6);
+                // Stars, the same ones every night.
+                for i in 0..40u32 {
+                    let k = i.wrapping_mul(2654435761) >> 7;
+                    s.pset((k % 320) as i32, ((k >> 9) % (horizon.max(8) as u32 - 6)) as i32, shade(ramp("WHITE"), 18 + (k % 10) as i32));
+                }
+                11
+            }
+        }
+    }
+
     fn hours_left(&self) -> i32 {
         let per = self.pack.manifest.season.hours_per_day;
         per - self.state.hours % per
@@ -295,6 +337,9 @@ impl Game {
             if let Some(r) = p.redline {
                 d.redline = r;
             }
+            if !p.curve.is_empty() {
+                d.torque = p.curve.clone();
+            }
         }
         d.grip *= grip.max(10) as f64 / 100.0;
         d.weight_lb = d.weight_lb.max(500.0);
@@ -333,7 +378,7 @@ impl Game {
         if sale.is_empty() {
             return Vec::new();
         }
-        let paints: Vec<String> = if m.paints.is_empty() { PAINTS.iter().map(|p| p.to_string()).collect() } else { m.paints.clone() };
+        let paints = self.paints();
         let day = self.day();
         (0..3usize).map(|i| {
             if self.state.sold.0 == day && self.state.sold.1.contains(&i) {
@@ -531,6 +576,12 @@ impl Game {
                 }
                 "yard" => self.scene = Scene::Yard,
                 "online" => self.go_online(),
+                "paint" => {
+                    if self.state.cur.is_none() {
+                        return self.no("There is no car in the bay.");
+                    }
+                    self.scene = Scene::Paint;
+                }
                 "rebuild" => {
                     let (cost, cond) = (self.pack.manifest.rebuild.cost, self.pack.manifest.rebuild.cond.clamp(1, 100));
                     let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
@@ -827,6 +878,29 @@ impl Game {
                         self.scene = Scene::Place;
                         self.offer_bet(b);
                         self.road_race = None;
+                    }
+                }
+            }
+            Scene::Paint => {
+                if back {
+                    self.scene = Scene::Place;
+                } else if pick {
+                    let paints = self.paints();
+                    if let Some(b) = self.button(paints.len()) {
+                        self.scene = Scene::Place;
+                        let (cost, hours) = (self.pack.manifest.respray.cost, self.pack.manifest.respray.hours);
+                        let Some(cur) = self.state.cur else { return };
+                        if self.state.cars[cur].paint.as_deref() == Some(paints[b].as_str()) {
+                            return self.say("It is that colour already.");
+                        }
+                        if self.state.cash < cost {
+                            return self.no(&format!("A respray is ${cost}. You don't have it."));
+                        }
+                        self.state.cash -= cost;
+                        self.state.cars[cur].paint = Some(paints[b].clone());
+                        self.say(&format!("Resprayed, for ${cost}. It was {hours} hours."));
+                        tone(700, 120);
+                        self.spend(hours);
                     }
                 }
             }
@@ -1248,7 +1322,7 @@ impl Game {
         }
         match self.scene {
             Scene::Title => self.draw_title(s),
-            Scene::Place | Scene::Bets => self.draw_place(s),
+            Scene::Place | Scene::Bets | Scene::Paint => self.draw_place(s),
             Scene::Paper(page) => self.draw_paper(s, page),
             Scene::Bench => self.draw_bench(s),
             Scene::Hood => self.draw_hood(s),
@@ -1266,11 +1340,15 @@ impl Game {
 
     fn draw_title(&self, s: &mut Screen) {
         s.vgrad(0, 0, 320, 240, ramp("NAVY"), 3, 14);
-        let name = self.pack.manifest.name.to_uppercase();
-        for (i, line) in wrap(&name, 18).iter().enumerate() {
-            let x = 160 - line.len() as i32 * 8;
-            s.text_big(x + 1, 61 + i as i32 * 22, line, shade(ramp("RED"), 14), 2);
-            s.text_big(x, 60 + i as i32 * 22, line, shade(ramp("GOLD"), 27), 2);
+        if let Some(pic) = self.pack.manifest.title.as_ref().and_then(|n| self.pack.pictures.get(n)) {
+            s.picture(pic, 0, 0);
+        } else {
+            let name = self.pack.manifest.name.to_uppercase();
+            for (i, line) in wrap(&name, 18).iter().enumerate() {
+                let x = 160 - line.len() as i32 * 8;
+                s.text_big(x + 1, 61 + i as i32 * 22, line, shade(ramp("RED"), 14), 2);
+                s.text_big(x, 60 + i as i32 * 22, line, shade(ramp("GOLD"), 27), 2);
+            }
         }
         if self.saved {
             s.text_sh(92, 190, "ENTER: CARRY ON", WHITE, BLACK);
@@ -1320,7 +1398,18 @@ impl Game {
         }
         let under = self.spot_under().map(|s| s.label.clone());
         let clock = format!("DAY {} OF {}. {} HOURS LEFT TODAY.", self.day(), self.pack.manifest.season.days, self.hours_left());
-        if self.scene == Scene::Bets {
+        if self.scene == Scene::Paint {
+            // A row of tins: each a button in its own colour.
+            let (paints, over) = (self.paints(), self.button(self.paints().len()));
+            let w = 312 / paints.len() as i32;
+            for (i, p) in paints.iter().enumerate() {
+                let (x, on) = (4 + i as i32 * w, over == Some(i));
+                s.vgrad(x + 1, 178, w - 2, 18, ramp(p), 26, 14);
+                s.frame(x + 1, 178, w - 2, 18, if on { WHITE } else { shade(ramp("CHROME"), 10) });
+            }
+            let name = over.map(|i| paints[i].to_lowercase()).unwrap_or_else(|| "Pick a colour.".into());
+            self.panel(s, "A respray", &name, &format!("${}, and {} hours. Escape: never mind", self.pack.manifest.respray.cost, self.pack.manifest.respray.hours));
+        } else if self.scene == Scene::Bets {
             let mut labels = vec!["KICKS".to_string()];
             labels.extend(self.stakes().iter().map(|b| format!("${b}")));
             labels.push("PINKS".into());
@@ -1878,11 +1967,17 @@ impl Game {
         let horizon = view * 60 / 136;
         const SEE: i32 = 5;
         let (p, road) = (map.pitch, map.road);
-        s.vgrad(0, 0, 320, horizon, ramp("SKY"), 15, 29);
-        s.vgrad(0, horizon, 320, view - horizon, ramp("GRASS"), 14, 20);
+        let dim = if self.dark() == 0 {
+            s.vgrad(0, 0, 320, horizon, ramp("SKY"), 15, 29);
+            s.vgrad(0, horizon, 320, view - horizon, ramp("GRASS"), 14, 20);
+            0
+        } else {
+            self.sky(s, horizon, view, ramp("SKY"), ramp("GRASS"))
+        };
         s.clip(0, 0, 320, view);
         let cam = Cam { pos: [town.x, 1.125, town.z], yaw: town.heading.to_radians(), pitch: 0.0, focal: 200.0, cx: 160, cy: horizon };
         let mut scene = Scene3::new(cam);
+        (scene.dim, scene.lamps) = (dim, 45.0);
         let (tar, tar2, line) = (shade(ramp("ASPHALT"), 15), shade(ramp("ASPHALT"), 16), shade(ramp("YELLOW"), 23));
         let (cbx, cbz) = ((town.x / p).floor() as i32, (town.z / p).floor() as i32);
         let (cols, depth) = (map.cols(), map.depth());
@@ -1959,7 +2054,7 @@ impl Game {
         let v = (town.speed * 10.0) as i32;
         if let Some(seat) = seat {
             let rpm = if town.speed > 0.0 { 1500.0 + (v % 110) as f64 * 50.0 } else { 900.0 };
-            self.draw_cockpit(s, seat, false, rpm, town.speed * 2.237, if town.speed > 8.0 { 6.0 } else { 0.0 }, if town.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, town.steer * 90.0, false);
+            self.draw_cockpit(s, seat, self.dark() == 2, rpm, town.speed * 2.237, if town.speed > 8.0 { 6.0 } else { 0.0 }, if town.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, town.steer * 90.0, false);
         } else {
             self.panel(s, &map.title, &format!("{} mph", (town.speed * 2.237) as i32), "Arrows drive. Escape turns back.");
         }

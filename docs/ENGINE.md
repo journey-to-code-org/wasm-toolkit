@@ -59,6 +59,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
   engine runs its own car, so the throttle and shifts are as sharp as alone; the tree comes down
   when both have staged, and the winner is worked out from the two timeslips. It needs a server
   to hold the room: see [The meet](#the-meet).
+- **Day and night**: the last third of each day is dusk and then dark, on the road and in town:
+  the sky goes, the country beyond the lamps is dim, other cars are their lights, and the dash
+  is lit if the cockpit has a night picture.
 - **People**: whoever you are up against can stand by their car, and a place can have a crowd.
 - **The record**: races won and lost are counted, and the calendar says so.
 - **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
@@ -245,6 +248,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `gas` | fill the tank, a dollar for three gallons |
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
+  | `paint` | a respray: pick one of the pack's paints |
 
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
   picture does not show the thing itself.
@@ -333,7 +337,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
   Beyond torque a part can have `grip` (per cent more, for tyres), `weight_lb` (what it adds;
   less than nothing saves weight), `gears` and `final` (a gearbox in place of the car's own) and
-  `redline` (a built engine's). `"radar": true` makes it a radar detector for the road.
+  `redline` (a built engine's). `"curve": [[1000, 120], [4000, 300], [7000, 240]]` is a different
+  engine altogether: its torque curve, in place of the car's. `"radar": true` makes it a radar detector for the road.
   `"side": "wing.pic"` is what it looks like on the car from the side: a picture the size of
   the car's own side picture, drawn over it in the garage, the yard and on the strip. Its clear
   pixels leave the car showing, so it can be only the wing, or the whole car again with the wing on.
@@ -345,6 +350,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   most money they will race for, `pinks` whether they will race for cars. The one with `king`
   must be last, races for cars only, and beating them wins the game.
   `"figure": "skeeter.pic"` is a picture of them, which stands by their car.
+- `"title": "title.pic"` is a picture for the title screen, 320 by 240. `"respray": { "cost": 60,
+  "hours": 3 }` is what the `paint` action charges.
 - **bets** and **paints** may be left out. So may `"rebuild": { "cost": 250, "cond": 85 }`:
   what an engine rebuild costs and how healthy it comes back.
 - **cars** may have `"tank": 17`, in gallons. A small dial in the cockpit with `"reads": "gas"`
