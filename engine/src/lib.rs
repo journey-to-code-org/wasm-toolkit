@@ -147,6 +147,13 @@ pub extern "C" fn wtk_mode() -> i32 {
     }
 }
 
+/// What the page might want to know besides the mode: 1 if the car in the bay has a nitrous kit.
+#[no_mangle]
+pub extern "C" fn wtk_flags() -> i32 {
+    let g = &engine().game;
+    g.owned().is_some_and(|o| g.kit(o).is_some()) as i32
+}
+
 #[no_mangle]
 pub extern "C" fn wtk_screen() -> *const u16 {
     engine().screen.fb.as_ptr()

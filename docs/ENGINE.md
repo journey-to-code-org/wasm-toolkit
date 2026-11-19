@@ -69,6 +69,10 @@ All five steps are in the engine. The engine plays a season out of a pack:
   a road, and what it is worth.
 - **People**: whoever you are up against can stand by their car, and a place can have a crowd.
 - **The record**: races won and lost are counted, and the calendar says so.
+- **Being shown round**: a new game outlines everything in a place that can be picked and
+  the picture does not mark; H (or ?, or the ? button on a phone) turns the outlines on and off.
+  Starting over when a game is kept takes E twice. On the road and in town the speed is written
+  up, and what the keys are is said as you set out.
 - **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
 
 Everything the C game did is now in the engine, except its 3D car models: other cars in town

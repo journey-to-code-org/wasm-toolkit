@@ -497,7 +497,19 @@ fn a_game_is_kept() {
     assert_eq!((again.state.cash, again.state.place.as_str()), (4321, "road"), "Enter carries on");
     let mut fresh = Game::new(Pack::parse(&files(MANIFEST)));
     fresh.tick(KEY_X, 0, 0);
-    assert_eq!((fresh.state.cash, fresh.state.place.as_str()), (1000, "shed"), "E is a new game");
+    assert_eq!(fresh.scene, Scene::Title, "with a game kept, E has to be meant");
+    fresh.tick(0, 0, 0);
+    fresh.tick(KEY_X, 0, 0);
+    assert_eq!((fresh.scene, fresh.state.cash, fresh.state.place.as_str(), fresh.hints), (Scene::Place, 1000, "shed", true), "E twice is a new game, and a new game is shown round");
+    assert!(!again.hints, "someone carrying on is not");
+    // H outlines what there is to pick, and H again takes the boxes away.
+    let mut s = Screen::new();
+    fresh.tick(0, 300, 190);
+    fresh.draw(&mut s);
+    assert_eq!(s.at(40, 0), shade(ramp("GOLD"), 26), "a box round the lamps");
+    fresh.tick(engine::game::KEY_H, 300, 190);
+    fresh.draw(&mut s);
+    assert_eq!((fresh.hints, s.at(40, 0)), (false, shade(ramp("WOOD"), 12)));
     // A game kept by another pack is not this one's.
     let other = Game::new(Pack::parse(&files(&MANIFEST.replace("Test Pack", "Other Pack"))));
     let mut s = Screen::new();

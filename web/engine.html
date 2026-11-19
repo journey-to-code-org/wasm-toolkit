@@ -20,6 +20,7 @@
   #pad button[hidden] { display: none; }
   #pad .back { left: 1.5%; top: 2%; width: 14%; height: 10%; }
   #pad .fresh { right: 1.5%; top: 2%; width: 26%; height: 10%; }
+  #pad .help { right: 1.5%; top: 2%; width: 10%; height: 10%; }
   #pad .l1 { left: 1.5%; bottom: 2.5%; } #pad .l2 { left: 20%; bottom: 2.5%; }
   #pad .r1 { right: 1.5%; bottom: 2.5%; } #pad .r2 { right: 20%; bottom: 2.5%; } #pad .r3 { right: 1.5%; bottom: 20%; height: 11%; }
   #pad .gas { height: 24%; }
@@ -38,7 +39,8 @@
     <button data-key="KeyE" data-in="2" class="l2" aria-label="Shift up">E &#9650;</button>
     <button data-key="ArrowDown" data-in="3" class="r2">Brake</button>
     <button data-key="ArrowUp" data-in="23" class="r1 gas">Gas</button>
-    <button data-key="KeyN" data-in="23" class="r3" aria-label="Nitrous">N2O</button>
+    <button data-key="KeyN" data-in="23" data-flag="1" class="r3" aria-label="Nitrous">N2O</button>
+    <button data-key="KeyH" data-in="1" class="help" aria-label="Show what can be picked">?</button>
   </div>
 </div>
 <script type="module">
@@ -64,12 +66,13 @@
     b.addEventListener("contextmenu", (e) => e.preventDefault());
   }
   // Show the buttons that fit what the game is doing; one that goes away lets go of its key.
-  let mode = -1;
+  // A button with a flag is only there when the game says so: the nitrous one, when the car has a kit.
+  let mode = -1, flags = -1;
   setInterval(() => {
-    const now = game.wtk_mode ? game.wtk_mode() : 1;
-    if (now === mode) return;
-    mode = now;
-    for (const b of buttons) { b.hidden = !b.dataset.in.includes(String(mode)); if (b.hidden) b.release(); }
+    const now = game.wtk_mode ? game.wtk_mode() : 1, has = game.wtk_flags ? game.wtk_flags() : -1;
+    if (now === mode && has === flags) return;
+    [mode, flags] = [now, has];
+    for (const b of buttons) { b.hidden = !b.dataset.in.includes(String(mode)) || (b.dataset.flag && has >= 0 && !(has & +b.dataset.flag)); if (b.hidden) b.release(); }
   }, 100);
 </script>
 </body>

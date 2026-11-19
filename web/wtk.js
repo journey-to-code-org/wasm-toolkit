@@ -3,7 +3,7 @@
 const W = 320, H = 240, HZ = 30;
 const KEYS = {
   ArrowUp: 1, KeyW: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 4, KeyA: 4, ArrowRight: 8, KeyD: 8,
-  Enter: 16, Space: 16, Escape: 32, Backspace: 32, KeyE: 64, KeyQ: 128, KeyN: 256, ShiftLeft: 256, ShiftRight: 256,
+  Enter: 16, Space: 16, Escape: 32, Backspace: 32, KeyE: 64, KeyQ: 128, KeyN: 256, ShiftLeft: 256, ShiftRight: 256, KeyH: 512, Slash: 512,
 };
 
 // `pack` is a content pack, for an engine that plays one. The game and the pack are each an address
