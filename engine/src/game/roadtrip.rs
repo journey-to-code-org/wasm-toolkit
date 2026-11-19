@@ -196,7 +196,7 @@ impl Game {
         }
         // The bottle, if there is one with something in it and a foot on the gas.
         let spray = self.state.cur.and_then(|i| self.state.cars.get(i)).filter(|o| keys & KEY_N != 0 && keys & KEY_UP != 0 && o.bottle > 0.0 && trip.hold == 0 && trip.crash == 0)
-            .and_then(|o| o.fitted.values().filter_map(|id| self.pack.manifest.parts.get(id)).find_map(|p| p.nitrous.as_ref())).map_or(0.0, |k| k.gain as f64 / 100.0);
+            .and_then(|o| o.fitted.values().filter_map(|id| self.pack.manifest.parts.get(base(id))).find_map(|p| p.nitrous.as_ref())).map_or(0.0, |k| k.gain as f64 / 100.0);
         trip.spray = spray;
         if spray > 0.0 {
             if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
@@ -311,7 +311,7 @@ impl Game {
 
     /// A radar detector, if there is one in the car.
     pub fn radar(&self) -> bool {
-        self.owned().is_some_and(|o| o.fitted.values().any(|id| self.pack.manifest.parts.get(id).is_some_and(|p| p.radar)))
+        self.owned().is_some_and(|o| o.fitted.values().any(|id| self.pack.manifest.parts.get(base(id)).is_some_and(|p| p.radar)))
     }
 
     /// A box standing on the road, pointing the way `f` points: only the sides that can be seen.

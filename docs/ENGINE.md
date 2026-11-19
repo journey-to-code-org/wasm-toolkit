@@ -80,6 +80,15 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Day and night**: the last third of each day is dusk and then dark, on the road and in town:
   the sky goes, places marked as out of doors darken, the country beyond the lamps is dim, other cars are their lights, and the dash
   is lit if the cockpit has a night picture.
+- **A car is its parts**: a car with a build sheet is made of real parts, slot by slot:
+  manifolds, coils, cams, valves, head, block, driveline, brakes, rims, tank, pump, computer,
+  seats. Each is in a state of its own, from new to done for, which goes with it to the shelf
+  and to whoever buys it. Any can come off at the bench; a slot the car needs with nothing in it,
+  or a part that is done for, and it will not run. Some parts want others: a bigger turbo wants
+  the manifold, housing and pump that suit it, four-bolt axles want the four-bolt diff, and a
+  laptop wants a computer that can be tuned.
+- **The driveline breaks**: each part of it holds so much torque. Make more, and on a launch
+  the weakest lets go, sooner the more it is over. Fit a stronger one and the next weakest is next.
 - **Wear and damage**: every knock on the road or in town marks the body, which shows as
   scuffs on the car, takes a little off its top speed and up to half off what it is worth, until
   it is straightened. Tyres wear with every launch and every mile, and worn ones have up to three
@@ -387,6 +396,11 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `minis` are dials that only sit there. The wheel is a square picture turned about `at`.
   Everything but `picture` may be left out.
   `"auto": true` in a car's `drive` makes it an automatic.
+  `"stock": { "Valves": "s-valves", "Rear diff": "s-diff" }` is its build sheet: for each
+  slot, the part of the pack it left the factory with. A car bought or won comes with these
+  fitted, each in a state near the car's own, and is then only what is fitted to it.
+  `"optional": ["Seats"]` are the slots it will run without. Slots under the hood are not put on
+  the sheet. A car with no sheet is as before: whatever has not been changed is stock.
   `rear` is also how the car looks ahead of you on a road, and `"front": { "picture":
   "front.pic", "width_m": 1.7 }` is how it looks coming the other way. Other cars on a road are
   drawn as whichever of the pack's cars have these pictures, in their own paint, and whoever you
@@ -397,6 +411,10 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   less than nothing saves weight), `gears` and `final` (a gearbox in place of the car's own) and
   `redline` (a built engine's). `"curve": [[1000, 120], [4000, 300], [7000, 240]]` is a different
   engine altogether: its torque curve, in place of the car's. `"radar": true` makes it a radar detector for the road.
+  `"needs": ["a 4-bolt diff"]` and `"gives": ["a 4-bolt diff"]` tie parts together: a part's
+  needs must each be given by something else fitted, or the car will not run, and says which.
+  `"holds": 380` is the torque, in pound-feet, a driveline part takes before it can break.
+  A pack can hold 120 parts; the paper and the bench turn over a page at a time.
   `"tuner": true` makes it a laptop and a cable, which opens the tune at the rollers.
   `"auto": true` or `false` on a gearbox part makes the car an automatic or a manual.
   `"nitrous": { "gain": 35, "seconds": 8, "fill": 20 }` makes it a nitrous kit: while N (or

@@ -211,6 +211,16 @@ pub struct Part {
     /// pound-feet, rising, as for a car.
     #[serde(default)]
     pub curve: Vec<[f64; 2]>,
+    /// What it has to have on the car with it to go on: each a few words, such as "a big-frame
+    /// manifold", that some other fitted part gives.
+    #[serde(default)]
+    pub needs: Vec<String>,
+    #[serde(default)]
+    pub gives: Vec<String>,
+    /// For a part of the driveline: the torque it will take, in pound-feet. An engine that makes
+    /// more will sooner or later break it on a launch.
+    #[serde(default)]
+    pub holds: Option<f64>,
     /// A laptop and a cable: with it the car's fuel, timing and boost can be changed at the rollers.
     #[serde(default)]
     pub tuner: bool,
@@ -440,6 +450,14 @@ pub struct Car {
     /// How many gallons the tank holds.
     #[serde(default = "tank")]
     pub tank: f64,
+    /// The build sheet: what the car left the factory with, slot by slot, each an ordinary part
+    /// of the pack. A car with one is made of these parts, any of which can come off, wear out or
+    /// break. Slots under the hood are not on it: those keep to the hood's own way of working.
+    #[serde(default)]
+    pub stock: BTreeMap<String, String>,
+    /// The slots of the build sheet the car will run without: seats, cruise control.
+    #[serde(default)]
+    pub optional: Vec<String>,
     #[serde(default)]
     pub cockpit: Option<Cockpit>,
     #[serde(default)]
@@ -771,7 +789,7 @@ pub const MOST_JOBS: usize = 6;
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
 pub const ACTIONS: [&str; 20] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tyres"];
 /// The most parts the paper has room to list.
-pub const MOST_PARTS: usize = 14;
+pub const MOST_PARTS: usize = 120;
 
 #[derive(Default)]
 pub struct Pack {
@@ -852,11 +870,14 @@ impl Pack {
             return Err(format!("the job {} has to take at least an hour and pay at least a dollar", j.name));
         }
         if m.parts.len() > MOST_PARTS {
-            return Err(format!("the pack has {} parts; the paper has room for {MOST_PARTS}", m.parts.len()));
+            return Err(format!("the pack has {} parts; there is room for {MOST_PARTS}", m.parts.len()));
         }
         for (id, part) in &m.parts {
             if let Some(name) = &part.picture {
                 need(&format!("the part {id}"), name)?;
+            }
+            if id.contains('@') || part.holds.is_some_and(|h| h <= 0.0) {
+                return Err(format!("the part {id} cannot have an @ in what it is called, or hold no torque at all"));
             }
             if part.curve.len() == 1 || part.curve.windows(2).any(|w| w[1][0] <= w[0][0]) || part.curve.iter().any(|p| p[1] <= 0.0) {
                 return Err(format!("the part {id} has a torque curve that is not rising pairs of rpm and torque"));
@@ -965,6 +986,17 @@ impl Pack {
             }
             if let Some(r) = &car.rear {
                 need(&format!("the back of the car {id}"), &r.picture)?;
+            }
+            for (slot, part) in &car.stock {
+                match m.parts.get(part) {
+                    None => return Err(format!("the car {id} leaves the factory with {part} for its {slot}, which is not a part in the pack")),
+                    Some(p) if p.slot != *slot => return Err(format!("the car {id} has {part} down for its {slot}, but that part goes in {}", p.slot)),
+                    Some(_) if car.hood.as_ref().is_some_and(|h| h.slots.contains_key(slot)) => return Err(format!("the {slot} of the car {id} is under its hood, and cannot be on its build sheet as well")),
+                    _ => {}
+                }
+            }
+            if let Some(slot) = car.optional.iter().find(|s| !car.stock.contains_key(*s)) {
+                return Err(format!("the car {id} can do without its {slot}, which is not on its build sheet"));
             }
             if let Some(r) = &car.front {
                 need(&format!("the front of the car {id}"), &r.picture)?;

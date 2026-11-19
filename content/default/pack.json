@@ -122,7 +122,49 @@
       "rear": {
         "picture": "rear.pic",
         "width_m": 1.7
-      }
+      },
+      "stock": {
+        "Intake manifold": "s-inmani",
+        "Battery": "s-battery",
+        "Cruise control": "s-cruise",
+        "Suspension": "s-struts",
+        "Coils": "s-coils",
+        "PTU": "s-ptu",
+        "Plug wires": "s-wires",
+        "Spark plugs": "s-plugs",
+        "Valve cover": "s-vcover",
+        "Camshafts": "s-cams",
+        "Valve springs": "s-springs",
+        "Valves": "s-valves",
+        "Cam gears": "s-gears",
+        "Timing belt": "s-belt",
+        "Cylinder head": "s-head",
+        "Block": "s-block",
+        "Crankshaft": "s-crank",
+        "Bottom end": "s-pistons",
+        "Exhaust system": "s-exhaust",
+        "O2 housing": "s-o2",
+        "Transfer case": "s-tcase",
+        "Driveshaft": "s-shaft",
+        "Front axles": "s-axles",
+        "Rear diff": "s-diff",
+        "Rear axles": "s-raxles",
+        "Gearbox": "s-box",
+        "Clutch": "s-clutch",
+        "Brakes": "s-calipers",
+        "Rims": "s-rims",
+        "Tyres": "s-tyres",
+        "Fuel tank": "s-tank",
+        "Fuel pump": "s-pump",
+        "ECU": "s-ecu",
+        "Seats": "s-seats",
+        "Dashboard": "s-dash"
+      },
+      "optional": [
+        "Cruise control",
+        "Seats",
+        "Dashboard"
+      ]
     },
     "umbra-base": {
       "name": "1990 Kagami Umbra",
@@ -275,7 +317,49 @@
       "rear": {
         "picture": "rear.pic",
         "width_m": 1.7
-      }
+      },
+      "stock": {
+        "Intake manifold": "s-inmani",
+        "Battery": "s-battery",
+        "Cruise control": "s-cruise",
+        "Suspension": "s-struts",
+        "Coils": "s-coils",
+        "PTU": "s-ptu",
+        "Plug wires": "s-wires",
+        "Spark plugs": "s-plugs",
+        "Valve cover": "s-vcover",
+        "Camshafts": "s-cams",
+        "Valve springs": "s-springs",
+        "Valves": "s-valves",
+        "Cam gears": "s-gears",
+        "Timing belt": "s-belt",
+        "Cylinder head": "s-head",
+        "Block": "s-block",
+        "Crankshaft": "s-crank",
+        "Bottom end": "s-pistons",
+        "Exhaust system": "s-exhaust",
+        "O2 housing": "s-o2",
+        "Transfer case": "s-tcase",
+        "Driveshaft": "s-shaft",
+        "Front axles": "s-axles",
+        "Rear diff": "s-diff",
+        "Rear axles": "s-raxles",
+        "Gearbox": "s-box",
+        "Clutch": "s-clutch",
+        "Brakes": "s-calipers",
+        "Rims": "s-rims",
+        "Tyres": "s-tyres",
+        "Fuel tank": "s-tank",
+        "Fuel pump": "s-pump",
+        "ECU": "s-ecu",
+        "Seats": "s-seats",
+        "Dashboard": "s-dash"
+      },
+      "optional": [
+        "Cruise control",
+        "Seats",
+        "Dashboard"
+      ]
     }
   },
   "places": {
@@ -847,7 +931,7 @@
       "name": "Big turbo",
       "slot": "Turbo",
       "price": 900,
-      "pitch": "27 psi. Hits late",
+      "pitch": "Needs the header, O2 housing and pump.",
       "boost": {
         "from": 3000,
         "psi": 27,
@@ -855,6 +939,11 @@
       },
       "fits": [
         "umbra"
+      ],
+      "needs": [
+        "a big-frame manifold",
+        "a big-frame O2 housing",
+        "a big fuel pump"
       ]
     },
     "header": {
@@ -862,7 +951,10 @@
       "slot": "Exhaust",
       "price": 420,
       "pitch": "Lets it all out",
-      "torque": 6
+      "torque": 6,
+      "gives": [
+        "a big-frame manifold"
+      ]
     },
     "front-mount": {
       "name": "Front intercooler",
@@ -894,7 +986,8 @@
         0.82
       ],
       "final": 4.6,
-      "auto": false
+      "auto": false,
+      "holds": 480
     },
     "forged": {
       "name": "Forged bottom end",
@@ -997,8 +1090,346 @@
       "name": "Laptop and cable",
       "slot": "Computer",
       "price": 400,
-      "pitch": "Log it and tune it yourself",
-      "tuner": true
+      "pitch": "Log and tune. Needs a socketed ECU.",
+      "tuner": true,
+      "needs": [
+        "a tunable ECU"
+      ]
+    },
+    "s-inmani": {
+      "name": "Intake manifold",
+      "slot": "Intake manifold",
+      "price": 120
+    },
+    "s-battery": {
+      "name": "Battery",
+      "slot": "Battery",
+      "price": 60
+    },
+    "s-cruise": {
+      "name": "Cruise control",
+      "slot": "Cruise control",
+      "price": 40
+    },
+    "s-struts": {
+      "name": "Struts and springs",
+      "slot": "Suspension",
+      "price": 160
+    },
+    "s-coils": {
+      "name": "Ignition coils",
+      "slot": "Coils",
+      "price": 90
+    },
+    "s-ptu": {
+      "name": "Power transistor",
+      "slot": "PTU",
+      "price": 70
+    },
+    "s-wires": {
+      "name": "Plug wires",
+      "slot": "Plug wires",
+      "price": 40
+    },
+    "s-plugs": {
+      "name": "Spark plugs",
+      "slot": "Spark plugs",
+      "price": 24
+    },
+    "s-vcover": {
+      "name": "Valve cover",
+      "slot": "Valve cover",
+      "price": 60
+    },
+    "s-cams": {
+      "name": "Camshafts",
+      "slot": "Camshafts",
+      "price": 220
+    },
+    "s-springs": {
+      "name": "Valve springs",
+      "slot": "Valve springs",
+      "price": 90
+    },
+    "s-valves": {
+      "name": "Valves",
+      "slot": "Valves",
+      "price": 160
+    },
+    "s-gears": {
+      "name": "Cam gears",
+      "slot": "Cam gears",
+      "price": 70
+    },
+    "s-belt": {
+      "name": "Timing belt",
+      "slot": "Timing belt",
+      "price": 45
+    },
+    "s-head": {
+      "name": "Cylinder head",
+      "slot": "Cylinder head",
+      "price": 400
+    },
+    "s-block": {
+      "name": "Block",
+      "slot": "Block",
+      "price": 500
+    },
+    "s-crank": {
+      "name": "Crankshaft",
+      "slot": "Crankshaft",
+      "price": 300
+    },
+    "s-pistons": {
+      "name": "Pistons and rods",
+      "slot": "Bottom end",
+      "price": 260
+    },
+    "s-exhaust": {
+      "name": "Exhaust",
+      "slot": "Exhaust system",
+      "price": 180
+    },
+    "s-o2": {
+      "name": "O2 housing",
+      "slot": "O2 housing",
+      "price": 80,
+      "gives": [
+        "a stock-frame O2 housing"
+      ]
+    },
+    "s-tcase": {
+      "name": "Transfer case",
+      "slot": "Transfer case",
+      "price": 350,
+      "holds": 370
+    },
+    "s-shaft": {
+      "name": "Driveshaft",
+      "slot": "Driveshaft",
+      "price": 200,
+      "holds": 430
+    },
+    "s-axles": {
+      "name": "Front axles",
+      "slot": "Front axles",
+      "price": 180,
+      "holds": 350
+    },
+    "s-diff": {
+      "name": "3-bolt rear diff",
+      "slot": "Rear diff",
+      "price": 300,
+      "holds": 380,
+      "gives": [
+        "a 3-bolt diff"
+      ]
+    },
+    "s-raxles": {
+      "name": "3-bolt rear axles",
+      "slot": "Rear axles",
+      "price": 160,
+      "holds": 360,
+      "needs": [
+        "a 3-bolt diff"
+      ]
+    },
+    "s-box": {
+      "name": "5-speed gearbox",
+      "slot": "Gearbox",
+      "price": 600,
+      "holds": 420
+    },
+    "s-clutch": {
+      "name": "Clutch",
+      "slot": "Clutch",
+      "price": 220,
+      "holds": 380
+    },
+    "s-calipers": {
+      "name": "Brake calipers",
+      "slot": "Brakes",
+      "price": 140
+    },
+    "s-rims": {
+      "name": "Steel rims",
+      "slot": "Rims",
+      "price": 240
+    },
+    "s-tyres": {
+      "name": "All-season tyres",
+      "slot": "Tyres",
+      "price": 120
+    },
+    "s-tank": {
+      "name": "Fuel tank",
+      "slot": "Fuel tank",
+      "price": 120
+    },
+    "s-pump": {
+      "name": "Fuel pump",
+      "slot": "Fuel pump",
+      "price": 90
+    },
+    "s-ecu": {
+      "name": "Factory ECU",
+      "slot": "ECU",
+      "price": 150
+    },
+    "s-seats": {
+      "name": "Seats",
+      "slot": "Seats",
+      "price": 120
+    },
+    "s-dash": {
+      "name": "Dashboard",
+      "slot": "Dashboard",
+      "price": 150
+    },
+    "coilovers": {
+      "name": "Coilovers",
+      "slot": "Suspension",
+      "price": 600,
+      "pitch": "Lower, stiffer. It turns.",
+      "grip": 6
+    },
+    "mani-sheet": {
+      "name": "Sheet-metal intake",
+      "slot": "Intake manifold",
+      "price": 380,
+      "pitch": "Breathes up top.",
+      "torque": 3
+    },
+    "wires-8mm": {
+      "name": "8mm plug wires",
+      "slot": "Plug wires",
+      "price": 70,
+      "pitch": "A fatter spark.",
+      "torque": 1
+    },
+    "cams-272": {
+      "name": "272 camshafts",
+      "slot": "Camshafts",
+      "price": 480,
+      "pitch": "Lumpy. Wants stiffer springs.",
+      "torque": 6,
+      "needs": [
+        "stiffer valve springs"
+      ]
+    },
+    "springs-dual": {
+      "name": "Dual valve springs",
+      "slot": "Valve springs",
+      "price": 220,
+      "pitch": "For a big cam, and for revs.",
+      "gives": [
+        "stiffer valve springs"
+      ]
+    },
+    "gears-adj": {
+      "name": "Adjustable cam gears",
+      "slot": "Cam gears",
+      "price": 180,
+      "pitch": "Dial the cams in.",
+      "torque": 2
+    },
+    "exhaust-3in": {
+      "name": "3 inch turbo-back",
+      "slot": "Exhaust system",
+      "price": 420,
+      "pitch": "Loud, and it flows.",
+      "torque": 5
+    },
+    "o2-big": {
+      "name": "Big O2 housing",
+      "slot": "O2 housing",
+      "price": 160,
+      "pitch": "The one a big turbo bolts to.",
+      "gives": [
+        "a big-frame O2 housing"
+      ]
+    },
+    "tcase-built": {
+      "name": "Built transfer case",
+      "slot": "Transfer case",
+      "price": 700,
+      "pitch": "Takes a launch.",
+      "holds": 640
+    },
+    "axles-s2": {
+      "name": "Stage 2 front axles",
+      "slot": "Front axles",
+      "price": 420,
+      "pitch": "Thicker where it counts.",
+      "holds": 560
+    },
+    "diff-4bolt": {
+      "name": "4-bolt rear diff",
+      "slot": "Rear diff",
+      "price": 520,
+      "pitch": "The rare one. Takes 4-bolt axles.",
+      "holds": 620,
+      "gives": [
+        "a 4-bolt diff"
+      ]
+    },
+    "raxles-4bolt": {
+      "name": "4-bolt rear axles",
+      "slot": "Rear axles",
+      "price": 300,
+      "pitch": "Needs the 4-bolt diff.",
+      "holds": 580,
+      "needs": [
+        "a 4-bolt diff"
+      ]
+    },
+    "box-built": {
+      "name": "Built 5-speed",
+      "slot": "Gearbox",
+      "price": 1400,
+      "pitch": "Shot-peened, and it holds.",
+      "holds": 720,
+      "auto": false
+    },
+    "clutch-twin": {
+      "name": "Twin-disc clutch",
+      "slot": "Clutch",
+      "price": 650,
+      "pitch": "Bites hard. Holds harder.",
+      "holds": 680
+    },
+    "brakes-big": {
+      "name": "Big brake kit",
+      "slot": "Brakes",
+      "price": 520,
+      "pitch": "Four pots up front.",
+      "grip": 2
+    },
+    "rims-alloy": {
+      "name": "Light alloy rims",
+      "slot": "Rims",
+      "price": 560,
+      "pitch": "Less to spin up.",
+      "weight_lb": -40
+    },
+    "pump-255": {
+      "name": "255 fuel pump",
+      "slot": "Fuel pump",
+      "price": 140,
+      "pitch": "Enough fuel for a big turbo.",
+      "gives": [
+        "a big fuel pump"
+      ]
+    },
+    "ecu-socket": {
+      "name": "Socketed ECU",
+      "slot": "ECU",
+      "price": 320,
+      "pitch": "Chipped. Now it can be tuned.",
+      "gives": [
+        "a tunable ECU"
+      ]
     }
   },
   "rivals": [
