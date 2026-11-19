@@ -1528,3 +1528,27 @@ fn an_automatic_shifts_itself_and_a_manual_is_shifted_on_the_road() {
     g.state.cars[0].fitted.insert("Exhaust".into(), "pipe".into());
     assert!(g.gearbox().is_none());
 }
+
+#[test]
+fn a_town_can_have_hills_and_the_default_one_has_a_mountain_road() {
+    // Flat unless it says otherwise; with hills, never higher than they are said to be, and not all one height.
+    let g = town_game();
+    let flat = g.pack.manifest.maps["grid"].clone();
+    assert_eq!(flat.height(40.0, 90.0), 0.0);
+    let mut hilly = flat.clone();
+    hilly.hills = 9.0;
+    let heights: Vec<f64> = (0..40).map(|i| hilly.height(i as f64 * 17.0, i as f64 * 5.0)).collect();
+    assert!(heights.iter().all(|h| h.abs() <= 9.0) && heights.iter().any(|&h| h > 3.0) && heights.iter().any(|&h| h < -3.0));
+    // The town still draws on its hills, with its map in the corner.
+    let mut g = town_game();
+    g.pack.manifest.maps.get_mut("grid").unwrap().hills = 9.0;
+    click(&mut g, 100, 10);
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    assert_eq!(s.at(43, 15), 0, "the corner map's border");
+    let Some(bytes) = default_pack() else { return };
+    let pack = Pack::parse(&bytes).unwrap();
+    let up = &pack.manifest.roads["mountain"];
+    assert!(up.parts.iter().map(|p| p.hill).sum::<f64>() > 200.0 && up.parts.iter().any(|p| p.curve.abs() == 1.0) && pack.manifest.places.contains_key("summit"));
+    assert!(pack.manifest.maps["town"].hills > 0.0);
+}

@@ -508,6 +508,9 @@ pub struct Map {
     pub traffic: usize,
     #[serde(default = "gas_per_km")]
     pub gas_per_km: f64,
+    /// How hilly the ground is: the height of the hills, in metres. Left out, it is flat.
+    #[serde(default)]
+    pub hills: f64,
 }
 
 fn pitch() -> f64 {
@@ -543,6 +546,15 @@ impl Map {
     }
 
     /// Every block that is somewhere to go: its column, its row from the south, and the block.
+    /// How high the ground is at a point: long, slow hills, the same ones every time.
+    pub fn height(&self, x: f64, z: f64) -> f64 {
+        if self.hills == 0.0 {
+            return 0.0;
+        }
+        let p = self.pitch;
+        self.hills.clamp(0.0, 30.0) * ((x / (p * 1.3)).sin() + (z / (p * 1.7)).cos() + ((x + z) / (p * 2.3)).sin()) / 3.0
+    }
+
     pub fn places(&self) -> Vec<(i32, i32, &Block)> {
         let mut out = Vec::new();
         for r in 0..self.depth() {

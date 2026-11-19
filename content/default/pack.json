@@ -590,24 +590,36 @@
           "rect": [
             160,
             178,
-            70,
+            52,
             18
           ],
           "label": "Race them down the ridge road",
           "do": "roadrace:ridge",
-          "button": "Ridge run",
+          "button": "Run",
           "needs_car": true
         },
         {
           "rect": [
-            232,
+            214,
             178,
-            84,
+            50,
             18
           ],
           "label": "Ridge road, back down to town",
           "do": "road:ridge",
-          "button": "To town",
+          "button": "Town",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            266,
+            178,
+            50,
+            18
+          ],
+          "label": "Mountain road, up to the summit",
+          "do": "road:mountain",
+          "button": "Summit",
           "needs_car": true
         }
       ],
@@ -643,6 +655,56 @@
           "label": "Back out on the road",
           "do": "drive:town",
           "button": "Drive off"
+        }
+      ]
+    },
+    "summit": {
+      "title": "The summit",
+      "backdrop": "INDIGO",
+      "outdoors": true,
+      "car_at": [
+        6,
+        138
+      ],
+      "rival_at": [
+        72,
+        174
+      ],
+      "spots": [
+        {
+          "rect": [
+            4,
+            178,
+            100,
+            18
+          ],
+          "label": "Race them back down the mountain",
+          "do": "roadrace:mountain",
+          "button": "Downhill",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            108,
+            178,
+            100,
+            18
+          ],
+          "label": "Wave them on: see who else made it up",
+          "do": "next",
+          "button": "Next"
+        },
+        {
+          "rect": [
+            212,
+            178,
+            104,
+            18
+          ],
+          "label": "Mountain road, down to the overlook",
+          "do": "road:mountain",
+          "button": "Back down",
+          "needs_car": true
         }
       ]
     }
@@ -1076,7 +1138,8 @@
           "to": "rollers",
           "name": "The dyno"
         }
-      }
+      },
+      "hills": 7
     }
   },
   "rebuild": {
@@ -1178,6 +1241,113 @@
           "len": 260,
           "curve": 0,
           "hill": 4,
+          "left": "posts",
+          "right": "posts"
+        }
+      ]
+    },
+    "mountain": {
+      "title": "Mountain road",
+      "ends": [
+        "overlook",
+        "summit"
+      ],
+      "limit": 35,
+      "ticket": 60,
+      "traffic": 4,
+      "cops": 1,
+      "hours": 1,
+      "gas_per_km": 0.35,
+      "ground": "FOREST",
+      "parts": [
+        {
+          "len": 200,
+          "curve": 0,
+          "hill": 14,
+          "left": "trees",
+          "right": "trees"
+        },
+        {
+          "len": 160,
+          "curve": 0.9,
+          "hill": 22,
+          "left": "rock",
+          "right": "drop"
+        },
+        {
+          "len": 120,
+          "curve": 0,
+          "hill": 16,
+          "left": "rock",
+          "right": "drop"
+        },
+        {
+          "len": 170,
+          "curve": -1.0,
+          "hill": 24,
+          "left": "drop",
+          "right": "rock"
+        },
+        {
+          "len": 140,
+          "curve": 0,
+          "hill": 18,
+          "left": "trees",
+          "right": "rock"
+        },
+        {
+          "len": 180,
+          "curve": 1.0,
+          "hill": 26,
+          "left": "rock",
+          "right": "drop"
+        },
+        {
+          "len": 110,
+          "curve": -0.5,
+          "hill": 12,
+          "left": "drop",
+          "right": "rock"
+        },
+        {
+          "len": 170,
+          "curve": -1.0,
+          "hill": 24,
+          "left": "drop",
+          "right": "rock"
+        },
+        {
+          "len": 150,
+          "curve": 0.6,
+          "hill": 20,
+          "left": "rock",
+          "right": "drop"
+        },
+        {
+          "len": 160,
+          "curve": 1.0,
+          "hill": 26,
+          "left": "rock",
+          "right": "drop"
+        },
+        {
+          "len": 200,
+          "curve": -0.7,
+          "hill": 22,
+          "left": "drop",
+          "right": "trees"
+        },
+        {
+          "len": 180,
+          "curve": 0.4,
+          "hill": 16,
+          "left": "trees",
+          "right": "drop"
+        },
+        {
+          "len": 220,
+          "curve": 0,
+          "hill": 10,
           "left": "posts",
           "right": "posts"
         }
