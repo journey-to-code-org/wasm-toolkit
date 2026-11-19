@@ -1346,3 +1346,49 @@ fn it_gets_dark_out_of_doors_and_bed_is_morning() {
     click(&mut g, 100, 10);
     assert_eq!((g.state.hours, g.day(), g.dark(), g.note.as_deref()), (4, 2, 0, Some("You slept. It is morning.")));
 }
+
+#[test]
+fn space_shifts_and_some_days_it_rains() {
+    // Space stages, then it is the shift, and on the timeslip it is nothing.
+    let mut g = game();
+    click(&mut g, 20, 10);
+    click(&mut g, 150, 10);
+    click(&mut g, 40, 186);
+    let space = engine::game::KEY_SPACE | KEY_A;
+    g.tick(space, 0, 0);
+    g.tick(0, 0, 0);
+    assert_eq!(g.race.as_ref().unwrap().phase, Phase::Tree, "space staged it");
+    for _ in 0..4000 {
+        let Some(r) = &g.race else { break };
+        if r.phase == Phase::Slip { break; }
+        let up = (r.gear == 0 && r.tree >= 51) || (r.gear > 0 && r.rpm > r.redline() - 250.0);
+        g.tick(KEY_UP | if up { space } else { 0 }, 0, 0);
+        g.tick(KEY_UP, 0, 0);
+    }
+    let r = g.race.as_ref().unwrap();
+    assert!(r.phase == Phase::Slip && r.gear >= 3 && r.et > 0, "space went up through the gears: {:?}", (r.gear, r.et));
+    g.tick(0, 0, 0);
+    g.tick(space, 0, 0);
+    g.tick(0, 0, 0);
+    assert_eq!(g.scene, Scene::Race, "space does not throw the timeslip away");
+    g.tick(KEY_A, 0, 0);
+    assert_eq!(g.scene, Scene::Place);
+    // Elsewhere it picks, as Enter does.
+    g.tick(0, 20, 10);
+    g.tick(space, 20, 10);
+    assert_eq!(g.state.place, "shed");
+
+    // Rain: never on the first day, on about as many of the rest as the pack says, and none if it says none.
+    let wet = (1..=200).filter(|&d| g.rain_on(d)).count();
+    assert!(!g.rain_on(1) && (12..=50).contains(&wet), "{wet} wet days in 200");
+    let dry = Game::new(Pack::parse(&files(&MANIFEST.replace("\"hours_per_day\": 4", "\"hours_per_day\": 4, \"rain\": 0"))));
+    assert!((1..=200).all(|d| !dry.rain_on(d)));
+    // In the wet a bend throws the car further.
+    let day = (2..200).find(|&d| g.rain_on(d)).unwrap();
+    let before = g.pace().slide;
+    g.state.hours = (day - 1) * 4;
+    assert!(g.raining() && (g.pace().slide / before - 1.35).abs() < 0.001);
+    let mut s = Screen::new();
+    click(&mut g, 20, 10);
+    g.draw(&mut s);
+}

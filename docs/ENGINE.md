@@ -59,6 +59,12 @@ All five steps are in the engine. The engine plays a season out of a pack:
   engine runs its own car, so the throttle and shifts are as sharp as alone; the tree comes down
   when both have staged, and the winner is worked out from the two timeslips. It needs a server
   to hold the room: see [The meet](#the-meet).
+- **Space shifts**: on the strip the space bar stages the car and, once the tree is coming
+  down, is the next gear, as it was in Street Rod. E still shifts up and Q down. Everywhere else
+  Space picks, as Enter does.
+- **Rain**: some days it rains, the same days in every game of a pack, and the paper says
+  what tomorrow will do. A wet strip has a fifth less grip, a wet bend throws the car a third
+  further, rivals are a little slower down a wet road, and it is drawn falling.
 - **Day and night**: the last third of each day is dusk and then dark, on the road and in town:
   the sky goes, places marked as out of doors darken, the country beyond the lamps is dim, other cars are their lights, and the dash
   is lit if the cockpit has a night picture.
@@ -372,6 +378,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   most money they will race for, `pinks` whether they will race for cars. The one with `king`
   must be last, races for cars only, and beating them wins the game.
   `"figure": "skeeter.pic"` is a picture of them, which stands by their car.
+- `"season": { "days": 90, "hours_per_day": 12, "rain": 15 }`: `rain` is how many days in a
+  hundred are wet. The first day never is.
 - `"title": "title.pic"` is a picture for the title screen, 320 by 240. `"respray": { "cost": 60,
   "hours": 3 }` is what the `paint` action charges.
 - **bets** and **paints** may be left out. So may `"rebuild": { "cost": 250, "cond": 85 }`:

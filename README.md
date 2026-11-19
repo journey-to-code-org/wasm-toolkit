@@ -29,7 +29,7 @@ How it goes: you start with $750 and the paper. Buy a car out of it, work on it 
 hit the street. At the lot the regulars pull up one at a time: race one for kicks, for money or for
 pink slips, or wave him on. Beat them in order, then the King, before the Shootout on day 91.
 
-Keys: arrows or WASD, Enter or Space to pick, Escape to go back. The mouse moves the pointer.
+Keys: arrows or WASD, Enter or Space to pick, Escape to go back. In a race Space is the shift up (E works too, and Q shifts down). The mouse moves the pointer.
 At the strip: hold W to build boost, E into first on the green, E to shift up, Q to shift down.
 Under the hood: click a bolt to undo it or do it up, click a part with its bolts out to lift it off,
 click a part on the floor to pick it up, and click where it goes to set it down.
