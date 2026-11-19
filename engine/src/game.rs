@@ -830,6 +830,9 @@ impl Game {
             return self.drive_tick(keys, hit);
         }
         if self.scene == Scene::Road {
+            if self.net.versus.is_some() {
+                return self.versus_road_tick(keys, hit);
+            }
             return self.road_tick(keys, hit);
         }
         if (mx, my) != self.last_mouse {

@@ -262,3 +262,94 @@ fn what_arrives_is_not_trusted() {
     press(&mut c, KEY_B);
     assert_eq!(c.scene, Scene::Place);
 }
+
+fn road_game(seed: u32) -> Game {
+    engine::host::store(b"");
+    let blue = shade(ramp("BLUE"), 20);
+    let manifest = MANIFEST.replace("\"places\":", "\"roads\": { \"pass\": { \"title\": \"The pass\", \"ends\": [\"lot\", \"lot\"], \"traffic\": 0, \"cops\": 3,
+        \"parts\": [ { \"len\": 300, \"left\": \"fields\", \"right\": \"fields\" }, { \"len\": 300, \"curve\": 0.3, \"left\": \"fields\", \"right\": \"fields\" } ] } },\n  \"places\":");
+    let mut g = Game::new(Pack::parse(&pack(&[("pack.json", manifest.as_bytes().to_vec()), ("box.pic", pic(4, 2, &[(4, blue), (2, CLEAR), (2, blue)]))])));
+    g.seed(seed);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    g
+}
+
+/// One tick of a road: the middle of the lane, at about a speed.
+fn cruise(g: &mut Game, mph: f64) {
+    let Some(t) = g.trip.as_ref() else { return g.tick(0, 300, 100) };
+    let mut keys = if t.speed * 2.237 < mph { KEY_UP } else { 0 };
+    if t.x > 0.55 { keys |= 4 } else if t.x < 0.45 { keys |= 8 }
+    g.tick(keys, 300, 100);
+}
+
+#[test]
+fn two_people_race_down_a_road() {
+    let (mut a, mut b) = (road_game(3), road_game(9));
+    let mut s = Screen::new();
+    let mut room = Room { names: vec!["Ay", "Bee"] };
+    click(&mut a, 100, 10);
+    click(&mut b, 100, 10);
+    room.join(&mut [&mut a, &mut b]);
+
+    // Ay picks Bee, changes where from the strip to the pass, and makes it ten dollars.
+    click(&mut a, 100, 44);
+    a.draw(&mut s);
+    click(&mut a, 100, 158);
+    assert_eq!((a.scene, a.net.course), (Scene::OnlineBets, 1));
+    a.draw(&mut s);
+    click(&mut a, 4 + 104 + 50, 185);
+    room.pump(&mut [&mut a, &mut b]);
+    assert_eq!(b.net.dare_in, Some((1, 10)));
+    b.draw(&mut s);
+    press(&mut b, KEY_A);
+    room.pump(&mut [&mut a, &mut b]);
+    assert_eq!((a.scene, b.scene), (Scene::Road, Scene::Road));
+    let (ta, tb) = (a.trip.as_ref().unwrap(), b.trip.as_ref().unwrap());
+    assert!(ta.cops.is_empty() && ta.rival.as_ref().unwrap().remote && tb.rival.as_ref().unwrap().remote);
+
+    // Both are on the line, so it counts down; nobody moves for three seconds.
+    for _ in 0..85 {
+        cruise(&mut a, 70.0);
+        cruise(&mut b, 45.0);
+        room.pump(&mut [&mut a, &mut b]);
+    }
+    a.draw(&mut s);
+    assert_eq!((a.trip.as_ref().unwrap().z, b.trip.as_ref().unwrap().z), (0.0, 0.0));
+    // Ay is the quicker. Each sees the other where they said they were.
+    let mut seen = false;
+    for _ in 0..4000 {
+        cruise(&mut a, 70.0);
+        cruise(&mut b, 45.0);
+        room.pump(&mut [&mut a, &mut b]);
+        if let (Some(ta), Some(tb)) = (a.trip.as_ref(), b.trip.as_ref()) {
+            if tb.z > 100.0 && tb.z < 500.0 {
+                let him = ta.rival.as_ref().unwrap();
+                assert!((him.z - tb.z).abs() < 8.0 && (him.x - tb.x).abs() < 0.2, "{:?}", (him.z, tb.z));
+                seen = true;
+            }
+        }
+        let done = |g: &Game| g.net.versus.as_ref().is_some_and(|v| v.result.is_some());
+        if done(&a) && done(&b) {
+            break;
+        }
+    }
+    assert!(seen);
+    a.draw(&mut s);
+    b.draw(&mut s);
+    assert_eq!((a.net.versus.as_ref().unwrap().result, b.net.versus.as_ref().unwrap().result), (Some(Outcome::Won), Some(Outcome::Lost)));
+    press(&mut a, KEY_A);
+    press(&mut b, KEY_A);
+    assert_eq!((a.scene, b.scene, a.state.cash, b.state.cash, a.state.hours), (Scene::Online, Scene::Online, 1010, 990, 2));
+    assert!(a.trip.is_none() && a.note.as_deref() == Some("You won $10."));
+
+    // A dare down a road the other pack does not have is passed on, and backing out is losing.
+    b.net_in(&json!({ "t": "dare", "from": 1, "stake": 0, "road": "nowhere", "seed": 5 }).to_string());
+    assert_eq!(b.net.dare_in, None);
+    b.net.outbox.clear();
+    b.net_in(&json!({ "t": "dare", "from": 1, "stake": 10, "road": "pass", "seed": 5 }).to_string());
+    press(&mut b, KEY_A);
+    assert_eq!(b.scene, Scene::Road);
+    press(&mut b, KEY_B);
+    assert_eq!((b.scene, b.state.cash), (Scene::Online, 980));
+}
