@@ -37,6 +37,9 @@ pub const KEY_N: u32 = 256;
 pub const KEY_H: u32 = 512;
 /// The space bar: picks, like Enter, except in a race, where it is the shift up, as it was in Street Rod.
 pub const KEY_SPACE: u32 = 1024;
+/// How many lines of a list fit a column at the bench, and a page of the paper.
+const LINES: usize = 12;
+const PAGE: usize = 11;
 
 /// The most cars you can keep.
 pub const MOST_CARS: usize = 16;
@@ -71,6 +74,25 @@ pub struct Owned {
     pub body: i32,
     #[serde(default)]
     pub tyres: f64,
+    /// It has a build sheet: it is made of the parts fitted to it, and a slot with nothing in it
+    /// has nothing in it. A car without is as it always was: what is not changed is stock.
+    #[serde(default)]
+    pub sheet: bool,
+}
+
+/// A part's name without the state it is in: `valves@40` is `valves`, at forty per cent.
+pub fn base(id: &str) -> &str {
+    id.split('@').next().unwrap_or(id)
+}
+
+/// How good a part is, from 100 (new) to 0 (done for).
+pub fn cond_of(id: &str) -> i32 {
+    id.split_once('@').and_then(|(_, c)| c.parse().ok()).unwrap_or(100)
+}
+
+/// A part in a state: new ones are just their name.
+pub fn worn(id: &str, cond: i32) -> String {
+    if cond >= 100 { base(id).to_string() } else { format!("{}@{}", base(id), cond.max(0)) }
 }
 
 /// A car's tune, as steps from how it left the factory: pounds of boost, fuel (more is richer),
@@ -88,7 +110,7 @@ fn some_gas() -> f64 {
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0 }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0, sheet: false }
     }
 
     /// Which of a slot's `n` bolts are tight, a bit apiece.
@@ -199,6 +221,9 @@ pub struct Game {
     pub sheet: Option<dyno::Sheet>,
     /// The round of the shootout being run, counted from nothing, while one is on.
     pub bracket: Option<usize>,
+    /// How far down each long list has been turned: the car's parts and the shelf at the bench,
+    /// and the parts in the paper.
+    pub turned: [usize; 3],
     /// How fast the car was going as it came off a road into a town, to carry on at.
     rolling: f64,
     pub rollers: dyno::Rollers,
@@ -240,7 +265,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -261,7 +286,7 @@ impl Game {
     /// A new game, as the pack starts it.
     fn fresh(&self) -> State {
         let m = &self.pack.manifest;
-        let cars: Vec<Owned> = m.start.car.iter().filter_map(|id| m.cars.get(id).map(|c| Owned::new(id, c.paint.clone(), 70))).collect();
+        let cars: Vec<Owned> = m.start.car.iter().filter_map(|id| m.cars.get(id).map(|c| { let mut o = Owned::new(id, c.paint.clone(), 70); self.outfit(&mut o); o })).collect();
         State { pack: m.name.clone(), place: m.start.place.clone(), cash: m.start.cash, cur: (!cars.is_empty()).then_some(0), cars, ..State::default() }
     }
 
@@ -271,8 +296,8 @@ impl Game {
         let s: State = serde_json::from_slice(&crate::host::fetch()).ok()?;
         let fits = s.pack == m.name
             && m.places.contains_key(&s.place)
-            && s.cars.iter().all(|c| m.cars.contains_key(&c.car) && c.fitted.values().all(|p| m.parts.contains_key(p)))
-            && s.spares.iter().all(|p| m.parts.contains_key(p))
+            && s.cars.iter().all(|c| m.cars.contains_key(&c.car) && c.fitted.values().all(|p| m.parts.contains_key(base(p))))
+            && s.spares.iter().all(|p| m.parts.contains_key(base(p)))
             && s.cur.is_none_or(|i| i < s.cars.len())
             && s.rung <= m.rivals.len();
         fits.then_some(s)
@@ -420,8 +445,42 @@ impl Game {
         slots
     }
 
+    /// A part by what it is called, whatever state it is in.
     fn part(&self, id: &str) -> Option<&Part> {
-        self.pack.manifest.parts.get(id)
+        self.pack.manifest.parts.get(base(id))
+    }
+
+    /// A car with a build sheet is given its parts: each about as good as the car is, some better, some worse.
+    pub fn outfit(&self, o: &mut Owned) {
+        let Some(car) = self.pack.manifest.cars.get(&o.car).filter(|c| !c.stock.is_empty()) else { return };
+        o.sheet = true;
+        for (i, (slot, part)) in car.stock.iter().enumerate() {
+            let cond = (o.cond + (hash(i as u32 * 131 + o.cond as u32 + o.car.len() as u32) % 31) as i32 - 15).clamp(20, 100);
+            o.fitted.entry(slot.clone()).or_insert_with(|| worn(part, cond));
+        }
+    }
+
+    /// What the engine makes at its best, in pound-feet: what the driveline has to take.
+    pub fn peak_torque(&self) -> f64 {
+        let Some((o, car)) = self.owned().zip(self.car()) else { return 0.0 };
+        let (d, (gain, _)) = (self.tuned_drive(o, car), self.tune(o));
+        d.torque.iter().filter(|p| p[0] <= d.redline).map(|p| p[1]).fold(0.0, f64::max) * gain * self.blown(o, car)
+    }
+
+    /// A launch with more torque than a part of the driveline will take: sooner or later it lets
+    /// go, the weakest first. What broke, if anything did.
+    pub fn strain_driveline(&mut self) -> Option<String> {
+        let torque = self.peak_torque();
+        let cur = self.state.cur?;
+        let (slot, id, holds) = self.state.cars[cur].fitted.iter().filter(|(_, id)| cond_of(id) > 0)
+            .filter_map(|(slot, id)| Some((slot.clone(), id.clone(), self.part(id)?.holds?))).filter(|&(_, _, h)| torque > h)
+            .min_by(|a, b| a.2.total_cmp(&b.2))?;
+        let chance = ((torque / holds - 1.0) * 150.0).clamp(4.0, 80.0) as u32;
+        if self.rand() % 100 >= chance {
+            return None;
+        }
+        self.state.cars[cur].fitted.insert(slot, worn(&id, 0));
+        Some(self.part(&id).map(|p| p.name.clone()).unwrap_or_default())
     }
 
     fn has_part(&self, id: &str) -> bool {
@@ -489,8 +548,8 @@ impl Game {
 
     /// What they give today for a part off the shelf: 70 to 89 hundredths of what it cost.
     pub fn spare_offer(&self, id: &str) -> i32 {
-        let n = self.pack.manifest.parts.keys().position(|k| k == id).unwrap_or(0) as u32;
-        self.part(id).map(|p| p.price).unwrap_or(0) * (70 + (hash(self.day() as u32 * 16 + n + 3) >> 12) as i32 % 20) / 100
+        let n = self.pack.manifest.parts.keys().position(|k| k == base(id)).unwrap_or(0) as u32;
+        self.part(id).map(|p| p.price).unwrap_or(0) * (70 + (hash(self.day() as u32 * 16 + n + 3) >> 12) as i32 % 20) / 100 * cond_of(id) / 100
     }
 
     /// Today's cars in the paper: three, picked by the day from the cars that have a price.
@@ -542,6 +601,22 @@ impl Game {
     /// not bolted down.
     pub fn wont_run(&self) -> Option<String> {
         let (o, car) = self.owned().zip(self.car())?;
+        // Something done for, something that wants a part that is not there, or nothing where a part should be.
+        for id in o.fitted.values() {
+            let Some(p) = self.part(id) else { continue };
+            if cond_of(id) == 0 {
+                return Some(format!("The {} is done for.", p.name.to_lowercase()).chars().take(38).collect());
+            }
+            let has = |need: &String| o.fitted.values().filter_map(|other| self.part(other)).any(|other| other.gives.contains(need));
+            if let Some(need) = p.needs.iter().find(|n| !has(n)) {
+                return Some(format!("{} needs {need}.", p.name).chars().take(38).collect());
+            }
+        }
+        if o.sheet {
+            if let Some(slot) = car.stock.keys().find(|s| !o.fitted.contains_key(*s) && !car.optional.contains(s)) {
+                return Some(format!("It has no {}.", slot.to_lowercase()));
+            }
+        }
         let hood = car.hood.as_ref()?;
         hood.slots.iter().find_map(|(slot, place)| {
             let n = place.bolts.len();
@@ -982,13 +1057,15 @@ impl Game {
         let stake = if self.bet == 0 || pinks { 0 } else { stakes[self.bet - 1] };
         if won { self.state.wins += 1 } else { self.state.losses += 1 }
         self.ping();
+        let broke = self.strain_driveline();
         if won {
             if pinks && r.king {
                 self.scene = Scene::Over(3);
                 return self.save();
             }
             if pinks {
-                let theirs = Owned::new(&r.car, r.paint.clone(), (62 + self.who as i32).min(100));
+                let mut theirs = Owned::new(&r.car, r.paint.clone(), (62 + self.who as i32).min(100));
+                self.outfit(&mut theirs);
                 if self.state.cars.len() < MOST_CARS {
                     self.state.cars.push(theirs);
                     self.say("You won his car. It is in your yard.");
@@ -1020,6 +1097,11 @@ impl Game {
         } else {
             self.state.cash -= stake;
             self.say(if stake > 0 { "You lose, sucker. Pay the man." } else { "You lost. It was for kicks." });
+        }
+        if let Some(name) = broke {
+            // More than it would take: whatever the race came to, the car is not going anywhere.
+            self.say(&format!("The {} let go.", name.to_lowercase()).chars().take(38).collect::<String>());
+            tone(90, 500);
         }
         self.spend(2);
     }
@@ -1161,8 +1243,13 @@ impl Game {
                                 self.buy_car(i);
                             }
                         }
-                    } else if let Some(i) = self.row(8, 312, 56, 10, self.pack.manifest.parts.len()) {
-                        self.buy_part(i);
+                    } else {
+                        let len = self.pack.manifest.parts.len();
+                        if len > PAGE && self.row(8, 312, 56 + PAGE as i32 * 10, 10, 1).is_some() {
+                            self.turned[2] = if self.turned[2] + PAGE >= len { 0 } else { self.turned[2] + PAGE };
+                        } else if let Some(i) = self.row(8, 312, 56, 10, (len - self.turned[2].min(len)).min(PAGE)) {
+                            self.buy_part(i + self.turned[2]);
+                        }
                     }
                 }
             }
@@ -1398,6 +1485,7 @@ impl Game {
         self.state.cash -= offer.price;
         let paint = (!offer.paint.is_empty()).then_some(offer.paint);
         let mut bought = Owned::new(&offer.car, paint, offer.cond);
+        self.outfit(&mut bought);
         bought.gas = 2.0 + (offer.price * 7 % 60) as f64 / 10.0;
         self.state.cars.push(bought);
         let day = self.day();
@@ -1449,7 +1537,15 @@ impl Game {
             return;
         }
         let slots = self.slots();
-        if let Some(i) = self.row(164, 312, 34, 10, self.state.spares.len()) {
+        // The last line of a long column turns it over to the next dozen.
+        for (k, (x0, x1, len)) in [(8, 156, slots.len()), (164, 312, self.state.spares.len())].into_iter().enumerate() {
+            if len > LINES && self.row(x0, x1, 34 + LINES as i32 * 10, 10, 1).is_some() {
+                self.turned[k] = if self.turned[k] + LINES >= len { 0 } else { self.turned[k] + LINES };
+                return;
+            }
+        }
+        let (top, shelf) = (self.turned[0].min(slots.len().saturating_sub(1)), self.turned[1].min(self.state.spares.len().saturating_sub(1)));
+        if let Some(i) = self.row(164, 312, 34, 10, (self.state.spares.len() - shelf.min(self.state.spares.len())).min(LINES)).map(|i| i + shelf) {
             let id = self.state.spares[i].clone();
             if self.selling {
                 self.state.cash += self.spare_offer(&id);
@@ -1473,18 +1569,19 @@ impl Game {
             self.say("Bolted on. That was an hour.");
             tone(520, 60);
             self.spend(1);
-        } else if let Some(i) = self.row(8, 156, 34, 10, slots.len()) {
+        } else if let Some(i) = self.row(8, 156, 34, 10, (slots.len() - top.min(slots.len())).min(LINES)).map(|i| i + top) {
             let Some(cur) = self.state.cur else { return };
             if self.under_hood(&slots[i]) {
                 return self.say("That one is under the hood.");
             }
+            let sheet = self.state.cars[cur].sheet;
             if let Some(old) = self.state.cars[cur].fitted.remove(&slots[i]) {
                 self.state.spares.push(old);
-                self.say("Off. The stock one is back on.");
+                self.say(if sheet { "Off, and on the shelf. An hour." } else { "Off. The stock one is back on." });
                 tone(400, 60);
                 self.spend(1);
             } else {
-                self.say("That is the stock one.");
+                self.say(if sheet { "There is nothing there to take off." } else { "That is the stock one." });
             }
         }
     }
@@ -1941,9 +2038,13 @@ impl Game {
             self.panel(s, "Help wanted", self.note.as_deref().unwrap_or("Pick a job to work it. It pays, and it takes the hours."), "Escape puts it down.");
         } else {
             let parts = &self.pack.manifest.parts;
-            let over = self.row(8, 312, 56, 10, parts.len());
-            for (i, (id, p)) in parts.iter().enumerate() {
-                let y = 56 + i as i32 * 10;
+            let top = self.turned[2].min(parts.len().saturating_sub(1));
+            let over = self.row(8, 312, 56, 10, (parts.len() - top.min(parts.len())).min(PAGE)).map(|i| i + top);
+            if parts.len() > PAGE {
+                s.text(12, 56 + PAGE as i32 * 10, &format!("MORE: {} TO {} OF {}", top + 1, (top + PAGE).min(parts.len()), parts.len()), shade(ramp("BLUE"), 14));
+            }
+            for (i, (id, p)) in parts.iter().enumerate().skip(top).take(PAGE) {
+                let y = 56 + (i - top) as i32 * 10;
                 if over == Some(i) {
                     s.rect(8, y - 1, 304, 10, hover);
                 }
@@ -1970,29 +2071,52 @@ impl Game {
         s.rect(8, 28, 148, 1, shade(ramp("WOOD"), 18));
         s.rect(164, 28, 148, 1, shade(ramp("WOOD"), 18));
         let (slots, lit) = (self.slots(), shade(ramp("WOOD"), 16));
-        let (left, right) = (self.row(8, 156, 34, 10, slots.len()), self.row(164, 312, 34, 10, self.state.spares.len()));
+        let (top, shelf) = (self.turned[0].min(slots.len().saturating_sub(1)), self.turned[1].min(self.state.spares.len().saturating_sub(1)));
+        let (left, right) = (self.row(8, 156, 34, 10, (slots.len() - top.min(slots.len())).min(LINES)).map(|i| i + top), self.row(164, 312, 34, 10, (self.state.spares.len() - shelf.min(self.state.spares.len())).min(LINES)).map(|i| i + shelf));
+        for (x, len, at) in [(10, slots.len(), top), (166, self.state.spares.len(), shelf)] {
+            if len > LINES {
+                s.text_sh(x, 34 + LINES as i32 * 10, &format!("MORE: {} TO {} OF {len}", at + 1, (at + LINES).min(len)), shade(ramp("CYAN"), 26), BLACK);
+            }
+        }
+        let sheet = self.owned().is_some_and(|o| o.sheet);
         let mut about: Option<String> = None;
-        for (i, slot) in slots.iter().enumerate() {
-            let y = 34 + i as i32 * 10;
-            let on = self.owned().and_then(|o| o.fitted.get(slot)).and_then(|id| self.part(id));
+        for (i, slot) in slots.iter().enumerate().skip(top).take(LINES) {
+            let y = 34 + (i - top) as i32 * 10;
+            let fitted = self.owned().and_then(|o| o.fitted.get(slot));
+            let on = fitted.and_then(|id| self.part(id));
             if left == Some(i) {
                 s.rect(8, y - 1, 148, 10, lit);
-                about = Some(match on { Some(p) => format!("{}. Pick it to take it off.", p.pitch), None => format!("{slot}: the stock one.") });
+                about = Some(match on { Some(p) if p.pitch.is_empty() => format!("{slot}. Pick it to take it off."), Some(p) => format!("{}. Pick it to take it off.", p.pitch), None if sheet => format!("{slot}: there is nothing there."), None => format!("{slot}: the stock one.") });
             }
-            let name = on.map(|p| p.name.to_uppercase()).unwrap_or_else(|| format!("STOCK {}", slot.to_uppercase()));
-            s.text_sh(10, y, &name.chars().take(18).collect::<String>(), if on.is_some() { shade(ramp("GOLD"), 27) } else { shade(ramp("CREAM"), 22) }, BLACK);
+            // What is there, and how good it is if it is not new; red when it is done for.
+            let cond = fitted.map_or(100, |id| cond_of(id));
+            // A slot the car left the factory with something in is one it wants something in.
+            let needed = self.car().is_some_and(|c| c.stock.contains_key(slot));
+            let name = match on {
+                Some(p) if cond < 100 => format!("{:14} {cond:2}%", p.name.to_uppercase().chars().take(14).collect::<String>()),
+                Some(p) => p.name.to_uppercase(),
+                None if self.under_hood(slot) => format!("{}: HOOD", slot.to_uppercase()),
+                None if sheet && needed => format!("NO {}", slot.to_uppercase()),
+                None if sheet => format!("{}: NONE", slot.to_uppercase()),
+                None => format!("STOCK {}", slot.to_uppercase()),
+            };
+            let stock = on.is_some() && self.car().is_some_and(|c| c.stock.get(slot).map(String::as_str) == fitted.map(|id| base(id)));
+            let colour = if cond == 0 || (on.is_none() && sheet && needed && !self.under_hood(slot)) { shade(ramp("RED"), 27) } else if on.is_none() && sheet { shade(ramp("CREAM"), 14) } else if on.is_some() && !stock { shade(ramp("GOLD"), 27) } else { shade(ramp("CREAM"), 22) };
+            s.text_sh(10, y, &name.chars().take(18).collect::<String>(), colour, BLACK);
         }
         if self.state.cur.is_none() {
             s.text_sh(10, 34 + slots.len() as i32 * 10 + 6, "NO CAR IN THE BAY.", shade(ramp("RED"), 26), BLACK);
         }
-        for (i, id) in self.state.spares.iter().enumerate() {
-            let y = 34 + i as i32 * 10;
+        for (i, id) in self.state.spares.iter().enumerate().skip(shelf).take(LINES) {
+            let y = 34 + (i - shelf) as i32 * 10;
             let Some(p) = self.part(id) else { continue };
             if right == Some(i) {
                 s.rect(164, y - 1, 148, 10, lit);
                 about = Some(if self.selling { format!("They give ${} for it today.", self.spare_offer(id)) } else { format!("{}: {}", p.slot, p.pitch) });
             }
-            s.text_sh(166, y, &p.name.to_uppercase().chars().take(18).collect::<String>(), WHITE, BLACK);
+            let cond = cond_of(id);
+            let name = if cond < 100 { format!("{:14} {cond:2}%", p.name.to_uppercase().chars().take(14).collect::<String>()) } else { p.name.to_uppercase() };
+            s.text_sh(166, y, &name.chars().take(18).collect::<String>(), if cond == 0 { shade(ramp("RED"), 27) } else { WHITE }, BLACK);
         }
         if self.state.spares.is_empty() {
             s.text_sh(166, 34, "NOTHING.", shade(ramp("CREAM"), 18), BLACK);

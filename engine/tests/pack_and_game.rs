@@ -1760,3 +1760,76 @@ fn bodies_get_knocked_about_and_tyres_wear() {
     assert_eq!((g.owned().unwrap().tyres, g.state.cash), (0.0, 1000 - 196));
     assert_eq!(g.value(g.owned().unwrap()), worth);
 }
+
+#[test]
+fn a_car_with_a_build_sheet_is_made_of_its_parts() {
+    use engine::game::{base, cond_of, worn};
+    let manifest = MANIFEST.replace("\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" } }", "\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" },
+        \"stock\": { \"Shocks\": \"struts\", \"Axles\": \"axle\", \"Seats\": \"seat\" }, \"optional\": [\"Seats\"] }")
+        .replace("\"puffer\": {", "\"struts\": { \"name\": \"Struts\", \"slot\": \"Shocks\", \"price\": 100 }, \"seat\": { \"name\": \"Seat\", \"slot\": \"Seats\", \"price\": 40 },
+        \"axle\": { \"name\": \"Axle\", \"slot\": \"Axles\", \"price\": 80, \"holds\": 150 }, \"axle2\": { \"name\": \"Big axle\", \"slot\": \"Axles\", \"price\": 200, \"holds\": 900 },
+        \"cam\": { \"name\": \"Cam\", \"slot\": \"Cams\", \"price\": 90, \"needs\": [\"stiffer springs\"] }, \"spr\": { \"name\": \"Springs\", \"slot\": \"Springs\", \"price\": 30, \"gives\": [\"stiffer springs\"] }, \"puffer\": {");
+    assert_eq!((base("valves@40"), cond_of("valves@40"), cond_of("valves"), worn("valves@40", 100), worn("valves", 7)), ("valves", 40, 100, "valves".to_string(), "valves@7".to_string()));
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    // It comes with what is on its sheet, each part in some state of its own, none of them new on a tired car.
+    let o = g.owned().unwrap().clone();
+    assert!(o.sheet && o.fitted.len() == 3 && ["Shocks", "Axles", "Seats"].iter().all(|s| (20..100).contains(&cond_of(&o.fitted[*s]))), "{:?}", o.fitted);
+    assert_eq!(g.wont_run(), None);
+    // It will run without its seat, not without its shocks, and not on a part that is done for.
+    let seat = g.state.cars[0].fitted.remove("Seats").unwrap();
+    assert_eq!(g.wont_run(), None);
+    let struts = g.state.cars[0].fitted.remove("Shocks").unwrap();
+    assert_eq!(g.wont_run().as_deref(), Some("It has no shocks."));
+    g.state.cars[0].fitted.insert("Shocks".into(), worn(&struts, 0));
+    assert_eq!(g.wont_run().as_deref(), Some("The struts is done for."));
+    g.state.cars[0].fitted.insert("Shocks".into(), struts.clone());
+    // A cam that wants stiffer springs wants them on the car.
+    g.state.cars[0].fitted.insert("Cams".into(), "cam".into());
+    assert_eq!(g.wont_run().as_deref(), Some("Cam needs stiffer springs."));
+    g.state.cars[0].fitted.insert("Springs".into(), "spr".into());
+    assert_eq!(g.wont_run(), None);
+    // A used part is worth what is left of it.
+    assert!(g.spare_offer(&seat) < g.spare_offer("seat") && g.spare_offer("seat@0") == 0);
+    // The engine makes more than the axle will take: launch after launch, and it goes. The big one never does.
+    assert!(g.peak_torque() > 150.0 && g.peak_torque() < 900.0);
+    let mut broke = None;
+    for _ in 0..200 {
+        broke = g.strain_driveline();
+        if broke.is_some() { break; }
+    }
+    assert_eq!((broke.as_deref(), g.owned().unwrap().fitted["Axles"].as_str(), g.wont_run().as_deref()), (Some("Axle"), "axle@0", Some("The axle is done for.")));
+    g.state.cars[0].fitted.insert("Axles".into(), "axle2".into());
+    assert!((0..300).all(|_| g.strain_driveline().is_none()));
+    // The bench lists it all, with what state each is in.
+    g.state.spares = vec![seat, "axle@0".into()];
+    click(&mut g, 60, 10);
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    // A build sheet has to name parts that are there, in the slots they go in.
+    assert!(Pack::parse(&files(&manifest.replace("\"Axles\": \"axle\"", "\"Axles\": \"struts\""))).err().unwrap().contains("goes in Shocks"));
+    assert!(Pack::parse(&files(&manifest.replace("\"optional\": [\"Seats\"]", "\"optional\": [\"Wings\"]"))).err().unwrap().contains("Wings"));
+
+    // The default car: whole as it comes; a big turbo wants its manifold, its housing and its pump; and then it breaks axles.
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra", None, 100);
+    g.outfit(&mut o);
+    assert!(o.sheet && o.fitted.len() >= 30);
+    g.state.cars.push(o);
+    g.state.cur = Some(0);
+    assert_eq!(g.wont_run(), None);
+    assert!((0..300).all(|_| g.strain_driveline().is_none()), "as it left the factory, it holds");
+    g.state.cars[0].fitted.insert("Turbo".into(), "big-turbo".into());
+    assert!(g.wont_run().is_some_and(|w| w.contains("needs")));
+    for (slot, part) in [("Exhaust", "header"), ("O2 housing", "o2-big"), ("Fuel pump", "pump-255")] {
+        g.state.cars[0].fitted.insert(slot.into(), part.into());
+    }
+    assert_eq!(g.wont_run(), None);
+    let broke = (0..300).find_map(|_| g.strain_driveline());
+    assert_eq!(broke.as_deref(), Some("Front axles"), "the weakest goes first");
+}

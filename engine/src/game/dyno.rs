@@ -59,7 +59,7 @@ pub fn tuned(e: Ecu, turbo: bool) -> (f64, f64) {
 impl Game {
     /// Whether the car in the bay has a laptop to tune it with.
     pub fn tuner(&self) -> bool {
-        self.owned().is_some_and(|o| o.fitted.values().filter_map(|id| self.pack.manifest.parts.get(id)).any(|p| p.tuner))
+        self.owned().is_some_and(|o| o.fitted.values().filter_map(|id| self.pack.manifest.parts.get(base(id))).any(|p| p.tuner))
     }
 
     /// A run with the engine knocking takes it out of the engine.
