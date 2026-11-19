@@ -598,6 +598,14 @@ impl Game {
                 }
                 "yard" => self.scene = Scene::Yard,
                 "online" => self.go_online(),
+                "sleep" => {
+                    // Bed: whatever is left of today is gone, and it is morning.
+                    let per = self.pack.manifest.season.hours_per_day.max(1);
+                    self.spend(per - self.state.hours % per);
+                    if self.scene == Scene::Place {
+                        self.say("You slept. It is morning.");
+                    }
+                }
                 "nitrous" => {
                     let Some((kit, cur)) = self.owned().and_then(|o| self.kit(o)).cloned().zip(self.state.cur) else { return self.no("There is no bottle on this car.") };
                     if self.state.cars[cur].bottle >= kit.seconds - 0.05 {
@@ -1446,6 +1454,9 @@ impl Game {
         }
         if let (Some([x, ground]), Some(o)) = (place.car_at, self.owned()) {
             self.draw_owned(s, o, self.lamps, x, ground, false);
+        }
+        if place.outdoors && self.dark() > 0 {
+            s.darken(0, 0, 320, 200, if self.dark() == 1 { 5 } else { 11 });
         }
         if self.scene == Scene::Place {
             let over = self.spot_under().map(|s| s.rect);

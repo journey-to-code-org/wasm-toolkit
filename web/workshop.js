@@ -16,7 +16,7 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
@@ -611,6 +611,7 @@ function roomsPanel() {
     }),
     p.picture ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "Take the picture away", onclick: () => { delete p.picture; p.backdrop ??= "NAVY"; tidy(); render(); } }))
       : choice("With no picture, its colour", p.backdrop ?? "NAVY", colours(), (v) => { p.backdrop = v; }),
+    tick("It is out of doors: it gets dark here late in the day", p.outdoors, (v) => { if (v) p.outdoors = true; else delete p.outdoors; }),
     tick("Your car stands here", !!p.car_at, (v) => { if (v) p.car_at = [40, 182]; else delete p.car_at; }),
     tick("Rivals pull in here", !!p.rival_at, (v) => { if (v) p.rival_at = [72, 174]; else { delete p.rival_at; } }),
     tick("A new game starts here", m.start.place === at.place, (v) => { if (v) m.start.place = at.place; })));

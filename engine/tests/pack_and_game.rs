@@ -1306,3 +1306,31 @@ fn nitrous_is_a_bottle_that_empties() {
     assert_eq!((g.trip.as_ref().unwrap().spray, g.owned().unwrap().bottle), (0.0, 0.0));
     assert!(Pack::parse(&files(&manifest.replace("\"gain\": 50", "\"gain\": 0"))).err().unwrap().contains("nitrous"));
 }
+
+#[test]
+fn it_gets_dark_out_of_doors_and_bed_is_morning() {
+    let manifest = MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"sleep\"").replace("\"backdrop\": \"GRASS\",", "\"backdrop\": \"GRASS\", \"outdoors\": true,");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    let mut s = Screen::new();
+    // Indoors the hour makes no difference; out on the road it does.
+    g.draw(&mut s);
+    let shed = s.at(300, 100);
+    g.state.hours = 3;
+    g.draw(&mut s);
+    assert_eq!(s.at(300, 100), shed);
+    g.state.hours = 0;
+    click(&mut g, 20, 10);
+    g.draw(&mut s);
+    let day = s.at(300, 100);
+    g.state.hours = 3;
+    g.draw(&mut s);
+    assert_eq!((s.at(300, 100) / 32, s.at(300, 100) % 32), (day / 32, day % 32 - 5), "five shades down at dusk");
+    // Bed at three o'clock of a four-hour day is one hour, and the morning of day two.
+    click(&mut g, 20, 10);
+    click(&mut g, 100, 10);
+    assert_eq!((g.state.hours, g.day(), g.dark(), g.note.as_deref()), (4, 2, 0, Some("You slept. It is morning.")));
+}
