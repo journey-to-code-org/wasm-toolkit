@@ -108,6 +108,8 @@ pub struct State {
     pub sold: (i32, Vec<usize>),
     /// Races against someone won and lost, whatever they were for.
     #[serde(default)]
+    pub knocked: (i32, Vec<(usize, i32)>),
+    #[serde(default)]
     pub wins: u32,
     #[serde(default)]
     pub losses: u32,
@@ -445,7 +447,8 @@ impl Game {
             let h = hash(day as u32 * 3 + i as u32 + 1);
             let (id, car) = sale[(h >> 4) as usize % sale.len()];
             let cond = 55 + (h >> 8) as i32 % 26;
-            let price = self.list_price(id, cond) + (h >> 16) as i32 % 40;
+            let off = if self.state.knocked.0 == day { self.state.knocked.1.iter().find(|k| k.0 == i).map_or(0, |k| k.1) } else { 0 };
+            let price = (self.list_price(id, cond) + (h >> 16) as i32 % 40) * (100 - off) / 100;
             let paint = if car.paint_ramps.mid.is_some() { paints[h as usize % paints.len()].clone() } else { car.paint.clone().unwrap_or_default() };
             Some(Offer { car: id.clone(), paint, cond, price })
         }).collect()
@@ -964,7 +967,12 @@ impl Game {
                         }
                     } else if page == 0 {
                         if let Some(i) = self.row(8, 312, 54, 44, 3) {
-                            self.buy_car(i);
+                            // The word in the corner of an ad is the telephone; the rest of it is the money.
+                            if self.px >= 248 && (self.py - 54) % 44 >= 30 {
+                                self.haggle(i);
+                            } else {
+                                self.buy_car(i);
+                            }
                         }
                     } else if let Some(i) = self.row(8, 312, 56, 10, self.pack.manifest.parts.len()) {
                         self.buy_part(i);
@@ -1094,6 +1102,33 @@ impl Game {
             self.say("Out of gas. You walked home.");
             self.spend(2);
         }
+    }
+
+    /// Asking for five per cent more off a car in the paper. Every seller has a price they will
+    /// not go under, somewhere between five and twenty-five per cent off, and does not say what
+    /// it is: ask for more than that and they hang up, and the car is gone.
+    fn haggle(&mut self, i: usize) {
+        let Some(Some(offer)) = self.offers().into_iter().nth(i) else { return };
+        let day = self.day();
+        if self.state.knocked.0 != day {
+            self.state.knocked = (day, Vec::new());
+        }
+        let had = self.state.knocked.1.iter().find(|k| k.0 == i).map_or(0, |k| k.1);
+        let most = 5 + (hash(day as u32 * 31 + i as u32 + 17) % 5) as i32 * 5;
+        if had + 5 > most {
+            if self.state.sold.0 != day {
+                self.state.sold = (day, Vec::new());
+            }
+            self.state.sold.1.push(i);
+            self.no("\"Forget it.\" He hung up.");
+        } else {
+            self.state.knocked.1.retain(|k| k.0 != i);
+            self.state.knocked.1.push((i, had + 5));
+            let now = self.offers().into_iter().nth(i).flatten().map_or(offer.price, |o| o.price);
+            self.say(&format!("\"All right. ${now}.\""));
+            tone(660, 80);
+        }
+        self.save();
     }
 
     fn buy_car(&mut self, i: usize) {
@@ -1616,11 +1651,13 @@ impl Game {
                 }
                 s.text(180, y + 24, cond_word(o.cond), grey);
                 s.text(180, y + 34, &format!("${}", o.price), shade(ramp("FOREST"), 12));
+                let on = over == Some(i) && self.px >= 248 && (self.py - 54) % 44 >= 30;
+                s.text(256, y + 34, "HAGGLE", if on { shade(ramp("RED"), 20) } else { grey });
             }
             if offers.is_empty() {
                 s.text(12, 60, "NO CARS FOR SALE.", grey);
             }
-            self.panel(s, "The paper", self.note.as_deref().unwrap_or("Pick a car to buy it."), "Escape puts it down.");
+            self.panel(s, "The paper", self.note.as_deref().unwrap_or("Pick a car to buy it, or haggle."), "Escape puts it down.");
         } else if page == 2 {
             let jobs = self.jobs();
             let over = self.row(8, 312, 56, 20, jobs.len());

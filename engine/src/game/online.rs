@@ -332,6 +332,10 @@ impl Game {
         r.cops = 0;
         let mut trip = crate::road::Trip::new(road, &r, false, seed);
         trip.pace = self.pace();
+        if self.raining() {
+            // It may not be raining where they are: at the meet the road is always dry.
+            trip.pace.slide /= 1.35;
+        }
         let mut them = crate::road::Rival::new(14.0, self.person(id).and_then(|p| p.paint.as_deref()).unwrap_or("RED"));
         them.remote = true;
         trip.rival = Some(them);
