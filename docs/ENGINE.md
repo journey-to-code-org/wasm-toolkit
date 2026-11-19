@@ -67,6 +67,12 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Under the hood on the build sheet**: on a car with a build sheet, what it came with under
   the hood (airbox, manifold, turbo, intercooler) are real parts: they come off onto the shelf,
   have a condition, and sell. A turbo sells best with its manifold and O2 housing.
+- **Torque steer**: on the strip a car has to be kept in its lane with the wheel (left and
+  right). A front-wheel-drive car pulls hard to one side off the line and in the low gears, an
+  all-wheel-drive one less, a rear-driven one only with its tyres spinning; which side is the
+  same for a car all day. Over the centre line or into the wall is a disqualification, and the
+  wall is a dent. On a road the power drags it across the lane the same way. A marker at the top
+  of the screen shows where the car is in its lane.
 - **Brakes and suspension**: better brakes stop shorter and better suspension takes bends
   faster, on roads and in town; worn ones do less, and the rain makes both worse.
 - **A tune after the work**: change cams, a head, a turbo, a manifold, the pump or the computer,
@@ -425,7 +431,9 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   Each dial is where its needle turns, the needle's length and what it reads at full sweep;
   `minis` are dials that only sit there. The wheel is a square picture turned about `at`.
   Everything but `picture` may be left out.
-  `"auto": true` in a car's `drive` makes it an automatic.
+  `"auto": true` in a car's `drive` makes it an automatic. `"driven": "front"` (or `"all"`, or
+  the default `"rear"`) is which wheels it drives: on a hard launch the front ones drag the car
+  to one side (torque steer), all four do it less, and the back ones only when they spin.
   `"stock": { "Valves": "s-valves", "Rear diff": "s-diff" }` is its build sheet: for each
   slot, the part of the pack it left the factory with. A car bought or won comes with these
   fitted, each in a state near the car's own, and is then only what is fitted to it.

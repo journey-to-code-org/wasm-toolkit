@@ -75,10 +75,17 @@ async function play(shots, packBytes) {
   const SHIFT_LIGHT = 170 * W + 121, LIT = 2 * 32 + 30, PAPER = [60 * W + 96, 100 * W + 96, 100 * W + 224];
   run(1, UP | E); run(1, UP);
   let ticks = 0, slip = false, mid = false;
+  // The lane marker at the top: green, or red near a line. Steer it back to the middle.
+  const MARK = [5 * 32 + 26, 2 * 32 + 28];
+  const wheel = () => {
+    const row = live().subarray(23 * W + 120, 23 * W + 203);
+    const at = row.findIndex((v) => MARK.includes(v));
+    return at < 0 ? 0 : at + 122 > 161 ? 4 : at + 122 < 159 ? 8 : 0;
+  };
   for (; ticks < 1500 && !slip; ticks++) {
     const lit = live()[SHIFT_LIGHT] === LIT;
-    run(1, lit ? UP | E : UP);
-    if (lit) run(1, UP);
+    run(1, (lit ? UP | E : UP) | wheel());
+    if (lit) run(1, UP | wheel());
     if (ticks === 150 && !mid) { shot("e11-run"); mid = true; }
     slip = PAPER.every((p) => (live()[p] >> 5) === 25);
   }

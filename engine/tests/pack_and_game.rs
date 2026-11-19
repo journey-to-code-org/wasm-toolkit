@@ -2260,3 +2260,48 @@ fn brakes_stop_and_suspension_corners_as_they_are_fitted_and_worn() {
     let t = gt.town.as_ref().unwrap();
     assert_eq!((t.brakes, t.turn), (1.0, 1.0), "a car with no brakes or suspension on its sheet is an ordinary one");
 }
+
+#[test]
+fn front_drive_pulls_to_a_side_and_the_wheel_holds_it() {
+    use engine::pack::{Drive, Driven};
+    use engine::race::LANE;
+    // A pass from the green, with or without the wheel to keep it in its lane: the furthest it got from the middle, and how it ended.
+    let pass = |driven: Driven, lean: f64, steer: bool| {
+        let d = Drive { driven, ..Drive::default() };
+        let mut r = Race::new(&d, 1.0, None, 0, 0);
+        r.lean = lean;
+        r.tick(Controls { stage: true, ..Controls::default() });
+        let mut most: f64 = 0.0;
+        for _ in 0..3000 {
+            if r.phase == Phase::Slip { break; }
+            let up = (r.gear == 0 && r.tree >= 51) || (r.gear > 0 && r.rpm > d.redline - 250.0);
+            let (left, right) = (steer && r.drift > 0.05, steer && r.drift < -0.05);
+            r.tick(Controls { throttle: true, up, left, right, ..Controls::default() });
+            most = most.max(r.drift.abs());
+        }
+        (most, r.out, r.et)
+    };
+    // Hands off: the front-driven car is over a line, the all-wheel one wanders but less, the rear-driven one hardly moves.
+    let (front, out, et) = pass(Driven::Front, 1.0, false);
+    assert_eq!((out, et), (1, 0), "over the centre line, and no time");
+    assert_eq!(pass(Driven::Front, -1.0, false).1, -1, "the other way is the wall");
+    let (all, out, _) = pass(Driven::All, 1.0, false);
+    let (rear, _, _) = pass(Driven::Rear, 1.0, false);
+    assert!(front > LANE && all < front && all > 0.5 && rear < all / 2.0 && out == 0, "{front} {all} {rear}");
+    // With the wheel it stays in its lane, and runs the same time as one that never pulled.
+    let (held, out, et) = pass(Driven::Front, 1.2, true);
+    let straight = { let mut d = Race::new(&Drive { driven: Driven::Front, ..Drive::default() }, 1.0, None, 0, 0); d.tick(Controls { stage: true, ..Controls::default() }); for _ in 0..3000 { if d.phase == Phase::Slip { break; } let up = (d.gear == 0 && d.tree >= 51) || (d.gear > 0 && d.rpm > 7200.0 - 250.0); d.tick(Controls { throttle: true, up, ..Controls::default() }); } d.et };
+    assert!(held < 1.0 && out == 0 && et == straight, "{held} {et} {straight}");
+
+    // In the game: a car pulls the same way all day, and over the line is disqualified, and the wall is a dent.
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra-base", None, 90);
+    g.outfit(&mut o);
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    let lean = g.lean();
+    assert!(lean != 0.0 && lean == g.lean() && (0.8..=1.2).contains(&lean.abs()));
+    assert!(g.pace().pull.abs() > 0.0 && g.pace().pull.signum() == lean.signum());
+}

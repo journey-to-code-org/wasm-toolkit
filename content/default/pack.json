@@ -168,7 +168,10 @@
         "Cruise control",
         "Seats",
         "Dashboard"
-      ]
+      ],
+      "drive": {
+        "driven": "all"
+      }
     },
     "umbra-base": {
       "name": "1990 Kagami Umbra",
@@ -227,7 +230,8 @@
         "weight_lb": 2700,
         "grip": 9,
         "boost": null,
-        "auto": true
+        "auto": true,
+        "driven": "front"
       },
       "hood": {
         "picture": "bay.pic",

@@ -442,6 +442,7 @@ function carsPanel() {
         field("Weight, lb", d.weight_lb, drive("weight_lb"), { type: "number", min: 500 }),
         field("Grip (12 is all four tyres)", d.grip, drive("grip"), { type: "number", step: "0.5", min: 1 })),
       tick("It is an automatic: it shifts itself, on the strip and on the road", !!d.auto, (v) => { c.drive ??= {}; if (v) c.drive.auto = true; else delete c.drive.auto; }),
+      choice("The wheels it drives", d.driven ?? "rear", [["rear", "The back ones: it hardly pulls to a side"], ["front", "The front ones: it pulls hard to a side on the power (torque steer)"], ["all", "All four: it pulls a little"]], (v) => { c.drive ??= {}; if (v && v !== "rear") c.drive.driven = v; else delete c.drive.driven; }),
       tick("It has a turbo", "boost" in d ? !!turbo : true, (v) => { c.drive ??= {}; c.drive.boost = v ? { from: 2200, psi: 20, lag: 6 } : null; }),
       turbo ? h("div", { class: "three" },
         field("Wakes at, rpm", turbo.from, (v) => { turbo.from = v ?? 2200; }, { type: "number", step: 100 }),

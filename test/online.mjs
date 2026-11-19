@@ -91,14 +91,21 @@ check(sent.staged === 2, "both said they were staged");
 const LIT = 2 * 32 + 30, slip = (p) => [[96, 60], [96, 100], [224, 100]].every(([px, py]) => (p.at(px, py) >> 5) === 25);
 for (let t = 0; t < 46; t++) { ay.step(UP); bee.step(UP); deliver(); }
 ay.step(UP | E); ay.step(UP);
+// The lane marker at the top: each steers to keep it in the middle.
+const MARK = [5 * 32 + 26, 2 * 32 + 28];
+const wheel = (p) => {
+  let at = -1;
+  for (let px = 120; px < 203 && at < 0; px++) if (MARK.includes(p.at(px, 23))) at = px + 2;
+  return at < 0 ? 0 : at > 161 ? 4 : at < 159 ? 8 : 0;
+};
 let ticks = 0;
 for (; ticks < 1500 && !(slip(ay) && slip(bee)); ticks++) {
   for (const p of [ay, bee]) {
     const go = p === bee && ticks === 15, lit = p.at(121, 170) === LIT;
     // Bee sits with a foot off it first, which is what makes an automatic late as well.
     if (p === bee && ticks < 15) { p.step(0); continue; }
-    p.step(go || (lit && !slip(p)) ? UP | E : UP);
-    if (go || lit) p.step(UP);
+    p.step((go || (lit && !slip(p)) ? UP | E : UP) | wheel(p));
+    if (go || lit) p.step(UP | wheel(p));
   }
   deliver();
 }
