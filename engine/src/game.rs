@@ -75,6 +75,9 @@ pub struct Owned {
     pub body: i32,
     #[serde(default)]
     pub tyres: f64,
+    /// Parts that change how it breathes or fuels have been swapped since it was last tuned.
+    #[serde(default)]
+    pub untuned: bool,
     /// Road gone by since the parts last wore, in kilometres.
     #[serde(default)]
     pub run: f64,
@@ -114,7 +117,7 @@ fn some_gas() -> f64 {
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0, run: 0.0, sheet: false }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0, untuned: false, run: 0.0, sheet: false }
     }
 
     /// Which of a slot's `n` bolts are tight, a bit apiece.
@@ -572,7 +575,9 @@ impl Game {
         // Parts that wear and are past half cost a little power each, down to three quarters in all.
         let tired = o.fitted.values().filter(|id| cond_of(id) < 50 && self.part(id).is_some_and(|p| p.wears > 0.0))
             .map(|id| 1.0 - (50 - cond_of(id)) as f64 * 0.002).product::<f64>().max(0.75);
-        ((100 + more) as f64 / 100.0 * o.cond as f64 / 100.0 * tired * dyno::tuned(o.ecu, blown).0, turbo)
+        // New parts on the old tune: it runs, but rich here and lean there, and down on power.
+        let rough = if o.untuned { 0.85 } else { 1.0 };
+        ((100 + more) as f64 / 100.0 * o.cond as f64 / 100.0 * tired * rough * dyno::tuned(o.ecu, blown).0, turbo)
     }
 
     /// The car as it is set up: its own running gear with what the parts on it change. Tyres and
@@ -1134,6 +1139,24 @@ impl Game {
                         return self.no("There is no car in the bay.");
                     }
                     self.scene = Scene::Paint;
+                }
+                "tuneup" => {
+                    // The shop's tune: back to the factory map, made to suit the parts on it.
+                    let (cost, hours) = (self.pack.manifest.tuneup.cost, self.pack.manifest.tuneup.hours);
+                    let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
+                    let o = &self.state.cars[cur];
+                    if !o.untuned && o.ecu == Ecu::default() {
+                        return self.say("It runs right. It does not need one.");
+                    }
+                    if self.state.cash < cost {
+                        return self.no(&format!("A tune is ${cost}. You don't have it."));
+                    }
+                    self.state.cash -= cost;
+                    let o = &mut self.state.cars[cur];
+                    (o.untuned, o.ecu) = (false, Ecu::default());
+                    self.say(&format!("Tuned on the factory map: ${cost}."));
+                    tone(700, 120);
+                    self.spend(hours);
                 }
                 "rebuild" => {
                     let (cost, cond) = (self.pack.manifest.rebuild.cost, self.pack.manifest.rebuild.cond.clamp(1, 100));
@@ -1848,11 +1871,14 @@ impl Game {
             if self.under_hood(&slot) {
                 return self.say("Pop the hood to bolt that one on.");
             }
+            let was = self.state.cars[cur].untuned;
             self.state.spares.remove(i);
+            self.swapped(&id);
             if let Some(old) = self.state.cars[cur].fitted.insert(slot, id) {
+                self.swapped(&old);
                 self.state.spares.push(old);
             }
-            self.say("Bolted on. That was an hour.");
+            self.say(if self.state.cars[cur].untuned && !was { "Bolted on. Now it wants a tune." } else { "Bolted on. That was an hour." });
             tone(520, 60);
             self.spend(1);
         } else if let Some(i) = self.row(8, 156, 34, 10, (slots.len() - top.min(slots.len())).min(LINES)).map(|i| i + top) {
@@ -1862,12 +1888,23 @@ impl Game {
             }
             let sheet = self.state.cars[cur].sheet;
             if let Some(old) = self.state.cars[cur].fitted.remove(&slots[i]) {
+                self.swapped(&old);
                 self.state.spares.push(old);
                 self.say(if sheet { "Off, and on the shelf. An hour." } else { "Off. The stock one is back on." });
                 tone(400, 60);
                 self.spend(1);
             } else {
                 self.say(if sheet { "There is nothing there to take off." } else { "That is the stock one." });
+            }
+        }
+    }
+
+    /// A part has gone on or come off the car in the bay: if it is one the tune is built around,
+    /// the car needs tuning again.
+    fn swapped(&mut self, id: &str) {
+        if self.part(id).is_some_and(|p| p.retune) {
+            if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+                o.untuned = true;
             }
         }
     }
@@ -1969,6 +2006,7 @@ impl Game {
                 }
                 let o = &mut self.state.cars[cur];
                 if let Some(part) = o.fitted.remove(&slot) {
+                    self.swapped(&part);
                     self.state.spares.push(part);
                 }
                 self.state.cars[cur].off.push(slot);
@@ -1989,6 +2027,7 @@ impl Game {
                 o.off.retain(|s| *s != slot);
                 o.bolts.insert(slot.clone(), 0);
                 if let Loose::Part(id) = l {
+                    self.swapped(&id);
                     self.state.spares.retain(|p| *p != id);
                     self.state.cars[cur].fitted.insert(slot, id);
                 }

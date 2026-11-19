@@ -791,6 +791,18 @@
           "do": "road:pike",
           "button": "Back to town",
           "needs_car": true
+        },
+        {
+          "rect": [
+            4,
+            3,
+            74,
+            16
+          ],
+          "label": "Have the shop tune it on the factory map",
+          "do": "tuneup",
+          "button": "Shop tune",
+          "needs_car": true
         }
       ]
     },
@@ -941,7 +953,8 @@
       "slot": "Intake",
       "price": 180,
       "pitch": "Breathes up top",
-      "torque": 4
+      "torque": 4,
+      "retune": true
     },
     "big-turbo": {
       "name": "Big turbo",
@@ -960,7 +973,8 @@
         "a big-frame manifold",
         "a big-frame O2 housing",
         "a big fuel pump"
-      ]
+      ],
+      "retune": true
     },
     "header": {
       "name": "Tubular header",
@@ -970,7 +984,8 @@
       "torque": 6,
       "gives": [
         "a big-frame manifold"
-      ]
+      ],
+      "retune": true
     },
     "front-mount": {
       "name": "Front intercooler",
@@ -980,7 +995,8 @@
       "torque": 5,
       "fits": [
         "umbra"
-      ]
+      ],
+      "retune": true
     },
     "sticky-tyres": {
       "name": "Sticky tyres",
@@ -1013,7 +1029,8 @@
       "redline": 8000,
       "fits": [
         "umbra"
-      ]
+      ],
+      "retune": true
     },
     "radar": {
       "name": "Radar detector",
@@ -1089,7 +1106,8 @@
           8000,
           180
         ]
-      ]
+      ],
+      "retune": true
     },
     "bottle": {
       "name": "Nitrous kit",
@@ -1115,7 +1133,8 @@
     "s-inmani": {
       "name": "Intake manifold",
       "slot": "Intake manifold",
-      "price": 120
+      "price": 120,
+      "retune": true
     },
     "s-battery": {
       "name": "Battery",
@@ -1165,7 +1184,8 @@
     "s-cams": {
       "name": "Camshafts",
       "slot": "Camshafts",
-      "price": 220
+      "price": 220,
+      "retune": true
     },
     "s-springs": {
       "name": "Valve springs",
@@ -1175,7 +1195,8 @@
     "s-valves": {
       "name": "Valves",
       "slot": "Valves",
-      "price": 160
+      "price": 160,
+      "retune": true
     },
     "s-gears": {
       "name": "Cam gears",
@@ -1194,22 +1215,26 @@
     "s-head": {
       "name": "Cylinder head",
       "slot": "Cylinder head",
-      "price": 400
+      "price": 400,
+      "retune": true
     },
     "s-block": {
       "name": "Block",
       "slot": "Block",
-      "price": 500
+      "price": 500,
+      "retune": true
     },
     "s-crank": {
       "name": "Crankshaft",
       "slot": "Crankshaft",
-      "price": 300
+      "price": 300,
+      "retune": true
     },
     "s-pistons": {
       "name": "Pistons and rods",
       "slot": "Bottom end",
-      "price": 260
+      "price": 260,
+      "retune": true
     },
     "s-exhaust": {
       "name": "Exhaust",
@@ -1298,12 +1323,14 @@
       "name": "Fuel pump",
       "slot": "Fuel pump",
       "price": 90,
-      "wears": 0.5
+      "wears": 0.5,
+      "retune": true
     },
     "s-ecu": {
       "name": "Factory ECU",
       "slot": "ECU",
-      "price": 150
+      "price": 150,
+      "retune": true
     },
     "s-seats": {
       "name": "Seats",
@@ -1328,7 +1355,8 @@
       "slot": "Intake manifold",
       "price": 380,
       "pitch": "Breathes up top.",
-      "torque": 3
+      "torque": 3,
+      "retune": true
     },
     "wires-8mm": {
       "name": "8mm plug wires",
@@ -1346,7 +1374,8 @@
       "torque": 6,
       "needs": [
         "stiffer valve springs"
-      ]
+      ],
+      "retune": true
     },
     "springs-dual": {
       "name": "Dual valve springs",
@@ -1362,7 +1391,8 @@
       "slot": "Cam gears",
       "price": 180,
       "pitch": "Dial the cams in.",
-      "torque": 2
+      "torque": 2,
+      "retune": true
     },
     "exhaust-3in": {
       "name": "3 inch turbo-back",
@@ -1453,7 +1483,8 @@
       "gives": [
         "a big fuel pump"
       ],
-      "wears": 0.4
+      "wears": 0.4,
+      "retune": true
     },
     "ecu-socket": {
       "name": "Socketed ECU",
@@ -1462,7 +1493,8 @@
       "pitch": "Chipped. Now it can be tuned.",
       "gives": [
         "a tunable ECU"
-      ]
+      ],
+      "retune": true
     },
     "s-airbox": {
       "name": "Stock airbox",
@@ -1471,7 +1503,8 @@
       "pitch": "The box and filter it came with.",
       "fits": [
         "umbra"
-      ]
+      ],
+      "retune": true
     },
     "s-exmani": {
       "name": "Cast manifold",
@@ -1483,7 +1516,8 @@
       ],
       "fits": [
         "umbra"
-      ]
+      ],
+      "retune": true
     },
     "s-turbo": {
       "name": "Stock turbo",
@@ -1497,7 +1531,8 @@
       "wears": 0.2,
       "fits": [
         "umbra"
-      ]
+      ],
+      "retune": true
     },
     "s-sidemount": {
       "name": "Side mount",
@@ -1506,7 +1541,8 @@
       "pitch": "The factory intercooler, behind the bumper.",
       "fits": [
         "umbra"
-      ]
+      ],
+      "retune": true
     },
     "sidemount-twin": {
       "name": "Double-core side mount",
@@ -1517,7 +1553,8 @@
       "rare": 6,
       "fits": [
         "umbra"
-      ]
+      ],
+      "retune": true
     }
   },
   "rivals": [
@@ -2375,5 +2412,9 @@
       "ship": 120,
       "days": 3
     }
-  ]
+  ],
+  "tuneup": {
+    "cost": 80,
+    "hours": 3
+  }
 }
