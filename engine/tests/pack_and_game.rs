@@ -1830,6 +1830,10 @@ fn a_car_with_a_build_sheet_is_made_of_its_parts() {
         g.state.cars[0].fitted.insert(slot.into(), part.into());
     }
     assert_eq!(g.wont_run(), None);
+    // The stock clutch slips at that, which is all that saves the axles; with one that holds, they are first to go.
+    let o = g.owned().unwrap().clone();
+    assert!(g.slip(&o) < 1.0);
+    g.state.cars[0].fitted.insert("Clutch".into(), "clutch-twin".into());
     let broke = (0..300).find_map(|_| g.strain_driveline());
     assert_eq!(broke.as_deref(), Some("Front axles"), "the weakest goes first");
 }
@@ -1897,4 +1901,41 @@ fn cars_are_sold_as_they_stand() {
     // A pack with nothing that can be wrong has none.
     assert!(Game::new(Pack::parse(&files(MANIFEST))).projects().is_empty());
     assert!(Pack::parse(&files(&manifest.replace("\"breaks\": [\"Axles\"], \"hidden\": [\"Shocks\"]", "\"breaks\": []"))).err().unwrap().contains("fault"));
+}
+
+#[test]
+fn a_clutch_slips_before_it_goes() {
+    use engine::game::cond_of;
+    let manifest = MANIFEST.replace("\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" } }", "\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" },
+        \"stock\": { \"Clutch\": \"disc\", \"Axles\": \"axle\" } }")
+        .replace("\"puffer\": {", "\"disc\": { \"name\": \"Clutch\", \"slot\": \"Clutch\", \"price\": 100, \"holds\": 200, \"slips\": true },
+        \"twin\": { \"name\": \"Twin disc\", \"slot\": \"Clutch\", \"price\": 400, \"holds\": 900, \"slips\": true },
+        \"axle\": { \"name\": \"Axle\", \"slot\": \"Axles\", \"price\": 80, \"holds\": 250 }, \"puffer\": {");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    g.state.cars[0].cond = 100;
+    g.state.cars[0].fitted.insert("Clutch".into(), "disc".into());
+    g.state.cars[0].fitted.insert("Axles".into(), "axle".into());
+    // The engine makes 314 and the clutch holds 200: that is all the car gets, and all the axle sees.
+    let o = g.owned().unwrap().clone();
+    assert!((g.peak_torque() - 314.0).abs() < 1.0 && (g.slip(&o) - 200.0 / 314.0).abs() < 0.001);
+    assert!((g.tune(&o).0 - 200.0 / 314.0).abs() < 0.001 && g.dyno().unwrap().torque < 201.0);
+    // Launch after launch it burns, holds less, and is done for; the axle behind it never breaks.
+    let mut launches = 0;
+    let gone = loop {
+        launches += 1;
+        if let Some(name) = g.strain_driveline() { break name; }
+        assert!(launches < 40);
+    };
+    assert_eq!((gone.as_str(), cond_of(&g.owned().unwrap().fitted["Clutch"]), cond_of(&g.owned().unwrap().fitted["Axles"])), ("Clutch", 0, 100));
+    assert!(launches >= 3 && g.wont_run().as_deref() == Some("The clutch is done for."), "{launches}");
+    // A clutch that holds passes it all on, and now it is the axle that goes.
+    g.state.cars[0].fitted.insert("Clutch".into(), "twin".into());
+    let o = g.owned().unwrap().clone();
+    assert_eq!(g.slip(&o), 1.0);
+    let broke = (0..200).find_map(|_| g.strain_driveline());
+    assert_eq!((broke.as_deref(), cond_of(&g.owned().unwrap().fitted["Clutch"])), (Some("Axle"), 100));
 }

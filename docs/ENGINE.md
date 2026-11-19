@@ -94,6 +94,10 @@ All five steps are in the engine. The engine plays a season out of a pack:
   or a part that is done for, and it will not run. Some parts want others: a bigger turbo wants
   the manifold, housing and pump that suit it, four-bolt axles want the four-bolt diff, and a
   laptop wants a computer that can be tuned.
+- **The clutch slips**: make more torque than the clutch holds and the extra never reaches
+  the wheels, on the strip, the road or the rollers, where the sheet says it is slipping. Each
+  launch like that wears it, a worn clutch holds less still, and in the end it is done for. A
+  slipping clutch spares the axles behind it; a clutch that holds passes the trouble on to them.
 - **The driveline breaks**: each part of it holds so much torque. Make more, and on a launch
   the weakest lets go, sooner the more it is over. Fit a stronger one and the next weakest is next.
 - **Wear and damage**: every knock on the road or in town marks the body, which shows as
@@ -421,6 +425,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"needs": ["a 4-bolt diff"]` and `"gives": ["a 4-bolt diff"]` tie parts together: a part's
   needs must each be given by something else fitted, or the car will not run, and says which.
   `"holds": 380` is the torque, in pound-feet, a driveline part takes before it can break.
+  `"slips": true` makes it a clutch, which does not break but slips: the car gets only what
+  the clutch holds, every launch over that burns some of it away, and a worn one holds less.
   A pack can hold 120 parts; the paper and the bench turn over a page at a time.
   `"tuner": true` makes it a laptop and a cable, which opens the tune at the rollers.
   `"auto": true` or `false` on a gearbox part makes the car an automatic or a manual.

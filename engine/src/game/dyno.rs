@@ -170,7 +170,9 @@ impl Game {
             tone(0, 0);
             self.sheet = self.dyno();
             self.ping();
-            if knock > 0.0 {
+            if self.owned().is_some_and(|o| self.slip(o) < 0.99) {
+                self.say("The clutch is slipping.");
+            } else if knock > 0.0 {
                 self.say("It was pinging. That hurts it.");
             } else {
                 self.note = None;
@@ -243,7 +245,7 @@ impl Game {
     }
     /// How much more than its measured curve a car makes for the turbo that is on it.
     pub(super) fn blown(&self, o: &Owned, car: &Car) -> f64 {
-        match (self.tune(o).1.or(car.drive.boost.clone()), car.drive.boost.as_ref()) {
+        match (self.tune_engine(o).1.or(car.drive.boost.clone()), car.drive.boost.as_ref()) {
             (Some(b), Some(stock)) => (0.45 + 0.55 * b.psi / stock.psi.max(1.0)).min(1.6),
             (Some(_), None) => 1.25,
             _ => 1.0,

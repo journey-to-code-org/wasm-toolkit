@@ -937,6 +937,7 @@ function partsPanel() {
       field("What has to be on the car with it, each a few words (a big-frame manifold), with commas between", (p.needs ?? []).join(", "), (v) => { const n = v.split(",").map((x) => x.trim()).filter(Boolean); if (n.length) p.needs = n; else delete p.needs; }),
       field("What it gives other parts that need it, in the same words", (p.gives ?? []).join(", "), (v) => { const n = v.split(",").map((x) => x.trim()).filter(Boolean); if (n.length) p.gives = n; else delete p.gives; }),
       field("For the driveline: the torque it holds, lb-ft (blank: it does not break)", p.holds ?? "", (v) => { if (v > 0) p.holds = v; else delete p.holds; }, { type: "number", min: 1 }),
+      tick("It is a clutch: over what it holds it slips and wears, and does not snap", !!p.slips, (v) => { if (v) p.slips = true; else delete p.slips; }),
       tick("It is a laptop and a cable: the car can be tuned at the rollers", !!p.tuner, (v) => { if (v) p.tuner = true; else delete p.tuner; }),
       choice("If it is a gearbox, what kind", p.auto == null ? "" : p.auto ? "auto" : "manual", [["", "Not a gearbox, or the same kind as the car's"], ["manual", "A manual: shifted by hand, on the strip and on the road"], ["auto", "An automatic: it shifts itself"]], (v) => { if (v) p.auto = v === "auto"; else delete p.auto; }),
       tick("It is a radar detector: it beeps when police are ahead on a road", !!p.radar, (v) => { if (v) p.radar = true; else delete p.radar; }),

@@ -239,6 +239,10 @@ pub struct Part {
     /// more will sooner or later break it on a launch.
     #[serde(default)]
     pub holds: Option<f64>,
+    /// A clutch: given more torque than it holds it does not snap, it slips. The car gets only
+    /// what the clutch will pass, and every launch like that wears it, until it is done for.
+    #[serde(default)]
+    pub slips: bool,
     /// A laptop and a cable: with it the car's fuel, timing and boost can be changed at the rollers.
     #[serde(default)]
     pub tuner: bool,

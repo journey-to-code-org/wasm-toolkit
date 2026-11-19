@@ -1245,7 +1245,8 @@
       "name": "Clutch",
       "slot": "Clutch",
       "price": 220,
-      "holds": 380
+      "holds": 380,
+      "slips": true
     },
     "s-calipers": {
       "name": "Brake calipers",
@@ -1396,8 +1397,9 @@
       "name": "Twin-disc clutch",
       "slot": "Clutch",
       "price": 650,
-      "pitch": "Bites hard. Holds harder.",
-      "holds": 680
+      "pitch": "Holds what the stock one slips at.",
+      "holds": 680,
+      "slips": true
     },
     "brakes-big": {
       "name": "Big brake kit",
