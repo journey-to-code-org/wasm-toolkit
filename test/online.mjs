@@ -95,6 +95,8 @@ let ticks = 0;
 for (; ticks < 1500 && !(slip(ay) && slip(bee)); ticks++) {
   for (const p of [ay, bee]) {
     const go = p === bee && ticks === 15, lit = p.at(121, 170) === LIT;
+    // Bee sits with a foot off it first, which is what makes an automatic late as well.
+    if (p === bee && ticks < 15) { p.step(0); continue; }
     p.step(go || (lit && !slip(p)) ? UP | E : UP);
     if (go || lit) p.step(UP);
   }
