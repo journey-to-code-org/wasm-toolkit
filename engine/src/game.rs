@@ -66,6 +66,11 @@ pub struct Owned {
     /// What has been done to its computer.
     #[serde(default)]
     pub ecu: Ecu,
+    /// How knocked about its body is, and how worn its tyres: each from nothing to a hundred.
+    #[serde(default)]
+    pub body: i32,
+    #[serde(default)]
+    pub tyres: f64,
 }
 
 /// A car's tune, as steps from how it left the factory: pounds of boost, fuel (more is richer),
@@ -83,7 +88,7 @@ fn some_gas() -> f64 {
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default() }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0 }
     }
 
     /// Which of a slot's `n` bolts are tight, a bit apiece.
@@ -457,7 +462,8 @@ impl Game {
                 d.torque = p.curve.clone();
             }
         }
-        d.grip *= grip.max(10) as f64 / 100.0;
+        // Worn tyres have up to three tenths less bite.
+        d.grip *= grip.max(10) as f64 / 100.0 * (1.0 - o.tyres.clamp(0.0, 100.0) * 0.003);
         d.weight_lb = d.weight_lb.max(500.0);
         d.launch = d.launch.min(d.redline - 400.0);
         d
@@ -478,7 +484,7 @@ impl Game {
     }
 
     pub fn value(&self, o: &Owned) -> i32 {
-        self.list_price(&o.car, o.cond) * 6 / 10 + o.fitted.values().filter_map(|p| self.part(p)).map(|p| p.price / 2).sum::<i32>()
+        self.list_price(&o.car, o.cond) * 6 / 10 * (200 - o.body.clamp(0, 100)) / 200 + o.fitted.values().filter_map(|p| self.part(p)).map(|p| p.price / 2).sum::<i32>()
     }
 
     /// What they give today for a part off the shelf: 70 to 89 hundredths of what it cost.
@@ -552,6 +558,20 @@ impl Game {
     /// Why the car in the bay cannot make a pass, if it cannot: it will not run, or it is nearly dry.
     fn cannot_race(&self) -> Option<String> {
         self.wont_run().or_else(|| self.owned().filter(|o| o.gas < 0.7).map(|_| "Not enough gas to race. Go fill up.".to_string()))
+    }
+
+    /// A knock: the body of the car in the bay is the worse for it.
+    pub fn dent(&mut self) {
+        if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+            o.body = (o.body + 8).min(100);
+        }
+    }
+
+    /// Rubber left on the road.
+    pub fn scrub(&mut self, wear: f64) {
+        if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+            o.tyres = (o.tyres + wear).min(100.0);
+        }
     }
 
     fn burn(&mut self, gallons: f64) {
@@ -718,6 +738,36 @@ impl Game {
                     self.bracket = Some(0);
                     self.bracket_round();
                 }
+                "bodywork" => {
+                    let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
+                    let body = self.state.cars[cur].body;
+                    if body == 0 {
+                        return self.say("There is not a mark on it.");
+                    }
+                    let cost = 20 + body * 4;
+                    if self.state.cash < cost {
+                        return self.no(&format!("Straightening it is ${cost}. You don't have it."));
+                    }
+                    self.state.cash -= cost;
+                    self.state.cars[cur].body = 0;
+                    self.say(&format!("Straight again, for ${cost}. Three hours."));
+                    tone(700, 120);
+                    self.spend(3);
+                }
+                "tyres" => {
+                    let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
+                    if self.state.cars[cur].tyres < 5.0 {
+                        return self.say("They are nearly new.");
+                    }
+                    if self.state.cash < 80 {
+                        return self.no("A set of tyres is $80. You don't have it.");
+                    }
+                    self.state.cash -= 80;
+                    self.state.cars[cur].tyres = 0.0;
+                    self.say("A new set of tyres, for $80.");
+                    tone(700, 120);
+                    self.save();
+                }
                 "sleep" => {
                     // Bed: whatever is left of today is gone, and it is morning.
                     let per = self.pack.manifest.season.hours_per_day.max(1);
@@ -840,6 +890,8 @@ impl Game {
         }
         let rt = 280 + (self.rand() % 260) as i32;
         self.burn(0.5);
+        // A launch is hard on the tyres.
+        self.scrub(2.0);
         let mut race = Race::new(&drive, gain, boost, rival_et, rt);
         if let Some(spray) = spray {
             (race.shot, race.bottle) = spray;
@@ -1284,6 +1336,10 @@ impl Game {
         } else if chased && !crashed {
             tone(if self.ticks / 9 % 2 == 0 { 760 } else { 570 }, 60);
         }
+        if crashed {
+            self.dent();
+        }
+        self.scrub(went / 1000.0 * 0.4);
         let Some(town) = self.town.as_ref() else { return };
         if crashed {
             tone(70, 500);
@@ -1651,6 +1707,15 @@ impl Game {
     fn draw_owned(&self, s: &mut Screen, o: &Owned, lamps: bool, x: i32, ground: i32, half: bool) {
         self.draw_car(s, &o.car, o.paint.as_deref(), lamps, x, ground, half);
         let Some(car) = self.pack.manifest.cars.get(&o.car) else { return };
+        if !half && o.body > 0 {
+            // What it has been through shows: scuffs along its flanks, more of them the worse it is.
+            if let Some(side) = self.pack.pictures.get(&car.side) {
+                for i in 0..(o.body / 10 + 1) as u32 {
+                    let k = hash(i * 97 + o.car.len() as u32);
+                    s.darken(x + side.w * (8 + (k % 80) as i32) / 100, ground - car.ground + side.h * (42 + ((k >> 8) % 26) as i32) / 100, 5 + (k >> 16) as i32 % 6, 2 + (k >> 20) as i32 % 3, 7);
+                }
+            }
+        }
         let tint = Self::tint(car, o.paint.as_deref(), 0);
         for pic in o.fitted.values().filter_map(|id| self.part(id)).filter_map(|p| p.side.as_ref()).filter_map(|n| self.pack.pictures.get(n)) {
             if half {

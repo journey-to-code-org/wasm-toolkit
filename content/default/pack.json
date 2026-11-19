@@ -405,6 +405,18 @@
           "label": "Bed: sleep until morning",
           "do": "sleep",
           "button": "Sleep"
+        },
+        {
+          "rect": [
+            172,
+            3,
+            54,
+            16
+          ],
+          "label": "Knock the dents out of it",
+          "do": "bodywork",
+          "button": "Body",
+          "needs_car": true
         }
       ]
     },
@@ -516,7 +528,7 @@
           "rect": [
             4,
             178,
-            100,
+            76,
             18
           ],
           "label": "A dollar buys three gallons",
@@ -526,9 +538,9 @@
         },
         {
           "rect": [
-            108,
+            82,
             178,
-            100,
+            76,
             18
           ],
           "label": "A full bottle of nitrous",
@@ -538,9 +550,21 @@
         },
         {
           "rect": [
-            212,
+            160,
             178,
-            104,
+            76,
+            18
+          ],
+          "label": "A new set of tyres",
+          "do": "tyres",
+          "button": "Tyres",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            238,
+            178,
+            78,
             18
           ],
           "label": "Back out on the road",

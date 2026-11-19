@@ -47,7 +47,7 @@ impl Game {
         let blown = self.blown(o, car);
         let hp = d.torque.iter().filter(|p| p[0] <= d.redline).map(|p| p[0] * p[1]).fold(0.0, f64::max) / 5252.0 * gain * blown;
         let wet = if self.raining() { 1.35 } else { 1.0 };
-        Pace { accel: (5.0 * (hp / d.weight_lb / 0.0975).powf(0.7)).clamp(2.0, 9.0), top: (56.0 * (hp / 298.0).cbrt()).clamp(28.0, 76.0), slide: (12.0 / d.grip.max(1.0)).clamp(0.6, 1.6) * wet }
+        Pace { accel: (5.0 * (hp / d.weight_lb / 0.0975).powf(0.7)).clamp(2.0, 9.0), top: (56.0 * (hp / 298.0).cbrt()).clamp(28.0, 76.0) * (1.0 - o.body.clamp(0, 100) as f64 * 0.0015), slide: (12.0 / d.grip.max(1.0)).clamp(0.6, 1.6) * wet }
     }
 
     /// The gearbox of the car in the bay, for a road, if it is one worked by hand.
@@ -240,11 +240,13 @@ impl Game {
             tone(match revs { Some(r) => (r / 40.0) as i32, None if speed > 0.0 || keys & KEY_UP != 0 => 60 + v % 110 + v / 110 * 12, None => 45 }, 60);
         }
         self.burn(h.went / 1000.0 * per_km);
+        self.scrub(h.went / 1000.0 * 0.4);
         if h.crashed {
             // Bent metal is a tired car.
             if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
                 o.cond = (o.cond - 3).max(25);
             }
+            self.dent();
         }
         if let Some((n, card)) = dealt {
             tone(880, 90);

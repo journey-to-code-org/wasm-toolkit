@@ -421,6 +421,7 @@ impl Game {
             if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
                 o.cond = (o.cond - 3).max(25);
             }
+            self.dent();
         }
         if dry {
             tone(0, 0);
