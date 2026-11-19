@@ -144,6 +144,10 @@ pub struct Part {
     /// A radar detector: it warns of police ahead on a road.
     #[serde(default)]
     pub radar: bool,
+    /// What it looks like on the car from the side: a picture the size of the car's own, drawn
+    /// over it wherever the car is seen from the side. A wing, a scoop, a set of wheels.
+    #[serde(default)]
+    pub side: Option<String>,
     /// What it looks like bolted on under the hood: a picture drawn over its slot's box, in place
     /// of the stock part that the engine bay's picture shows there.
     #[serde(default)]
@@ -176,6 +180,9 @@ pub struct Rival {
     /// The one to beat: races for cars and nothing else, and beating them wins the game.
     #[serde(default)]
     pub king: bool,
+    /// A picture of them, to stand by their car.
+    #[serde(default)]
+    pub figure: Option<String>,
 }
 
 /// A place under the hood where a part sits: its box on the picture (x, y, width, height), the
@@ -392,7 +399,20 @@ pub struct Place {
     pub rival_at: Option<[i32; 2]>,
     #[serde(default)]
     pub spots: Vec<Spot>,
+    /// Whoever else is standing about: pictures, each with the x of its left edge and the y of its feet.
+    #[serde(default)]
+    pub people: Vec<Stand>,
 }
+
+/// A picture standing in a place.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Stand {
+    pub picture: String,
+    pub at: [i32; 2],
+}
+
+/// The most people a place has room for.
+pub const MOST_PEOPLE: usize = 12;
 
 /// What stands on a block of a map.
 #[derive(Deserialize, Clone, Debug, Default)]
@@ -679,8 +699,24 @@ impl Pack {
             if let Some(name) = &part.picture {
                 need(&format!("the part {id}"), name)?;
             }
+            if let Some(name) = &part.side {
+                need(&format!("the part {id}"), name)?;
+            }
             if let Some(car) = part.fits.iter().find(|c| !m.cars.contains_key(*c)) {
                 return Err(format!("the part {id} fits the car {car}, which is not in the pack"));
+            }
+        }
+        for r in &m.rivals {
+            if let Some(name) = &r.figure {
+                need(&format!("the rival {}", r.name), name)?;
+            }
+        }
+        for (id, place) in &m.places {
+            if place.people.len() > MOST_PEOPLE {
+                return Err(format!("{id} has {} people standing in it; there is room for {MOST_PEOPLE}", place.people.len()));
+            }
+            for p in &place.people {
+                need(&format!("someone standing in {id}"), &p.picture)?;
             }
         }
         for (id, road) in &m.roads {

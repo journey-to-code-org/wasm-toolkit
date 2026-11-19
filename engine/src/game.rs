@@ -96,6 +96,11 @@ pub struct State {
     pub spares: Vec<String>,
     /// The day, and which of that day's cars in the paper have gone.
     pub sold: (i32, Vec<usize>),
+    /// Races against someone won and lost, whatever they were for.
+    #[serde(default)]
+    pub wins: u32,
+    #[serde(default)]
+    pub losses: u32,
 }
 
 /// A car in today's paper.
@@ -502,8 +507,8 @@ impl Game {
                     tone(if self.lamps { 440 } else { 330 }, 70);
                 }
                 "calendar" => {
-                    let (day, days, left) = (self.day(), self.pack.manifest.season.days, self.hours_left());
-                    self.say(&format!("Day {day} of {days}. {left} hours left today."));
+                    let (day, days) = (self.day(), self.pack.manifest.season.days);
+                    self.say(&format!("Day {day} of {days}. Won {}, lost {}.", self.state.wins, self.state.losses));
                 }
                 "paper" => {
                     // Reading the paper takes an hour.
@@ -639,6 +644,7 @@ impl Game {
         let stakes = self.stakes();
         let pinks = self.bet == stakes.len() + 1;
         let stake = if self.bet == 0 || pinks { 0 } else { stakes[self.bet - 1] };
+        if won { self.state.wins += 1 } else { self.state.losses += 1 }
         if won {
             if pinks && r.king {
                 self.scene = Scene::Over(3);
@@ -1193,6 +1199,20 @@ impl Game {
         }
     }
 
+    /// A car of yours: the car, and over it whatever its parts look like from the side.
+    fn draw_owned(&self, s: &mut Screen, o: &Owned, lamps: bool, x: i32, ground: i32, half: bool) {
+        self.draw_car(s, &o.car, o.paint.as_deref(), lamps, x, ground, half);
+        let Some(car) = self.pack.manifest.cars.get(&o.car) else { return };
+        let tint = Self::tint(car, o.paint.as_deref(), 0);
+        for pic in o.fitted.values().filter_map(|id| self.part(id)).filter_map(|p| p.side.as_ref()).filter_map(|n| self.pack.pictures.get(n)) {
+            if half {
+                s.picture_half(pic, x, ground - (car.ground + 1) / 2, Some(&tint));
+            } else {
+                s.picture_tint(pic, x, ground - car.ground, Some(&tint));
+            }
+        }
+    }
+
     /// The three lines along the bottom, and the cash.
     fn panel(&self, s: &mut Screen, title: &str, line: &str, foot: &str) {
         s.vgrad(0, 200, 320, 40, ramp("NAVY"), 6, 2);
@@ -1269,12 +1289,24 @@ impl Game {
             }
             None => s.vgrad(0, 0, 320, 200, ramp(place.backdrop.as_deref().unwrap_or("NAVY")), 4, 14),
         }
+        // Whoever is standing about is behind the cars; whoever you are racing is in front of theirs.
+        for p in &place.people {
+            if let Some(pic) = self.pack.pictures.get(&p.picture) {
+                s.picture(pic, p.at[0], p.at[1] - pic.h);
+            }
+        }
         let rival = place.rival_at.and(self.rival());
         if let (Some([x, ground]), Some(r)) = (place.rival_at, rival) {
             self.draw_car(s, &r.car, r.paint.as_deref(), true, x, ground, false);
+            if let Some(pic) = r.figure.as_ref().and_then(|n| self.pack.pictures.get(n)) {
+                // By the nose of the car if there is room there, or else by its tail.
+                let wide = self.pack.manifest.cars.get(&r.car).and_then(|c| self.pack.pictures.get(&c.side)).map_or(0, |c| c.w);
+                let fx = if x + wide + 3 + pic.w <= 320 { x + wide + 3 } else { (x - pic.w - 3).max(0) };
+                s.picture(pic, fx, ground + 2 - pic.h);
+            }
         }
         if let (Some([x, ground]), Some(o)) = (place.car_at, self.owned()) {
-            self.draw_car(s, &o.car, o.paint.as_deref(), self.lamps, x, ground, false);
+            self.draw_owned(s, o, self.lamps, x, ground, false);
         }
         if self.scene == Scene::Place {
             let over = self.spot_under().map(|s| s.rect);
@@ -1575,7 +1607,7 @@ impl Game {
             }
         }
         if let Some(o) = self.owned() {
-            self.draw_car(s, &o.car, o.paint.as_deref(), true, NOSE - 122, 170, true);
+            self.draw_owned(s, o, true, NOSE - 122, 170, true);
         }
         // The tree: a staging light, three ambers, the green, and the red.
         s.rect(286, 6, 28, 76, shade(ramp("RUBBER"), 3));
@@ -1774,7 +1806,7 @@ impl Game {
         let tree = scene.point(at(0.0, 0.0, 12.0)).zip(scene.point(at(0.0, 3.0, 12.0)));
         scene.end(s);
         if let Some((rv, x, ground, depth)) = him {
-            let rv = Rival { name: rv.2, says: String::new(), car: rv.0, paint: rv.1, et: 0.0, limit: 0, pinks: false, king: false };
+            let rv = Rival { name: rv.2, says: String::new(), car: rv.0, paint: rv.1, et: 0.0, limit: 0, pinks: false, king: false, figure: None };
             let car = self.pack.manifest.cars.get(&rv.car);
             match car.and_then(|c| c.rear.as_ref()).and_then(|rear| Some((rear, self.pack.pictures.get(&rear.picture)?))) {
                 Some((rear, pic)) => {
@@ -1970,6 +2002,8 @@ impl Game {
         }
         let tally = format!("DAY {}  CASH ${}  BEATEN {}", self.day().min(self.pack.manifest.season.days), self.state.cash, self.state.rung);
         s.text_sh(160 - tally.len() as i32 * 4, 150, &tally, WHITE, BLACK);
+        let record = format!("RACES WON {}  LOST {}", self.state.wins, self.state.losses);
+        s.text_sh(160 - record.len() as i32 * 4, 164, &record, WHITE, BLACK);
         s.text_sh(116, 200, "PRESS ENTER", WHITE, BLACK);
     }
 }
