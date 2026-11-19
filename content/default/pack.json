@@ -501,6 +501,18 @@
           "do": "bodywork",
           "button": "Body",
           "needs_car": true
+        },
+        {
+          "rect": [
+            172,
+            21,
+            54,
+            16
+          ],
+          "label": "Put the battery on the charger",
+          "do": "charge",
+          "button": "Charge",
+          "needs_car": true
         }
       ]
     },
@@ -1104,7 +1116,8 @@
     "s-battery": {
       "name": "Battery",
       "slot": "Battery",
-      "price": 60
+      "price": 60,
+      "charges": true
     },
     "s-cruise": {
       "name": "Cruise control",
