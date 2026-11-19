@@ -2080,3 +2080,53 @@ fn what_is_under_the_hood_is_on_the_build_sheet() {
     assert_eq!((o.fitted["Turbo"].as_str(), o.fitted["Exhaust"].as_str(), o.fitted.contains_key("Intake")), ("s-turbo@80", "header", false));
     assert_eq!(st.spares, vec!["s-exmani@80".to_string(), "s-airbox@80".to_string()], "once each, run twice");
 }
+
+#[test]
+fn a_car_in_the_yard_goes_to_the_dealer_as_a_shell_or_for_scrap() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut runs = Owned::new("umbra", None, 90);
+    g.outfit(&mut runs);
+    let mut dead = runs.clone();
+    dead.fitted.insert("Timing belt".into(), "s-belt@0".into());
+    let mut rusty = dead.clone();
+    rusty.body = 90;
+    g.state.cars = vec![runs.clone(), dead.clone(), rusty.clone()];
+    g.state.spares.clear();
+    g.state.cur = Some(0);
+    g.scene = Scene::Yard;
+    // Each way pays what it says, and the dealer will not take one that does not run, nor anyone a rotten shell.
+    assert!(g.partings(&runs).iter().all(Option::is_some));
+    assert_eq!(g.partings(&dead)[0], None);
+    assert_eq!(g.partings(&rusty)[1], None);
+    let scrap = g.scrap_offer(&rusty);
+    assert!(scrap > 50 && scrap < g.value(&runs));
+
+    // Sell on the second car: the choices come up. The dealer passes on it; the shell does not.
+    click(&mut g, 280, 45);
+    assert_eq!(g.parting, Some(1));
+    click(&mut g, 60, 110);
+    assert_eq!((g.parting, g.note.as_deref()), (Some(1), Some("It does not run. The dealer passes.")));
+    let (cash, hours, shell) = (g.state.cash, g.state.hours, g.shell_offer(&dead).unwrap());
+    click(&mut g, 150, 110);
+    assert_eq!((g.state.cars.len(), g.state.cash - cash, g.state.hours - hours, g.state.spares.len()), (2, shell, 4, dead.fitted.len()));
+    assert_eq!(g.parting, None);
+
+    // Escape backs out of the choices, not out of the yard.
+    click(&mut g, 280, 45);
+    g.tick(KEY_B, 280, 45);
+    g.tick(0, 280, 45);
+    assert_eq!((g.parting, g.scene), (None, Scene::Yard));
+    // The rusty one, for scrap: everything on it goes with it.
+    click(&mut g, 280, 45);
+    let (cash, spares) = (g.state.cash, g.state.spares.len());
+    click(&mut g, 250, 110);
+    assert_eq!((g.state.cars.len(), g.state.cash - cash, g.state.spares.len()), (1, scrap, spares));
+    // And the one that runs, whole, to the dealer: it was in the bay, and the bay is empty.
+    click(&mut g, 280, 35);
+    let worth = g.value(&g.state.cars[0]);
+    let cash = g.state.cash;
+    click(&mut g, 60, 110);
+    assert_eq!((g.state.cash - cash, g.state.cur), (worth, None));
+}

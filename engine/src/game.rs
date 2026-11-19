@@ -234,6 +234,8 @@ pub struct Game {
     pub net: Net,
     selling: bool,
     pub carrying: Option<Loose>,
+    /// The car in the yard whose ways to get rid of it are being shown.
+    pub parting: Option<usize>,
     saved: bool,
     /// Whether everything that can be picked in a place is being outlined, and whether E has been
     /// pressed once on the title with a game kept, so that once more starts over.
@@ -269,7 +271,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -621,10 +623,28 @@ impl Game {
             // A car that is its parts is worth its shell and what is on it: the parts it came
             // with for an eighth of their price, anything better for two fifths, each for as much
             // of that as is left of it. A shell too far gone is only scrap.
-            let shell = if o.body > 70 { 40 } else { car.price.unwrap_or(300) / 4 * (200 - o.body.clamp(0, 100)) / 200 };
+            let shell = self.shell_offer(o).unwrap_or(40);
             return shell + o.fitted.iter().filter_map(|(slot, id)| Some((slot, id, self.part(id)?))).map(|(slot, id, p)| p.price * cond_of(id) / 100 * if car.stock.get(slot).map(String::as_str) == Some(base(id)) { 12 } else { 40 } / 100).sum::<i32>();
         }
         self.list_price(&o.car, o.cond) * 6 / 10 * (200 - o.body.clamp(0, 100)) / 200 + o.fitted.values().filter_map(|p| self.part(p)).map(|p| p.price / 2).sum::<i32>()
+    }
+
+    /// What a buyer gives for the bare shell, if it is good enough to sell: the car's price less
+    /// what is wrong with its body.
+    pub fn shell_offer(&self, o: &Owned) -> Option<i32> {
+        let car = self.pack.manifest.cars.get(&o.car)?;
+        (o.body <= 70).then(|| car.price.unwrap_or(300) / 4 * (200 - o.body.clamp(0, 100)) / 200)
+    }
+
+    /// What the scrapyard gives: the steel, and a little for each part still on it.
+    pub fn scrap_offer(&self, o: &Owned) -> i32 {
+        50 + o.fitted.values().filter_map(|id| Some(self.part(id)?.price * cond_of(id) / 100 * 6 / 100)).sum::<i32>()
+    }
+
+    /// The ways to get rid of a car with a build sheet: to the dealer if it runs, the shell with
+    /// the parts stripped onto the shelf, or all of it for scrap. What each brings, if it can be done.
+    pub fn partings(&self, o: &Owned) -> [Option<i32>; 3] {
+        [self.wont_run_of(o).is_none().then(|| self.value(o)), self.shell_offer(o), Some(self.scrap_offer(o))]
     }
 
     /// What they give today for a part off the shelf: 70 to 89 hundredths of what it cost.
@@ -706,7 +726,12 @@ impl Game {
     /// Why the car in the bay will not start, if it will not: something under the hood is off, or
     /// not bolted down.
     pub fn wont_run(&self) -> Option<String> {
-        let (o, car) = self.owned().zip(self.car())?;
+        self.wont_run_of(self.owned()?)
+    }
+
+    /// Why a car of yours will not start, if it will not.
+    pub fn wont_run_of(&self, o: &Owned) -> Option<String> {
+        let car = self.pack.manifest.cars.get(&o.car)?;
         // Something done for, something that wants a part that is not there, or nothing where a part should be.
         for id in o.fitted.values() {
             let Some(p) = self.part(id) else { continue };
@@ -1498,9 +1523,13 @@ impl Game {
                 }
             }
             Scene::Yard => {
-                if back {
+                if back && self.parting.take().is_some() {
+                    self.note = None;
+                } else if back {
                     self.scene = Scene::Place;
                     self.note = None;
+                } else if let (true, Some(i)) = (pick, self.parting) {
+                    self.parting_pick(i);
                 } else if pick {
                     if let Some(i) = self.row(8, 312, 34, 10, self.state.cars.len()) {
                         self.yard_pick(i, self.px >= 264);
@@ -1951,8 +1980,58 @@ impl Game {
         }
     }
 
+    /// Which of the three ways out the pointer is on, in the box over the yard.
+    fn parting_under(&self) -> Option<usize> {
+        (self.py >= 96 && self.py < 126 && self.px >= 16 && self.px < 304).then(|| ((self.px - 16) / 96) as usize)
+    }
+
+    fn parting_pick(&mut self, i: usize) {
+        let Some(way) = self.parting_under() else {
+            self.parting = None;
+            self.note = None;
+            return;
+        };
+        let Some(o) = self.state.cars.get(i) else { return };
+        let Some(paid) = self.partings(o)[way] else {
+            return self.no(["It does not run. The dealer passes.", "The body is too far gone to sell.", ""][way]);
+        };
+        self.parting = None;
+        let mut gone = self.drop_car(i);
+        match way {
+            0 => self.say("Sold to the dealer."),
+            1 => {
+                // Everything on it comes off first, onto the shelf.
+                self.state.spares.extend(std::mem::take(&mut gone.fitted).into_values());
+                self.say(&format!("Stripped. The shell went for ${paid}."));
+            }
+            _ => self.say(&format!("Scrapped, as it stood: ${paid}.")),
+        }
+        self.state.cash += paid;
+        tone(660, 80);
+        // Stripping a car is a morning's work; a dealer or a tow is an hour.
+        self.spend(if way == 1 { 4 } else { 1 });
+    }
+
+    /// A car off your hands: out of the yard, and out of the bay if it was there.
+    fn drop_car(&mut self, i: usize) -> Owned {
+        let gone = self.state.cars.remove(i);
+        self.state.cur = match self.state.cur {
+            Some(c) if c == i => None,
+            Some(c) if c > i => Some(c - 1),
+            other => other,
+        };
+        if self.state.cur.is_none() {
+            self.lamps = false;
+        }
+        gone
+    }
+
     fn yard_pick(&mut self, i: usize, sell: bool) {
-        if sell {
+        if sell && self.state.cars[i].sheet {
+            self.parting = Some(i);
+            self.note = None;
+            tone(520, 40);
+        } else if sell {
             let gone = self.state.cars.remove(i);
             self.state.cash += self.value(&gone);
             self.state.cur = match self.state.cur {
@@ -2486,7 +2565,30 @@ impl Game {
         if self.state.cars.is_empty() {
             s.text_sh(8, 34, "YOU HAVE NO CAR. TRY THE PAPER.", WHITE, BLACK);
         }
-        let worth = over.and_then(|i| self.state.cars.get(i)).map(|o| format!("The dealer gives ${}.", self.value(o)));
+        if let Some(o) = self.parting.and_then(|i| self.state.cars.get(i)) {
+            let car = &self.pack.manifest.cars[&o.car];
+            s.rect(8, 70, 304, 64, shade(ramp("NAVY"), 4));
+            s.frame(8, 70, 304, 64, shade(ramp("CHROME"), 22));
+            s.text_sh(16, 78, &car.name.to_uppercase().chars().take(36).collect::<String>(), WHITE, BLACK);
+            let under = self.parting_under();
+            for (k, (word, paid)) in ["DEALER", "SHELL", "SCRAP"].into_iter().zip(self.partings(o)).enumerate() {
+                let x = 16 + k as i32 * 96;
+                let lit = under == Some(k);
+                s.rect(x, 96, 92, 30, if lit && paid.is_some() { shade(ramp("GRASS"), 14) } else { shade(ramp("NAVY"), 9) });
+                s.frame(x, 96, 92, 30, shade(ramp("CHROME"), if lit { 26 } else { 14 }));
+                s.text_sh(x + 6, 100, word, if paid.is_some() { WHITE } else { shade(ramp("CREAM"), 12) }, BLACK);
+                let says = paid.map_or_else(|| ["NO RUN", "TOO RUSTY", ""][k].to_string(), |p| if k == 1 { format!("${p} +PARTS") } else { format!("${p}") });
+                s.text_sh(x + 6, 113, &says, if paid.is_some() { shade(ramp("GOLD"), 27) } else { shade(ramp("RED"), 22) }, BLACK);
+            }
+            let line = match under {
+                Some(0) => "The dealer takes it whole, if it runs.",
+                Some(1) => "Strip it, sell the shell. Four hours.",
+                Some(2) => "Steel, and a bit for what is on it.",
+                _ => "Pick one, or Escape to keep it.",
+            };
+            return self.panel(s, "The yard", self.note.as_deref().unwrap_or(line), "Escape keeps it.");
+        }
+        let worth = over.and_then(|i| self.state.cars.get(i)).map(|o| if o.sheet { "Sell: the dealer, a shell, or scrap.".to_string() } else { format!("The dealer gives ${}.", self.value(o)) });
         self.panel(s, "The yard", self.note.as_deref().or(worth.as_deref()).unwrap_or("Pick one to bring it into the bay."), "The gold one is in the bay. Escape.");
     }
 
