@@ -34,6 +34,8 @@ pub const KEY_Y: u32 = 128;
 pub const KEY_N: u32 = 256;
 /// H or ?: show what there is to pick.
 pub const KEY_H: u32 = 512;
+/// The space bar: picks, like Enter, except in a race, where it is the shift up, as it was in Street Rod.
+pub const KEY_SPACE: u32 = 1024;
 
 /// The most cars you can keep.
 pub const MOST_CARS: usize = 16;
@@ -285,6 +287,29 @@ impl Game {
         if m.paints.is_empty() { PAINTS.iter().map(|p| p.to_string()).collect() } else { m.paints.iter().take(12).cloned().collect() }
     }
 
+    /// Whether it rains on a day. The same days every game of a pack, so the paper can say.
+    pub fn rain_on(&self, day: i32) -> bool {
+        let m = &self.pack.manifest;
+        day > 1 && (hash(day as u32 ^ (m.name.len() as u32) << 8) % 100) < m.season.rain.clamp(0, 100) as u32
+    }
+
+    pub fn raining(&self) -> bool {
+        self.rain_on(self.day())
+    }
+
+    /// Rain across a box of the screen: streaks that fall a little further every tick.
+    pub(crate) fn draw_rain(&self, s: &mut Screen, w: i32, h: i32) {
+        if !self.raining() || h < 20 {
+            return;
+        }
+        let c = shade(ramp("CHROME"), 20);
+        for i in 0..70u32 {
+            let k = hash(i * 31 + 5);
+            let (x, y) = ((k % (w as u32 + 40)) as i32 - 20, ((k >> 10) as i32 + self.ticks as i32 * (9 + (i % 4) as i32)) % (h - 8));
+            s.line(x, y, x - 2, y + 7, c);
+        }
+    }
+
     /// How dark it is out: 0 by day, 1 as the day's last hours come on, 2 in its last sixth.
     pub fn dark(&self) -> i32 {
         let per = self.pack.manifest.season.hours_per_day.max(1);
@@ -295,6 +320,11 @@ impl Game {
     /// The sky and the far ground for how dark it is, and how many shades the world is taken down.
     pub(crate) fn sky(&self, s: &mut Screen, horizon: i32, view: i32, sky: usize, land: usize) -> i32 {
         match self.dark() {
+            0 if self.raining() => {
+                s.vgrad(0, 0, 320, horizon, ramp("GREY"), 12, 22);
+                s.vgrad(0, horizon, 320, view - horizon, land, 10, 14);
+                2
+            }
             0 => {
                 s.vgrad(0, 0, 320, horizon, sky, 15, 29);
                 s.vgrad(0, horizon, 320, view - horizon, land, 12, 17);
@@ -718,6 +748,11 @@ impl Game {
         let (gain, boost) = self.tune(o);
         let drive = self.tuned_drive(o, car);
         let spray = self.kit(o).map(|kit| (kit.gain as f64 / 100.0, o.bottle));
+        let mut drive = drive;
+        if self.raining() {
+            // A wet strip: a fifth less bite off the line.
+            drive.grip *= 0.8;
+        }
         let rt = 280 + (self.rand() % 260) as i32;
         self.burn(0.5);
         let mut race = Race::new(&drive, gain, boost, rival_et, rt);
@@ -817,6 +852,19 @@ impl Game {
     }
 
     pub fn tick(&mut self, keys: u32, mx: i32, my: i32) {
+        // The space bar is whatever fits: staging and picking are Enter's work, and once the tree
+        // is coming down it is the next gear. On the timeslip it is nothing, so a late shift does
+        // not throw the slip away.
+        let keys = if keys & KEY_SPACE == 0 {
+            keys
+        } else {
+            let bare = keys & !(KEY_SPACE | KEY_A);
+            match (self.scene == Scene::Race).then(|| self.race.as_ref().map(|r| r.phase)).flatten() {
+                Some(Phase::Tree | Phase::Run) => bare | KEY_X,
+                Some(Phase::Slip) => bare,
+                _ => bare | KEY_A,
+            }
+        };
         let hit = keys & !self.last_keys;
         self.last_keys = keys;
         self.ticks += 1;
@@ -1481,6 +1529,9 @@ impl Game {
         if let (Some([x, ground]), Some(o)) = (place.car_at, self.owned()) {
             self.draw_owned(s, o, self.lamps, x, ground, false);
         }
+        if place.outdoors {
+            self.draw_rain(s, 320, 200);
+        }
         if place.outdoors && self.dark() > 0 {
             s.darken(0, 0, 320, 200, if self.dark() == 1 { 5 } else { 11 });
         }
@@ -1535,7 +1586,7 @@ impl Game {
         let (ink, grey, cream) = (shade(ramp("RUBBER"), 3), shade(ramp("BROWN"), 14), ramp("CREAM"));
         s.vgrad(0, 0, 320, 200, cream, 27, 23);
         s.text_big(8, 8, "THE PAPER", ink, 2);
-        s.text(8, 30, &format!("DAY {}", self.day()), grey);
+        s.text(8, 30, if self.rain_on(self.day() + 1) { "TOMORROW: RAIN" } else { "TOMORROW: DRY" }, grey);
         for (t, label, x) in [(2, "JOBS", 128), (0, "CARS", 192), (1, "PARTS", 256)] {
             if t == page {
                 s.rect(x, 34, 60, 16, ink);
@@ -1855,6 +1906,7 @@ impl Game {
     fn draw_race(&self, s: &mut Screen) {
         let Some(r) = &self.race else { return };
         self.draw_race_view(s, r);
+        self.draw_rain(s, 320, self.car().and_then(|c| c.cockpit.as_ref()).map_or(200, |c| c.view_h));
         self.draw_bottle(s, 30, r.bottle, r.spraying);
     }
 
@@ -1879,7 +1931,7 @@ impl Game {
         let say = match r.phase {
             Phase::Stage if versus.is_some() => versus.as_ref().unwrap().0,
             Phase::Stage => "ENTER TO STAGE",
-            Phase::Tree if r.gear == 0 => "HOLD UP FOR REVS. E ON THE GREEN.",
+            Phase::Tree if r.gear == 0 => "HOLD UP FOR REVS. SPACE ON THE GREEN.",
             _ if r.red => "RED LIGHT",
             _ => "",
         };
@@ -2087,7 +2139,7 @@ impl Game {
         let horizon = view * 60 / 136;
         const SEE: i32 = 5;
         let (p, road) = (map.pitch, map.road);
-        let dim = if self.dark() == 0 {
+        let dim = if self.dark() == 0 && !self.raining() {
             s.vgrad(0, 0, 320, horizon, ramp("SKY"), 15, 29);
             s.vgrad(0, horizon, 320, view - horizon, ramp("GRASS"), 14, 20);
             0
@@ -2170,6 +2222,7 @@ impl Game {
             Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, 0.9, 1.4, ramp("GLASS"), 0.5);
         }
         scene.end(s);
+        self.draw_rain(s, 320, view);
         s.clip_off();
         let v = (town.speed * 10.0) as i32;
         if let Some(seat) = seat {

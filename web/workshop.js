@@ -973,6 +973,7 @@ function gamePanel() {
       field("Money to start with", m.start.cash, (v) => { m.start.cash = Math.max(0, Math.floor(v ?? 0)); }, { type: "number", min: 0, id: "cash" }),
       choice("Starts in", m.start.place, Object.entries(m.places).map(([id, p]) => [id, p.title]), (v) => { m.start.place = v; }),
       field("Days in the season", m.season.days, (v) => { m.season.days = Math.max(1, Math.floor(v ?? 90)); }, { type: "number", min: 1 }),
+      field("Days in a hundred that it rains", m.season.rain ?? 15, (v) => { m.season.rain = Math.max(0, Math.min(100, Math.floor(v ?? 15))); }, { type: "number", min: 0, max: 100 }),
       field("Hours in a day", m.season.hours_per_day, (v) => { m.season.hours_per_day = Math.max(1, Math.floor(v ?? 12)); }, { type: "number", min: 1 })),
     choice("Starts with", m.start.car ?? "", [["", "No car: buy one from the paper"], ...carChoices()], (v) => { if (v) m.start.car = v; else delete m.start.car; }),
     h("div", { class: "two" },

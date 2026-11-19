@@ -41,7 +41,8 @@ impl Game {
         let (d, (gain, _)) = (self.tuned_drive(o, car), self.tune(o));
         let blown = self.blown(o, car);
         let hp = d.torque.iter().filter(|p| p[0] <= d.redline).map(|p| p[0] * p[1]).fold(0.0, f64::max) / 5252.0 * gain * blown;
-        Pace { accel: (5.0 * (hp / d.weight_lb / 0.0975).powf(0.7)).clamp(2.0, 9.0), top: (56.0 * (hp / 298.0).cbrt()).clamp(28.0, 76.0), slide: (12.0 / d.grip.max(1.0)).clamp(0.6, 1.6) }
+        let wet = if self.raining() { 1.35 } else { 1.0 };
+        Pace { accel: (5.0 * (hp / d.weight_lb / 0.0975).powf(0.7)).clamp(2.0, 9.0), top: (56.0 * (hp / 298.0).cbrt()).clamp(28.0, 76.0), slide: (12.0 / d.grip.max(1.0)).clamp(0.6, 1.6) * wet }
     }
 
     /// Down a road against whoever has pulled in, for what was bet: no police, and first to the end.
@@ -54,7 +55,12 @@ impl Game {
         let seed = self.rand();
         let mut trip = Trip::new(id, &road, backwards, seed);
         trip.pace = self.pace();
-        trip.rival = Some(crate::road::Rival::new(r.et, r.paint.as_deref().unwrap_or("RED")));
+        let mut them = crate::road::Rival::new(r.et, r.paint.as_deref().unwrap_or("RED"));
+        if self.raining() {
+            // They are no braver in the wet than you can be.
+            them.top *= 0.93;
+        }
+        trip.rival = Some(them);
         trip.hold = 90;
         self.trip = Some(trip);
         self.trip_from = None;
@@ -375,6 +381,7 @@ impl Game {
             on_road(c.z, 1.3, false, "RUBBER", 1, None);
         }
         scene.end_with(s, |s, id, (x, y, w, h)| s.picture_sized(looks[id].0, x, y, w, h, Some(&looks[id].1)));
+        self.draw_rain(s, 320, view);
         s.clip_off();
 
         let v = (trip.speed * 10.0) as i32;

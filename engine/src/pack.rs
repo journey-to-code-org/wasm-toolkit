@@ -39,11 +39,13 @@ pub struct PaintRamps {
 pub struct Season {
     pub days: i32,
     pub hours_per_day: i32,
+    /// How many days in a hundred it rains. The first day is always dry.
+    pub rain: i32,
 }
 
 impl Default for Season {
     fn default() -> Season {
-        Season { days: 90, hours_per_day: 12 }
+        Season { days: 90, hours_per_day: 12, rain: 15 }
     }
 }
 
