@@ -1151,7 +1151,8 @@
       "name": "Struts and springs",
       "slot": "Suspension",
       "price": 160,
-      "wears": 0.5
+      "wears": 0.5,
+      "handling": 0
     },
     "s-coils": {
       "name": "Ignition coils",
@@ -1302,7 +1303,8 @@
       "name": "Brake calipers",
       "slot": "Brakes",
       "price": 140,
-      "wears": 1
+      "wears": 1,
+      "brakes": 0
     },
     "s-rims": {
       "name": "Steel rims",
@@ -1348,7 +1350,8 @@
       "price": 600,
       "pitch": "Lower, stiffer. It turns.",
       "grip": 6,
-      "wears": 0.3
+      "wears": 0.3,
+      "handling": 30
     },
     "mani-sheet": {
       "name": "Sheet-metal intake",
@@ -1466,7 +1469,8 @@
       "price": 520,
       "pitch": "Four pots up front.",
       "grip": 2,
-      "wears": 0.6
+      "wears": 0.6,
+      "brakes": 40
     },
     "rims-alloy": {
       "name": "Light alloy rims",

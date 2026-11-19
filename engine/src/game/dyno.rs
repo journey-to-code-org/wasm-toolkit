@@ -394,9 +394,11 @@ impl Game {
             ("WORTH", o.map_or(String::new(), |o| format!("${}", self.value(o)))),
             ("BODY", o.map_or(String::new(), |o| format!("{}%", 100 - o.body))),
             ("TYRES", o.map_or(String::new(), |o| format!("{:.0}%", 100.0 - o.tyres))),
+            ("BRAKES", o.map_or(String::new(), |o| format!("{:.0}%", self.chassis(o).0 * 100.0))),
+            ("HANDLING", o.map_or(String::new(), |o| format!("{:.0}%", self.chassis(o).1 * 100.0))),
         ];
         for (i, (name, value)) in lines.iter().enumerate() {
-            let y = 26 + i as i32 * 12;
+            let y = 26 + i as i32 * 11;
             s.text(208, y, name, grey);
             s.text(320 - 4 - value.len() as i32 * 8, y, value, cream);
         }
