@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 
 pub mod online;
 pub mod roadtrip;
+pub mod dyno;
 use online::Net;
 
 pub const KEY_UP: u32 = 1;
@@ -124,6 +125,8 @@ pub enum Scene {
     Bets,
     /// Picking a colour for a respray.
     Paint,
+    /// The rollers: what the car makes.
+    Dyno,
     /// The meet: other people, to race. And picking what a race with one of them is for.
     Online,
     OnlineBets,
@@ -158,6 +161,8 @@ pub struct Game {
     town_by_road: bool,
     /// The road the race being bet on is down, if it is not the strip.
     road_race: Option<String>,
+    /// What the rollers said, while it is being looked at.
+    pub sheet: Option<dyno::Sheet>,
     pub net: Net,
     selling: bool,
     pub carrying: Option<Loose>,
@@ -192,7 +197,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, net: Net::default(), selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, net: Net::default(), selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -576,6 +581,16 @@ impl Game {
                 }
                 "yard" => self.scene = Scene::Yard,
                 "online" => self.go_online(),
+                "dyno" => {
+                    if let Some(why) = self.wont_run() {
+                        return self.no(&why);
+                    }
+                    self.sheet = self.dyno();
+                    if self.sheet.is_none() {
+                        return self.no("There is no car in the bay.");
+                    }
+                    self.scene = Scene::Dyno;
+                }
                 "paint" => {
                     if self.state.cur.is_none() {
                         return self.no("There is no car in the bay.");
@@ -879,6 +894,12 @@ impl Game {
                         self.offer_bet(b);
                         self.road_race = None;
                     }
+                }
+            }
+            Scene::Dyno => {
+                if back || pick {
+                    self.scene = Scene::Place;
+                    self.sheet = None;
                 }
             }
             Scene::Paint => {
@@ -1327,6 +1348,7 @@ impl Game {
             Scene::Bench => self.draw_bench(s),
             Scene::Hood => self.draw_hood(s),
             Scene::Yard => self.draw_yard(s),
+            Scene::Dyno => self.draw_dyno(s),
             Scene::Online | Scene::OnlineBets => self.draw_online(s),
             Scene::Race => return self.draw_race(s),
             Scene::Drive => return self.draw_drive(s),

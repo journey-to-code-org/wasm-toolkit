@@ -382,6 +382,9 @@ pub struct Car {
     pub cockpit: Option<Cockpit>,
     #[serde(default)]
     pub rear: Option<Rear>,
+    /// And from in front, for when it is coming the other way.
+    #[serde(default)]
+    pub front: Option<Rear>,
 }
 
 /// Something in a place that can be picked: where it is, what it is called, and what picking it does.
@@ -641,7 +644,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 14] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint"];
+pub const ACTIONS: [&str; 15] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 
@@ -829,6 +832,9 @@ impl Pack {
             }
             if let Some(r) = &car.rear {
                 need(&format!("the back of the car {id}"), &r.picture)?;
+            }
+            if let Some(r) = &car.front {
+                need(&format!("the front of the car {id}"), &r.picture)?;
             }
             if let Some(hood) = &car.hood {
                 for (name, place) in &hood.slots {

@@ -393,6 +393,18 @@
           "do": "paint",
           "button": "Respray",
           "needs_car": true
+        },
+        {
+          "rect": [
+            140,
+            3,
+            66,
+            16
+          ],
+          "label": "The rollers: what it makes",
+          "do": "dyno",
+          "button": "Dyno",
+          "needs_car": true
         }
       ]
     },

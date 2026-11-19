@@ -35,11 +35,19 @@ pub struct Scene3 {
     pub dim: i32,
     pub lamps: f64,
     polys: Vec<Poly>,
+    sprites: Vec<Sprite>,
+}
+
+/// A flat picture standing in the scene, facing the camera: which one, and where on the screen.
+struct Sprite {
+    key: f64,
+    id: usize,
+    at: (i32, i32, i32, i32),
 }
 
 impl Scene3 {
     pub fn new(cam: Cam) -> Scene3 {
-        Scene3 { cam, dim: 0, lamps: 0.0, polys: Vec::new() }
+        Scene3 { cam, dim: 0, lamps: 0.0, polys: Vec::new(), sprites: Vec::new() }
     }
 
     /// Into the camera's own space: x to its right, y up, z ahead.
@@ -137,10 +145,40 @@ impl Scene3 {
     }
 
     /// Paint everything, far to near. Returns how many shapes there were.
-    pub fn end(mut self, s: &mut Screen) -> usize {
+    pub fn end(self, s: &mut Screen) -> usize {
+        self.end_with(s, |_, _, _| {})
+    }
+
+    /// A picture `width` metres wide and `aspect` times as tall, standing with the middle of its
+    /// foot at `feet`, drawn in its turn by whoever ends the scene. False if it cannot be seen.
+    pub fn sprite(&mut self, feet: V3, width: f64, aspect: f64, id: usize, key: f64) -> bool {
+        let c = self.to_cam(feet);
+        if c[2] < NEAR * 4.0 {
+            return false;
+        }
+        let ((x, y), w) = (self.flat(c), (width * self.cam.focal / c[2]) as i32);
+        let h = (w as f64 * aspect) as i32;
+        if !(2..=640).contains(&w) || h < 1 || x + w / 2 < 0 || x - w / 2 >= W {
+            return false;
+        }
+        self.sprites.push(Sprite { key, id, at: (x - w / 2, y - h, w, h) });
+        true
+    }
+
+    /// Draw it all, farthest first. `draw` is handed each picture's number and its box on the screen.
+    pub fn end_with(mut self, s: &mut Screen, mut draw: impl FnMut(&mut Screen, usize, (i32, i32, i32, i32))) -> usize {
         self.polys.sort_by(|a, b| b.key.total_cmp(&a.key));
+        self.sprites.sort_by(|a, b| b.key.total_cmp(&a.key));
+        let mut next = 0;
         for p in &self.polys {
+            while next < self.sprites.len() && self.sprites[next].key >= p.key {
+                draw(s, self.sprites[next].id, self.sprites[next].at);
+                next += 1;
+            }
             s.poly(&p.pts, p.a, p.b);
+        }
+        for sp in &self.sprites[next..] {
+            draw(s, sp.id, sp.at);
         }
         self.polys.len()
     }

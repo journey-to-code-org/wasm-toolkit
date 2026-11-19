@@ -1182,3 +1182,62 @@ fn a_respray_a_swap_a_title_and_the_dark() {
     assert!(Pack::parse(&files(&manifest.replace("[4000, 400]", "[900, 400]"))).err().unwrap().contains("torque curve"));
     assert!(Pack::parse(&files(&MANIFEST.replace("\"name\": \"Test Pack\",", "\"name\": \"Test Pack\", \"title\": \"none.pic\","))).err().unwrap().contains("title"));
 }
+
+#[test]
+fn the_rollers_say_what_the_car_makes() {
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"dyno\""))));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    g.state.cars[0].cond = 100;
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Dyno);
+    let stock = g.sheet.clone().unwrap();
+    assert!((stock.hp - 298.0).abs() < 2.0 && stock.hp_at == 5800.0 && stock.torque == 314.0 && stock.torque_at == 4400.0, "{:?}", (stock.hp, stock.hp_at, stock.torque));
+    assert!(stock.et > 11000 && stock.et < 16000 && stock.mph > 80 && (stock.top - 125.0).abs() < 3.0, "{:?}", (stock.et, stock.mph, stock.top));
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    click(&mut g, 100, 100);
+    assert_eq!((g.scene, g.sheet.is_none()), (Scene::Place, true));
+    // Ten per cent more torque is ten per cent more of everything, and a quicker slip.
+    g.state.cars[0].fitted.insert("Exhaust".into(), "pipe".into());
+    let piped = g.dyno().unwrap();
+    assert!((piped.hp / stock.hp - 1.1).abs() < 0.001 && piped.et < stock.et && piped.stock == stock.stock);
+    g.state.cars.clear();
+    g.state.cur = None;
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Place);
+}
+
+#[test]
+fn a_car_with_a_picture_of_its_back_is_seen_on_the_road() {
+    // The pack's car gets a back, all one colour that nothing else on a road is.
+    let pink = shade(ramp("PINK"), 20);
+    let mut bytes = files(&MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"road:pass\"").replace("\"price\": 350,", "\"price\": 350, \"rear\": { \"picture\": \"back.pic\" },"));
+    let (name, data) = ("back.pic", pic(8, 5, &[(40, pink)]));
+    bytes.extend((name.len() as u16).to_le_bytes());
+    bytes.extend(name.as_bytes());
+    bytes.extend((data.len() as u32).to_le_bytes());
+    bytes.extend(data);
+    bytes[4..8].copy_from_slice(&5u32.to_le_bytes());
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    g.seed(5);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    click(&mut g, 100, 10);
+    let mut s = Screen::new();
+    let count = |s: &Screen| (0..240).flat_map(|y| (0..320).map(move |x| (x, y))).filter(|&(x, y)| s.at(x, y) == pink).count();
+    g.draw(&mut s);
+    assert_eq!(count(&s), 0);
+    // One going the same way, twenty metres up the road, in your lane: 1.7 metres is 17 pixels there.
+    g.trip.as_mut().unwrap().others.push(engine::road::Other { z: 20.0, lane: 0.5, speed: 0.0, paint: "PINK" });
+    g.draw(&mut s);
+    let n = count(&s);
+    assert!((100..260).contains(&n), "its back is on the screen: {n} pixels");
+    // One coming the other way has no picture of its front, and is a plain shape.
+    g.trip.as_mut().unwrap().others[0] = engine::road::Other { z: 20.0, lane: -0.5, speed: -1.0, paint: "PINK" };
+    g.draw(&mut s);
+    assert_eq!(count(&s), 0);
+}

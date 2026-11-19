@@ -38,13 +38,8 @@ impl Game {
     /// What the car in the bay can do on a road: what it makes for what it weighs, and its tyres.
     pub fn pace(&self) -> Pace {
         let Some((o, car)) = self.owned().zip(self.car()) else { return Pace::default() };
-        let (d, (gain, turbo)) = (self.tuned_drive(o, car), self.tune(o));
-        // A bigger turbo than the one the curve was measured with makes more; one where there was none, a quarter more.
-        let blown = match (turbo.or(car.drive.boost.clone()), car.drive.boost.as_ref()) {
-            (Some(b), Some(stock)) => (0.45 + 0.55 * b.psi / stock.psi.max(1.0)).min(1.6),
-            (Some(_), None) => 1.25,
-            _ => 1.0,
-        };
+        let (d, (gain, _)) = (self.tuned_drive(o, car), self.tune(o));
+        let blown = self.blown(o, car);
         let hp = d.torque.iter().filter(|p| p[0] <= d.redline).map(|p| p[0] * p[1]).fold(0.0, f64::max) / 5252.0 * gain * blown;
         Pace { accel: (5.0 * (hp / d.weight_lb / 0.0975).powf(0.7)).clamp(2.0, 9.0), top: (56.0 * (hp / 298.0).cbrt()).clamp(28.0, 76.0), slide: (12.0 / d.grip.max(1.0)).clamp(0.6, 1.6) }
     }
@@ -318,7 +313,12 @@ impl Game {
             }
         }
         // Whatever is standing or moving on a piece of road is drawn after that piece.
-        let mut on_road = |z: f64, out: f64, back: bool, paint: usize, kind: u8| {
+        // Cars that have pictures of their backs and fronts in the pack are drawn with them.
+        let cars = &self.pack.manifest.cars;
+        let seen = |car: &Car, back: bool| (if back { car.front.as_ref() } else { car.rear.as_ref() }).and_then(|r| Some((self.pack.pictures.get(&r.picture)?, r.width_m)));
+        let (backs, fronts): (Vec<&Car>, Vec<&Car>) = (cars.values().filter(|c| seen(c, false).is_some()).collect(), cars.values().filter(|c| seen(c, true).is_some()).collect());
+        let mut looks: Vec<(&crate::gfx::Picture, Tint)> = Vec::new();
+        let mut on_road = |z: f64, out: f64, back: bool, paint: &str, kind: u8, car: Option<&Car>| {
             if z <= trip.z + 1.0 || z >= trip.z + (n as f64 - 1.0) * SEG {
                 return;
             }
@@ -328,6 +328,16 @@ impl Game {
             let p = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
             let hd = joints[k].2 + if back { std::f64::consts::PI } else { 0.0 };
             let (fwd, key) = ((hd.sin(), hd.cos()), k as f64 * 10.0 + 3.0 - t);
+            // Whichever car this is: the one it is said to be, or one of the pack's, the same one each time for its paint.
+            let pool = if back { &fronts } else { &backs };
+            let which = car.or_else(|| (kind == 0 && !pool.is_empty()).then(|| pool[paint.len() * 7 % pool.len()]));
+            if let Some((c, (pic, wide))) = which.and_then(|c| Some((c, seen(c, back)?))) {
+                looks.push((pic, Self::tint(c, Some(paint), if dim > 4 { -8 } else if dim > 0 { -3 } else { 0 })));
+                if scene.sprite(p, wide, pic.h as f64 / pic.w as f64, looks.len() - 1, key) {
+                    return;
+                }
+            }
+            let paint = ramp(paint);
             Self::obox(&mut scene, [p[0], p[1] + 0.25, p[2]], fwd, 2.1, 0.9, 0.65, paint, key);
             Self::obox(&mut scene, [p[0], p[1] + 0.9, p[2]], fwd, 1.0, 0.75, 0.5, ramp(if kind == 1 { "WHITE" } else { "GLASS" }), key - 0.3);
             if dim > 4 {
@@ -347,15 +357,15 @@ impl Game {
             }
         };
         for o in &trip.others {
-            on_road(o.z, o.lane, o.speed < 0.0, ramp(o.paint), 0);
+            on_road(o.z, o.lane, o.speed < 0.0, o.paint, 0, None);
         }
         if let Some(r) = &trip.rival {
-            on_road(r.z, r.x, false, ramp(&r.paint), 0);
+            on_road(r.z, r.x, false, &r.paint, 0, self.rival().and_then(|x| cars.get(&x.car)));
         }
         for c in &trip.cops {
-            on_road(c.z, 1.3, false, ramp("RUBBER"), 1);
+            on_road(c.z, 1.3, false, "RUBBER", 1, None);
         }
-        scene.end(s);
+        scene.end_with(s, |s, id, (x, y, w, h)| s.picture_sized(looks[id].0, x, y, w, h, Some(&looks[id].1)));
         s.clip_off();
 
         let v = (trip.speed * 10.0) as i32;
