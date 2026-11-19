@@ -90,6 +90,24 @@ impl Default for Shootout {
     }
 }
 
+/// Something wrong with a car sold as it stands: what the ad says about it, the slots whose
+/// parts it has done for, and the ones it has done for that the ad does not mention.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Fault {
+    pub says: String,
+    #[serde(default)]
+    pub breaks: Vec<String>,
+    #[serde(default)]
+    pub hidden: Vec<String>,
+}
+
+/// Somewhere a car sold as it stands might be, and what bringing it home from there costs.
+#[derive(Deserialize, Clone, Debug)]
+pub struct Seller {
+    pub from: String,
+    pub ship: i32,
+}
+
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Poker {
@@ -756,6 +774,11 @@ pub struct Manifest {
     /// The shootout: a knockout on the strip every so many days. Left out, there is none.
     #[serde(default)]
     pub shootout: Option<Shootout>,
+    /// What can be wrong with a car sold as it stands, and where such cars are.
+    #[serde(default)]
+    pub faults: Vec<Fault>,
+    #[serde(default)]
+    pub sellers: Vec<Seller>,
     /// What a poker run costs to ride in, and how many others ride.
     #[serde(default)]
     pub poker: Poker,
@@ -838,6 +861,12 @@ impl Pack {
         let need = |what: &str, name: &str| -> Result<(), String> {
             if self.pictures.contains_key(name) { Ok(()) } else { Err(format!("{what} names the picture {name}, which is not in the pack")) }
         };
+        if m.faults.len() > 24 || m.faults.iter().any(|f| f.says.is_empty() || f.says.len() > 38 || (f.breaks.is_empty() && f.hidden.is_empty())) {
+            return Err("a fault needs what the ad says of it, in 38 letters or fewer, and at least one slot it breaks; and there is room for 24".into());
+        }
+        if m.sellers.iter().any(|s| s.from.is_empty() || s.ship < 0) {
+            return Err("somewhere a car is sold from needs a name, and what it costs to bring one from there".into());
+        }
         if let Some(sh) = &m.shootout {
             if m.rivals.is_empty() || sh.rounds < 1 || sh.rounds > 6 || sh.every < 1 || sh.entry < 0 || sh.purse < 0 {
                 return Err("the shootout needs rivals in the pack, one to six rounds, and to be held every day or less often".into());

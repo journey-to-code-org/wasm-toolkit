@@ -80,6 +80,13 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Day and night**: the last third of each day is dusk and then dark, on the road and in town:
   the sky goes, places marked as out of doors darken, the country beyond the lamps is dim, other cars are their lights, and the dash
   is lit if the cockpit has a night picture.
+- **Cars sold as they stand**: the paper's AS IS page has two cars a day that do not run.
+  Each has one to three things wrong, parts missing, and sometimes something better than stock
+  still on it. The ad is mostly true: it says what is wrong, but not everything that went with
+  it, now and then leaves a second fault out, and now and then the seller thinks it is worse
+  than it is. Each is somewhere, and costs so much to bring home. It can be haggled over. Bought,
+  it stands in the yard to be mended with parts from the paper, stripped for the shelf, or sold:
+  the dealer pays for the shell and for what is still on it, and a shell too far gone is scrap.
 - **A car is its parts**: a car with a build sheet is made of real parts, slot by slot:
   manifolds, coils, cams, valves, head, block, driveline, brakes, rims, tank, pump, computer,
   seats. Each is in a state of its own, from new to done for, which goes with it to the shelf
@@ -435,6 +442,10 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"figure": "skeeter.pic"` is a picture of them, which stands by their car.
 - `"season": { "days": 90, "hours_per_day": 12, "rain": 15 }`: `rain` is how many days in a
   hundred are wet. The first day never is.
+- `"faults": [ { "says": "Jumped timing. Needs a belt.", "breaks": ["Timing belt"], "hidden":
+  ["Valves"] } ]` is what can be wrong with a car sold as it stands: what the ad says, the slots
+  whose parts are done for, and the ones done for that it does not mention. `"sellers": [ {
+  "from": "Ohio", "ship": 120 } ]` is where they are and what bringing one home costs.
 - `"shootout": { "entry": 50, "purse": 400, "rounds": 3, "every": 7 }` holds one every
   seventh day. Left out, there is none.
 - `"title": "title.pic"` is a picture for the title screen, 320 by 240. `"respray": { "cost": 60,
