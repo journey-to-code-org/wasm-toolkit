@@ -62,6 +62,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Day and night**: the last third of each day is dusk and then dark, on the road and in town:
   the sky goes, the country beyond the lamps is dim, other cars are their lights, and the dash
   is lit if the cockpit has a night picture.
+- **The rollers**: the power and torque of the car in the bay as curves, against the car as
+  it left the factory, with what it weighs, what it should run the quarter in, how fast it is on
+  a road, and what it is worth.
 - **People**: whoever you are up against can stand by their car, and a place can have a crowd.
 - **The record**: races won and lost are counted, and the calendar says so.
 - **Saving**: the game is kept in the browser as you go, and the title offers to carry on.
@@ -249,6 +252,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
+  | `dyno` | the rollers: the power and torque of the car in the bay, drawn and in numbers |
 
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
   picture does not show the thing itself.
@@ -333,6 +337,10 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   Each dial is where its needle turns, the needle's length and what it reads at full sweep;
   `minis` are dials that only sit there. The wheel is a square picture turned about `at`.
   Everything but `picture` may be left out.
+  `rear` is also how the car looks ahead of you on a road, and `"front": { "picture":
+  "front.pic", "width_m": 1.7 }` is how it looks coming the other way. Other cars on a road are
+  drawn as whichever of the pack's cars have these pictures, in their own paint, and whoever you
+  race down a road is drawn as their car. With no picture a car is a plain shape.
 - **parts**: one part to a `slot`; the slots are whatever the parts name. `torque` is a
   percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
   Beyond torque a part can have `grip` (per cent more, for tyres), `weight_lb` (what it adds;
