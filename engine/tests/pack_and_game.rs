@@ -1977,3 +1977,46 @@ fn a_dry_tank_and_a_flat_battery_are_not_the_end() {
     let p = g.projects().into_iter().flatten().find(|p| p.owned.fitted.contains_key("Battery")).unwrap();
     assert_eq!(p.owned.fitted["Battery"], "cell@8");
 }
+
+#[test]
+fn parts_wear_with_use_and_a_battery_runs_down() {
+    let manifest = MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"sleep\"")
+        .replace("\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" } }", "\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" }, \"stock\": { \"Battery\": \"cell\", \"Belt\": \"belt\", \"Valves\": \"valves\" } }")
+        .replace("\"puffer\": {", "\"cell\": { \"name\": \"Battery\", \"slot\": \"Battery\", \"price\": 60, \"charges\": true }, \"belt\": { \"name\": \"Timing belt\", \"slot\": \"Belt\", \"price\": 45, \"wears\": 30, \"takes\": [\"Valves\"] }, \"valves\": { \"name\": \"Valves\", \"slot\": \"Valves\", \"price\": 160 }, \"puffer\": {");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    for (slot, id) in [("Battery", "cell@50"), ("Belt", "belt"), ("Valves", "valves")] {
+        g.state.cars[0].fitted.insert(slot.into(), id.into());
+    }
+    let power = g.tune_engine(&g.state.cars[0]).0;
+    // A pass takes thirty off the belt, and the engine running puts eight in the battery.
+    assert_eq!(g.use_parts(1.0), None);
+    assert_eq!((g.state.cars[0].fitted["Belt"].as_str(), g.state.cars[0].fitted["Battery"].as_str()), ("belt@70", "cell@58"));
+    assert_eq!(g.tune_engine(&g.state.cars[0]).0, power);
+    // Past half it costs power, and under a quarter it says so.
+    assert_eq!(g.use_parts(1.0), None);
+    assert!(g.tune_engine(&g.state.cars[0]).0 < power);
+    assert_eq!(g.use_parts(1.0), Some(("Timing belt".to_string(), false)));
+    // When it goes it takes the valves, and the car will not run.
+    assert_eq!(g.use_parts(1.0), Some(("Timing belt".to_string(), true)));
+    assert_eq!((g.state.cars[0].fitted["Belt"].as_str(), g.state.cars[0].fitted["Valves"].as_str()), ("belt@0", "valves@0"));
+    assert!(g.wont_run().is_some());
+    // Four kilometres of road are a pass.
+    g.state.cars[0].fitted.insert("Belt".into(), "belt".into());
+    for _ in 0..8 { g.roll(0.5); }
+    assert_eq!(g.state.cars[0].fitted["Belt"], "belt@70");
+
+    // The lamps left on overnight take most of a battery; a car in the yard loses a little a day.
+    let mut parked = g.state.cars[0].clone();
+    parked.fitted.insert("Battery".into(), "cell@6".into());
+    g.state.cars.push(parked);
+    g.state.cars[0].fitted.insert("Battery".into(), "cell".into());
+    g.lamps = true;
+    click(&mut g, 100, 10);
+    assert_eq!((g.state.cars[0].fitted["Battery"].as_str(), g.state.cars[1].fitted["Battery"].as_str(), g.lamps, g.note.as_deref()), ("cell@55", "cell@5", false, Some("You left the lamps on all night.")));
+    click(&mut g, 100, 10);
+    assert_eq!((g.state.cars[0].fitted["Battery"].as_str(), g.note.as_deref()), ("cell@55", Some("You slept. It is morning.")));
+}

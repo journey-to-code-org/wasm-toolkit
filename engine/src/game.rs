@@ -75,6 +75,9 @@ pub struct Owned {
     pub body: i32,
     #[serde(default)]
     pub tyres: f64,
+    /// Road gone by since the parts last wore, in kilometres.
+    #[serde(default)]
+    pub run: f64,
     /// It has a build sheet: it is made of the parts fitted to it, and a slot with nothing in it
     /// has nothing in it. A car without is as it always was: what is not changed is stock.
     #[serde(default)]
@@ -111,7 +114,7 @@ fn some_gas() -> f64 {
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0, sheet: false }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0, run: 0.0, sheet: false }
     }
 
     /// Which of a slot's `n` bolts are tight, a bit apiece.
@@ -537,7 +540,10 @@ impl Game {
         let more: i32 = parts.iter().map(|p| p.torque).sum();
         let turbo = parts.iter().find_map(|p| p.boost.clone());
         let blown = turbo.is_some() || self.pack.manifest.cars.get(&o.car).is_some_and(|c| c.drive.boost.is_some());
-        ((100 + more) as f64 / 100.0 * o.cond as f64 / 100.0 * dyno::tuned(o.ecu, blown).0, turbo)
+        // Parts that wear and are past half cost a little power each, down to three quarters in all.
+        let tired = o.fitted.values().filter(|id| cond_of(id) < 50 && self.part(id).is_some_and(|p| p.wears > 0.0))
+            .map(|id| 1.0 - (50 - cond_of(id)) as f64 * 0.002).product::<f64>().max(0.75);
+        ((100 + more) as f64 / 100.0 * o.cond as f64 / 100.0 * tired * dyno::tuned(o.ecu, blown).0, turbo)
     }
 
     /// The car as it is set up: its own running gear with what the parts on it change. Tyres and
@@ -696,6 +702,65 @@ impl Game {
         }
     }
 
+    /// Use wears parts out: `passes` is how hard, a pass down the strip being one. What wore
+    /// out altogether, if anything did; failing that, what is newly close to it. Running also
+    /// puts charge back in the battery.
+    pub fn use_parts(&mut self, passes: f64) -> Option<(String, bool)> {
+        let cur = self.state.cur?;
+        let fitted: Vec<(String, String)> = self.state.cars[cur].fitted.iter().map(|(s, id)| (s.clone(), id.clone())).collect();
+        let (mut gone, mut tired) = (None, None);
+        for (slot, id) in fitted {
+            let Some((wears, charges, name, takes)) = self.part(&id).map(|p| (p.wears, p.charges, p.name.clone(), p.takes.clone())) else { continue };
+            let was = cond_of(&id);
+            if charges && was > 0 && was < 100 {
+                self.state.cars[cur].fitted.insert(slot, worn(&id, (was + (passes * 8.0).ceil() as i32).min(100)));
+                continue;
+            }
+            if wears <= 0.0 || was == 0 {
+                continue;
+            }
+            // Whole points, and the odds of one more for what is left over.
+            let lost = wears * passes;
+            let more = ((lost.fract() * 1000.0) as u32 > self.rand() % 1000) as i32;
+            let left = (was - lost as i32 - more).max(0);
+            self.state.cars[cur].fitted.insert(slot, worn(&id, left));
+            if left == 0 {
+                for slot in &takes {
+                    if let Some(other) = self.state.cars[cur].fitted.get(slot).cloned() {
+                        self.state.cars[cur].fitted.insert(slot.clone(), worn(&other, 0));
+                    }
+                }
+                gone = Some(name);
+            } else if left < 25 && was >= 25 {
+                tired = Some(name);
+            }
+        }
+        gone.map(|n| (n, true)).or(tired.map(|n| (n, false)))
+    }
+
+    /// Road under the car: every kilometre of it is a quarter of a pass to the parts.
+    pub fn roll(&mut self, km: f64) {
+        let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) else { return };
+        o.run += km;
+        if o.run < 1.0 {
+            return;
+        }
+        o.run -= 1.0;
+        match self.use_parts(0.25) {
+            Some((name, true)) => self.no(&format!("The {} let go.", name.to_lowercase()).chars().take(38).collect::<String>()),
+            Some((name, false)) => self.say(&format!("The {} will not last.", name.to_lowercase()).chars().take(38).collect::<String>()),
+            None => {}
+        }
+    }
+
+    /// What is left in a car's battery goes down by `by`, but sitting never kills one: it is flat.
+    fn drain(&mut self, car: usize, by: i32) -> bool {
+        let found = self.state.cars[car].fitted.iter().find(|(_, id)| cond_of(id) > 5 && self.part(id).is_some_and(|p| p.charges)).map(|(s, id)| (s.clone(), id.clone()));
+        let Some((slot, id)) = found else { return false };
+        self.state.cars[car].fitted.insert(slot, worn(&id, (cond_of(&id) - by).max(5)));
+        true
+    }
+
     /// Rubber left on the road.
     pub fn scrub(&mut self, wear: f64) {
         if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
@@ -713,7 +778,15 @@ impl Game {
 
     /// Everything takes time. When the days run out, or there is no way to get a car, it is over.
     fn spend(&mut self, hours: i32) {
+        let before = self.day();
         self.state.hours += hours;
+        // A car that sits loses a little from its battery every day it is not the one driven.
+        let days = self.day() - before;
+        for car in 0..self.state.cars.len() {
+            if days > 0 && Some(car) != self.state.cur {
+                self.drain(car, 3 * days);
+            }
+        }
         self.check_over();
         self.save();
     }
@@ -928,9 +1001,12 @@ impl Game {
                 "sleep" => {
                     // Bed: whatever is left of today is gone, and it is morning.
                     let per = self.pack.manifest.season.hours_per_day.max(1);
+                    // Lamps left burning all night: most of a battery.
+                    let left_on = self.lamps && self.state.cur.is_some_and(|cur| self.drain(cur, 45));
+                    self.lamps = false;
                     self.spend(per - self.state.hours % per);
                     if self.scene == Scene::Place {
-                        self.say("You slept. It is morning.");
+                        self.say(if left_on { "You left the lamps on all night." } else { "You slept. It is morning." });
                     }
                 }
                 "nitrous" => {
@@ -1140,6 +1216,10 @@ impl Game {
         if won { self.state.wins += 1 } else { self.state.losses += 1 }
         self.ping();
         let broke = self.strain_driveline();
+        // A pass is a pass to every part that wears. One that goes takes the car with it.
+        let used = self.use_parts(1.0);
+        let tired = used.clone().filter(|w| !w.1 && broke.is_none()).map(|w| w.0);
+        let broke = broke.or(used.filter(|w| w.1).map(|w| w.0));
         if won {
             if pinks && r.king {
                 self.scene = Scene::Over(3);
@@ -1184,6 +1264,9 @@ impl Game {
             // More than it would take: whatever the race came to, the car is not going anywhere.
             self.say(&format!("The {} let go.", name.to_lowercase()).chars().take(38).collect::<String>());
             tone(90, 500);
+        } else if let Some(name) = tired {
+            // Fair warning, once, before it goes.
+            self.say(&format!("The {} will not last.", name.to_lowercase()).chars().take(38).collect::<String>());
         }
         self.spend(2);
     }
@@ -1521,6 +1604,7 @@ impl Game {
             self.dent();
         }
         self.scrub(went / 1000.0 * 0.4);
+        self.roll(went / 1000.0);
         let Some(town) = self.town.as_ref() else { return };
         if crashed {
             tone(70, 500);

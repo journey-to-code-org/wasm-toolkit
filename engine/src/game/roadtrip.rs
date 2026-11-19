@@ -241,6 +241,7 @@ impl Game {
         }
         self.burn(h.went / 1000.0 * per_km);
         self.scrub(h.went / 1000.0 * 0.4);
+        self.roll(h.went / 1000.0);
         if h.crashed {
             // Bent metal is a tired car.
             if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {

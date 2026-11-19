@@ -64,6 +64,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
   keep your foot in it and lose him. A bend taken too fast throws the car wide, and what is beside
   the road decides what that costs. A road takes hours off the day and gas out of the tank.
   Rivals can be raced down one as well as on the strip.
+- **Wear**: parts a pack says wear do, with every pass and every kilometre. A tired one costs
+  power, a note says when one will not last, and one that wears out stops the car. A battery
+  runs down with the lamps left on overnight, or sitting in the yard, and charges as you drive.
 - **A can of gas**: a car with too little in it to leave home is not stuck: trying to drive
   off walks you to the pump with a can instead, a gallon for two dollars and an hour.
 - **Gas**: every car has a tank. Cruising burns it, a pass down the strip burns half a gallon,
@@ -428,8 +431,14 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"needs": ["a 4-bolt diff"]` and `"gives": ["a 4-bolt diff"]` tie parts together: a part's
   needs must each be given by something else fitted, or the car will not run, and says which.
   `"holds": 380` is the torque, in pound-feet, a driveline part takes before it can break.
+  `"wears": 2` is the per cent of itself a pass down the strip takes off it, and four
+  kilometres of road or town the same. Past half it costs a little power; at nothing it is done
+  for and the car will not run. `"takes": ["Valves"]` names slots whose parts are finished with
+  it when it wears out in use: a timing belt that lets go bends the valves.
   `"charges": true` makes it a battery: at 15 per cent or less it is flat and the car will not
   start, and a spot that does `charge` brings it back to 90. One that is done for takes no charge.
+  Driving puts charge back. Sleeping with the lamps on takes 45 out, and a car that is not the
+  one in the bay loses 3 a day; neither takes it below 5, so it is flat and never finished.
   `"slips": true` makes it a clutch, which does not break but slips: the car gets only what
   the clutch holds, every launch over that burns some of it away, and a worn one holds less.
   A pack can hold 120 parts; the paper and the bench turn over a page at a time.
