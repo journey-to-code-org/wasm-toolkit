@@ -18,6 +18,7 @@ pub mod online;
 pub mod roadtrip;
 pub mod dyno;
 pub mod cards;
+pub mod projects;
 use online::Net;
 
 pub const KEY_UP: u32 = 1;
@@ -543,6 +544,13 @@ impl Game {
     }
 
     pub fn value(&self, o: &Owned) -> i32 {
+        if let Some(car) = self.pack.manifest.cars.get(&o.car).filter(|_| o.sheet) {
+            // A car that is its parts is worth its shell and what is on it: the parts it came
+            // with for an eighth of their price, anything better for two fifths, each for as much
+            // of that as is left of it. A shell too far gone is only scrap.
+            let shell = if o.body > 70 { 40 } else { car.price.unwrap_or(300) / 4 * (200 - o.body.clamp(0, 100)) / 200 };
+            return shell + o.fitted.iter().filter_map(|(slot, id)| Some((slot, id, self.part(id)?))).map(|(slot, id, p)| p.price * cond_of(id) / 100 * if car.stock.get(slot).map(String::as_str) == Some(base(id)) { 12 } else { 40 } / 100).sum::<i32>();
+        }
         self.list_price(&o.car, o.cond) * 6 / 10 * (200 - o.body.clamp(0, 100)) / 200 + o.fitted.values().filter_map(|p| self.part(p)).map(|p| p.price / 2).sum::<i32>()
     }
 
@@ -1226,10 +1234,22 @@ impl Game {
                     self.scene = Scene::Place;
                     self.note = None;
                 } else if pick {
-                    if self.py >= 34 && self.py < 50 && self.px >= 128 {
+                    if self.py >= 34 && self.py < 50 && (64..124).contains(&self.px) {
+                        self.scene = Scene::Paper(3);
+                        self.note = None;
+                    } else if self.py >= 34 && self.py < 50 && self.px >= 128 {
                         // The tabs, left to right: jobs, cars, parts.
                         self.scene = Scene::Paper(if self.px >= 256 { 1 } else if self.px >= 192 { 0 } else { 2 });
                         self.note = None;
+                    } else if page == 3 {
+                        if let Some(i) = self.row(8, 312, 54, 62, projects::PROJECTS) {
+                            let down = (self.py - 54) % 62;
+                            if self.px >= 248 && (30..42).contains(&down) {
+                                self.haggle_project(i);
+                            } else {
+                                self.buy_project(i);
+                            }
+                        }
                     } else if page == 2 {
                         if let Some(i) = self.row(8, 312, 56, 20, self.jobs().len()) {
                             self.work(i);
@@ -1984,8 +2004,8 @@ impl Game {
         let (ink, grey, cream) = (shade(ramp("RUBBER"), 3), shade(ramp("BROWN"), 14), ramp("CREAM"));
         s.vgrad(0, 0, 320, 200, cream, 27, 23);
         s.text_big(8, 8, "THE PAPER", ink, 2);
-        s.text(8, 30, if self.rain_on(self.day() + 1) { "TOMORROW: RAIN" } else { "TOMORROW: DRY" }, grey);
-        for (t, label, x) in [(2, "JOBS", 128), (0, "CARS", 192), (1, "PARTS", 256)] {
+        s.text(200, 12, if self.rain_on(self.day() + 1) { "TOMORROW: RAIN" } else { "TOMORROW: DRY" }, grey);
+        for (t, label, x) in [(3, "AS IS", 64), (2, "JOBS", 128), (0, "CARS", 192), (1, "PARTS", 256)] {
             if t == page {
                 s.rect(x, 34, 60, 16, ink);
             }
@@ -1994,7 +2014,13 @@ impl Game {
         }
         s.rect(8, 52, 304, 1, grey);
         let hover = shade(cream, 31);
-        if page == 0 {
+        if page == 3 {
+            self.draw_projects(s, ink, grey, hover);
+            // Whatever more the ad says than there was room for is read out for the one pointed at.
+            let more: Vec<String> = self.row(8, 312, 54, 62, projects::PROJECTS).and_then(|i| self.projects().into_iter().nth(i).flatten()).map(|p| p.says.into_iter().skip(2).collect()).unwrap_or_default();
+            let line = self.note.clone().or_else(|| more.first().cloned()).unwrap_or_else(|| "It does not run. The ad says why.".into());
+            self.panel(s, "Sold as it stands", &line, more.get(1).map_or("Pick one to buy it. Escape: back.", |m| m.as_str()));
+        } else if page == 0 {
             let offers = self.offers();
             let over = self.row(8, 312, 54, 44, 3);
             for (i, offer) in offers.iter().enumerate() {

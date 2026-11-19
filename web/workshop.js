@@ -1035,6 +1035,23 @@ function gamePanel() {
     }),
     m.title ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "No picture: write the name up", onclick: () => { delete m.title; tidy(); render(); } })) : null,
     h("p", { class: "hint", text: "The title is seen with Play it. Leave the bottom fifth of the picture plain: \"Press Enter\" is written there." }),
+    h("label", { for: "faults", text: "Cars sold as they stand: what can be wrong with one. A line each: what the ad says | the slots it breaks | the slots it breaks and does not mention" }),
+    (() => {
+      const box = h("textarea", { id: "faults", spellcheck: "false", rows: 6 });
+      const list = (v) => (v ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      box.value = (m.faults ?? []).map((f) => [f.says, (f.breaks ?? []).join(", "), (f.hidden ?? []).join(", ")].join(" | ")).join("\n");
+      box.oninput = () => {
+        const faults = box.value.split("\n").map((l) => l.split("|")).filter((l) => l[0]?.trim()).map((l) => ({ says: l[0].trim().slice(0, 38), breaks: list(l[1]), hidden: list(l[2]) })).filter((f) => f.breaks.length || f.hidden.length);
+        if (faults.length) m.faults = faults.slice(0, 24); else delete m.faults;
+        touch();
+      };
+      return box;
+    })(),
+    field("Where such cars are, and what bringing one home costs: Ohio = 120, Maryland = 60", (m.sellers ?? []).map((x) => `${x.from} = ${x.ship}`).join(", "), (v) => {
+      const sellers = v.split(",").map((x) => x.split("=").map((y) => y.trim())).filter((x) => x.length === 2 && x[0] && +x[1] >= 0).map((x) => ({ from: x[0], ship: Math.floor(+x[1]) }));
+      if (sellers.length) m.sellers = sellers; else delete m.sellers;
+    }),
+    h("p", { class: "hint", text: "They are in the paper under AS IS when the pack has faults and a car with a build sheet." }),
     h("label", { text: "Work in the paper (up to 6 jobs)" }),
     (m.jobs ?? []).map((j, i) => h("div", { class: "three" },
       field("The job", j.name, (v) => { j.name = v; }, { maxlength: 22 }),

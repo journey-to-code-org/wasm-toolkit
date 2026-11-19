@@ -1833,3 +1833,68 @@ fn a_car_with_a_build_sheet_is_made_of_its_parts() {
     let broke = (0..300).find_map(|_| g.strain_driveline());
     assert_eq!(broke.as_deref(), Some("Front axles"), "the weakest goes first");
 }
+
+#[test]
+fn cars_are_sold_as_they_stand() {
+    use engine::game::cond_of;
+    let manifest = MANIFEST.replace("\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" } }", "\"paint\": \"RED\", \"paint_ramps\": { \"mid\": \"BLUE\" },
+        \"stock\": { \"Shocks\": \"struts\", \"Axles\": \"axle\", \"Seats\": \"seat\" }, \"optional\": [\"Seats\"] }")
+        .replace("\"puffer\": {", "\"struts\": { \"name\": \"Struts\", \"slot\": \"Shocks\", \"price\": 100 }, \"seat\": { \"name\": \"Seat\", \"slot\": \"Seats\", \"price\": 40 },
+        \"axle\": { \"name\": \"Axle\", \"slot\": \"Axles\", \"price\": 80 }, \"axle2\": { \"name\": \"Big axle\", \"slot\": \"Axles\", \"price\": 200 }, \"puffer\": {")
+        .replace("\"bets\": [10, 25],", "\"bets\": [10, 25], \"faults\": [ { \"says\": \"Bent an axle.\", \"breaks\": [\"Axles\"], \"hidden\": [\"Shocks\"] } ], \"sellers\": [ { \"from\": \"Ohio\", \"ship\": 120 } ],");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    // A car that is its parts is worth its shell and its parts, and less than it cost.
+    let worth = g.value(g.owned().unwrap());
+    assert!(worth > 60 && worth < 350, "{worth}");
+    // Two a day, the same two however often the paper is opened, each from somewhere, saying something.
+    let (a, b) = (g.projects(), g.projects());
+    assert_eq!(a.len(), 2);
+    for (x, y) in a.iter().zip(&b) {
+        let (x, y) = (x.as_ref().unwrap(), y.as_ref().unwrap());
+        assert_eq!((x.price, &x.says, &x.owned.fitted), (y.price, &y.says, &y.owned.fitted));
+        assert!(x.price > 0 && x.ship == 120 && x.from == "Ohio" && x.owned.sheet && x.says.iter().any(|s| s == "Bent an axle."));
+        // What the ad does not say went with it: the shocks, unless someone has had them off already.
+        assert!(x.owned.fitted.get("Shocks").is_none_or(|id| cond_of(id) == 0), "{:?}", x.owned.fitted);
+    }
+    // Over many days: nearly all of them do not run, and now and then the axle the ad wrote off is fine.
+    let (mut dead, mut lucky, mut all) = (0, 0, 0);
+    for day in 0..60 {
+        g.state.hours = day * 4;
+        for p in g.projects().into_iter().flatten() {
+            all += 1;
+            lucky += usize::from(p.owned.fitted.get("Axles").is_some_and(|id| cond_of(id) > 0));
+            g.state.cars = vec![p.owned];
+            g.state.cur = Some(0);
+            dead += usize::from(g.wont_run().is_some());
+        }
+    }
+    assert!(all == 120 && dead > 100 && lucky > 3 && lucky < 60, "{:?}", (all, dead, lucky));
+    // Bought from the AS IS page: the price and the haul, and it is in the yard with what was wrong with it.
+    g.state.hours = 0;
+    g.state.cars.truncate(1);
+    click(&mut g, 140, 10);
+    click(&mut g, 90, 40);
+    assert_eq!(g.scene, Scene::Paper(3));
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    let first = g.projects().remove(0).unwrap();
+    click(&mut g, 270, 54 + 36);
+    let talked = g.projects().remove(0);
+    assert!(talked.as_ref().is_none_or(|p| p.price == first.price * 95 / 100));
+    let pay = g.projects().into_iter().position(|p| p.is_some()).unwrap();
+    let it = g.projects().remove(pay).unwrap();
+    let cash = g.state.cash;
+    click(&mut g, 100, 54 + pay as i32 * 62 + 10);
+    assert_eq!((g.state.cars.len(), g.state.cash, g.projects()[pay].is_none()), (2, cash - it.price - 120, true));
+    assert_eq!(g.state.cars[1].fitted, it.owned.fitted);
+    // The other tabs still turn from there.
+    click(&mut g, 280, 40);
+    assert_eq!(g.scene, Scene::Paper(1));
+    // A pack with nothing that can be wrong has none.
+    assert!(Game::new(Pack::parse(&files(MANIFEST))).projects().is_empty());
+    assert!(Pack::parse(&files(&manifest.replace("\"breaks\": [\"Axles\"], \"hidden\": [\"Shocks\"]", "\"breaks\": []"))).err().unwrap().contains("fault"));
+}

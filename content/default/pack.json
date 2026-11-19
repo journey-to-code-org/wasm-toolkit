@@ -2178,5 +2178,109 @@
     "purse": 600,
     "rounds": 3,
     "every": 1
-  }
+  },
+  "faults": [
+    {
+      "says": "Jumped timing. Needs a belt.",
+      "breaks": [
+        "Timing belt"
+      ],
+      "hidden": [
+        "Valves"
+      ]
+    },
+    {
+      "says": "Ran when parked. Will not start.",
+      "breaks": [
+        "Fuel pump"
+      ],
+      "hidden": [
+        "Battery"
+      ]
+    },
+    {
+      "says": "Spun a bearing. Needs a bottom end.",
+      "breaks": [
+        "Crankshaft",
+        "Bottom end"
+      ]
+    },
+    {
+      "says": "Clutch is gone. Engine is strong.",
+      "breaks": [
+        "Clutch"
+      ],
+      "hidden": [
+        "Transfer case"
+      ]
+    },
+    {
+      "says": "Blew the head gasket. Sold as is.",
+      "breaks": [
+        "Cylinder head"
+      ]
+    },
+    {
+      "says": "No spark. Probably something simple.",
+      "breaks": [
+        "Coils"
+      ],
+      "hidden": [
+        "PTU"
+      ]
+    },
+    {
+      "says": "Will not go in gear.",
+      "breaks": [
+        "Gearbox"
+      ]
+    },
+    {
+      "says": "Broke an axle at the track.",
+      "breaks": [
+        "Front axles"
+      ],
+      "hidden": [
+        "Rear diff"
+      ]
+    },
+    {
+      "says": "Misfires. Could be plugs or wires.",
+      "breaks": [
+        "Spark plugs",
+        "Plug wires"
+      ]
+    },
+    {
+      "says": "Sat for years. Tank is rusty.",
+      "breaks": [
+        "Fuel tank"
+      ],
+      "hidden": [
+        "Fuel pump"
+      ]
+    }
+  ],
+  "sellers": [
+    {
+      "from": "two towns over",
+      "ship": 30
+    },
+    {
+      "from": "Maryland",
+      "ship": 60
+    },
+    {
+      "from": "Virginia",
+      "ship": 70
+    },
+    {
+      "from": "Pennsylvania",
+      "ship": 90
+    },
+    {
+      "from": "Ohio",
+      "ship": 120
+    }
+  ]
 }
