@@ -260,6 +260,14 @@ pub struct Part {
     /// what the clutch will pass, and every launch like that wears it, until it is done for.
     #[serde(default)]
     pub slips: bool,
+    /// Brakes: how much harder (or, below nothing, softer) than stock they stop, as a percentage.
+    /// A part with this is the car's brakes, and stops worse as it wears.
+    #[serde(default)]
+    pub brakes: Option<i32>,
+    /// Suspension: how much less a fast bend throws the car than on stock, as a percentage. A part
+    /// with this is the car's suspension, and handles worse as it wears.
+    #[serde(default)]
+    pub handling: Option<i32>,
     /// Swapping it, on or off, leaves the engine needing a tune: until it has one it runs down.
     #[serde(default)]
     pub retune: bool,

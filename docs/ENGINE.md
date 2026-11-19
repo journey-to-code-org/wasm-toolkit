@@ -67,6 +67,8 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Under the hood on the build sheet**: on a car with a build sheet, what it came with under
   the hood (airbox, manifold, turbo, intercooler) are real parts: they come off onto the shelf,
   have a condition, and sell. A turbo sells best with its manifold and O2 housing.
+- **Brakes and suspension**: better brakes stop shorter and better suspension takes bends
+  faster, on roads and in town; worn ones do less, and the rain makes both worse.
 - **A tune after the work**: change cams, a head, a turbo, a manifold, the pump or the computer,
   and the car runs on a tune made for what was there before: down on power until it is tuned.
   Your own laptop at the rollers does it; or the shop does, on the factory map, for a fee.
@@ -442,6 +444,10 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"needs": ["a 4-bolt diff"]` and `"gives": ["a 4-bolt diff"]` tie parts together: a part's
   needs must each be given by something else fitted, or the car will not run, and says which.
   `"holds": 380` is the torque, in pound-feet, a driveline part takes before it can break.
+  `"brakes": 40` makes it the car's brakes, stopping 40 per cent harder than stock (0 for the
+  stock ones); `"handling": 30` makes it the suspension, and a fast bend throws the car 30 per
+  cent less. Both count for less as the part wears, down to three fifths at nothing, and a wet
+  road makes both worse. They work on roads and in town, and the rollers show them.
   `"retune": true` means swapping it, on or off, leaves the engine needing a tune: it runs 15 per
   cent down until it is tuned, either on the car's own laptop at the rollers (which keeps its
   tune) or by the shop with `tuneup` (which puts it back on the factory map).

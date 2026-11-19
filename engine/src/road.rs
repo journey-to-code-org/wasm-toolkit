@@ -73,12 +73,15 @@ pub struct Cop {
 pub struct Pace {
     pub accel: f64,
     pub top: f64,
+    /// How far a bend taken fast throws the car: less with better suspension and stickier tyres.
     pub slide: f64,
+    /// How hard the brakes stop it, as a share of an ordinary car's.
+    pub brakes: f64,
 }
 
 impl Default for Pace {
     fn default() -> Pace {
-        Pace { accel: 5.0, top: 56.0, slide: 1.0 }
+        Pace { accel: 5.0, top: 56.0, slide: 1.0, brakes: 1.0 }
     }
 }
 
@@ -290,7 +293,7 @@ impl Trip {
             self.speed -= 1.0 / HZ;
         }
         if p.stop {
-            self.speed -= 11.0 / HZ;
+            self.speed -= 11.0 * self.pace.brakes / HZ;
         }
         // Off the tar it is slow going.
         if self.x.abs() > 1.0 && self.speed > 15.0 {

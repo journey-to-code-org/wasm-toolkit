@@ -538,6 +538,23 @@ impl Game {
         self.state.spares.iter().any(|p| p == id) || self.state.cars.iter().any(|c| c.fitted.values().any(|p| p == id))
     }
 
+    /// How the brakes and the suspension of a car are: each a share of an ordinary car's, from
+    /// what is fitted and how worn it is. A worn part does three fifths of its job, at worst.
+    pub fn chassis(&self, o: &Owned) -> (f64, f64) {
+        let part = |pick: fn(&Part) -> Option<i32>| o.fitted.values().filter_map(|id| Some((pick(self.part(id)?)?, cond_of(id))))
+            .map(|(more, cond)| (1.0 + more as f64 / 100.0) * (0.6 + 0.4 * cond as f64 / 100.0)).product::<f64>();
+        (part(|p| p.brakes), part(|p| p.handling))
+    }
+
+    /// The town car brakes and turns as the car in the bay does.
+    pub fn fit_town(&mut self) {
+        let p = self.pace();
+        let handling = self.owned().map_or(1.0, |o| self.chassis(o).1);
+        if let Some(t) = self.town.as_mut() {
+            (t.brakes, t.turn) = (p.brakes, handling.sqrt().clamp(0.75, 1.3));
+        }
+    }
+
     /// What the parts on a car do: torque as a fraction of stock, and the turbo fitted, if one is.
     pub fn tune(&self, o: &Owned) -> (f64, Option<Boost>) {
         let (gain, turbo) = self.tune_engine(o);
@@ -573,7 +590,7 @@ impl Game {
         let turbo = parts.iter().find_map(|p| p.boost.clone());
         let blown = turbo.is_some() || self.pack.manifest.cars.get(&o.car).is_some_and(|c| c.drive.boost.is_some());
         // Parts that wear and are past half cost a little power each, down to three quarters in all.
-        let tired = o.fitted.values().filter(|id| cond_of(id) < 50 && self.part(id).is_some_and(|p| p.wears > 0.0))
+        let tired = o.fitted.values().filter(|id| cond_of(id) < 50 && self.part(id).is_some_and(|p| p.wears > 0.0 && p.brakes.is_none() && p.handling.is_none()))
             .map(|id| 1.0 - (50 - cond_of(id)) as f64 * 0.002).product::<f64>().max(0.75);
         // New parts on the old tune: it runs, but rich here and lean there, and down on power.
         let rough = if o.untuned { 0.85 } else { 1.0 };
@@ -994,6 +1011,7 @@ impl Game {
             });
             self.rng = rng;
             self.town = Some(town);
+            self.fit_town();
             self.town_by_road = false;
             self.scene = Scene::Drive;
         } else {

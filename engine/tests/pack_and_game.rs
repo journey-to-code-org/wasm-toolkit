@@ -2206,3 +2206,57 @@ fn new_parts_want_a_new_tune() {
     click(&mut g, 160, 186);
     assert_eq!((g.scene, g.state.cars[0].untuned, g.state.cars[0].ecu.timing), (Scene::Laptop, false, 3));
 }
+
+#[test]
+fn brakes_stop_and_suspension_corners_as_they_are_fitted_and_worn() {
+    use engine::road::{Pace, Trip};
+    use engine::town::Pedals;
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra", None, 100);
+    g.outfit(&mut o);
+    o.fitted.insert("Brakes".into(), "s-calipers".into());
+    o.fitted.insert("Suspension".into(), "s-struts".into());
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    let stock = g.pace();
+    assert_eq!(g.chassis(&g.state.cars[0]), (1.0, 1.0));
+    // Worn out, stock brakes do three fifths of the job; a big kit, new, stops 40 per cent harder.
+    g.state.cars[0].fitted.insert("Brakes".into(), "s-calipers@0".into());
+    assert!((g.chassis(&g.state.cars[0]).0 - 0.6).abs() < 1e-9);
+    g.state.cars[0].fitted.insert("Brakes".into(), "brakes-big".into());
+    g.state.cars[0].fitted.insert("Suspension".into(), "coilovers".into());
+    let (brakes, handling) = g.chassis(&g.state.cars[0]);
+    assert!((brakes - 1.4).abs() < 1e-9 && (handling - 1.3).abs() < 1e-9);
+    let built = g.pace();
+    assert!(built.brakes > stock.brakes && built.slide < stock.slide);
+    // Worn brakes and dampers cost no power: that is the engine's business.
+    g.state.cars[0].fitted.insert("Brakes".into(), "brakes-big@10".into());
+    g.state.cars[0].fitted.insert("Suspension".into(), "coilovers@10".into());
+    let worn_power = g.tune_engine(&g.state.cars[0]).0;
+    g.state.cars[0].fitted.insert("Brakes".into(), "brakes-big".into());
+    g.state.cars[0].fitted.insert("Suspension".into(), "coilovers".into());
+    assert_eq!(worn_power, g.tune_engine(&g.state.cars[0]).0);
+
+    // On a road: from the same speed, the better brakes stop in less road.
+    let road = g.pack.manifest.roads.values().next().unwrap().clone();
+    let stop_in = |pace: Pace| {
+        let mut t = Trip::new("r", &road, false, 9);
+        t.pace = pace;
+        t.speed = 30.0;
+        let z = t.z;
+        for _ in 0..600 {
+            if t.speed <= 0.0 { break; }
+            t.tick(&road, Pedals { stop: true, ..Pedals::default() });
+        }
+        t.z - z
+    };
+    assert!(stop_in(built) < stop_in(stock) * 0.8, "{} against {}", stop_in(built), stop_in(stock));
+
+    // In town, too: the town car takes the brakes and the turn of the car.
+    let mut gt = town_game();
+    click(&mut gt, 100, 10);
+    let t = gt.town.as_ref().unwrap();
+    assert_eq!((t.brakes, t.turn), (1.0, 1.0), "a car with no brakes or suspension on its sheet is an ordinary one");
+}
