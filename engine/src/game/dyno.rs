@@ -105,7 +105,15 @@ impl Game {
                     self.rollers = Rollers { straps, phase: 1, rpm: 1500.0, ..Rollers::default() };
                     self.sheet = None;
                 }
-                1 if self.tuner() => self.scene = Scene::Laptop,
+                1 if self.tuner() => {
+                    // On the laptop with a fresh log: the map is made to fit what is on it now.
+                    if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)).filter(|o| o.untuned) {
+                        o.untuned = false;
+                        self.note = Some("Mapped to the new parts.".into());
+                        self.save();
+                    }
+                    self.scene = Scene::Laptop;
+                }
                 1 => self.no("That takes a laptop and a cable."),
                 _ => {
                     self.scene = Scene::Place;
@@ -393,6 +401,7 @@ impl Game {
             s.text(320 - 4 - value.len() as i32 * 8, y, value, cream);
         }
         self.buttons(s, &["PULL AGAIN".to_string(), "LAPTOP".to_string(), "DONE".to_string()]);
-        self.panel(s, "The rollers", self.note.as_deref().unwrap_or("What it makes, and what that is worth."), "Grey: as it left the factory. Escape.");
+        let line = if self.owned().is_some_and(|o| o.untuned) { "New parts, old tune: it needs a tune." } else { "What it makes, and what that is worth." };
+        self.panel(s, "The rollers", self.note.as_deref().unwrap_or(line), "Grey: as it left the factory. Escape.");
     }
 }

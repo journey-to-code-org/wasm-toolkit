@@ -2160,3 +2160,49 @@ fn a_parts_car_from_far_off_comes_on_a_trailer() {
     assert_eq!(g.state.cars[0], p.owned);
     assert_eq!(g.note, Some(format!("The car from {} is here.", p.from)));
 }
+
+#[test]
+fn new_parts_want_a_new_tune() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra", None, 100);
+    g.outfit(&mut o);
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    g.state.cash = 1000;
+    let power = g.tune_engine(&g.state.cars[0]).0;
+    // Seats are seats; cams are the tune. On at the bench, and it runs down until it is tuned.
+    g.state.spares = vec!["cams-272".into(), "springs-dual".into()];
+    g.scene = Scene::Bench;
+    click(&mut g, 200, 45);
+    assert!(!g.state.cars[0].untuned, "valve springs are not the tune");
+    click(&mut g, 200, 35);
+    assert!(g.state.cars[0].untuned);
+    assert_eq!(g.note.as_deref(), Some("Bolted on. Now it wants a tune."));
+    let rough = g.tune_engine(&g.state.cars[0]).0;
+    g.state.cars[0].untuned = false;
+    let tuned = g.tune_engine(&g.state.cars[0]).0;
+    g.state.cars[0].untuned = true;
+    assert!((rough / tuned - 0.85).abs() < 1e-9 && tuned > power);
+
+    // The shop puts it on the factory map, and says so; again, and it does not need one.
+    g.state.cars[0].ecu.timing = 4;
+    g.scene = Scene::Place;
+    g.state.place = "rollers".into();
+    let hours = g.state.hours;
+    click(&mut g, 40, 10);
+    assert_eq!((g.state.cars[0].untuned, g.state.cars[0].ecu.timing, g.state.cash, g.state.hours - hours), (false, 0, 920, 3));
+    click(&mut g, 40, 10);
+    assert_eq!((g.state.cash, g.note.as_deref()), (920, Some("It runs right. It does not need one.")));
+
+    // Or your own laptop at the rollers: opening it with the car there makes the map fit, tune and all.
+    g.state.cars[0].fitted.insert("Computer".into(), "laptop".into());
+    g.state.cars[0].fitted.insert("ECU".into(), "ecu-socket".into());
+    g.state.cars[0].untuned = true;
+    g.state.cars[0].ecu.timing = 3;
+    g.scene = Scene::Dyno;
+    g.rollers.phase = 2;
+    click(&mut g, 160, 186);
+    assert_eq!((g.scene, g.state.cars[0].untuned, g.state.cars[0].ecu.timing), (Scene::Laptop, false, 3));
+}

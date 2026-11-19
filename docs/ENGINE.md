@@ -67,6 +67,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Under the hood on the build sheet**: on a car with a build sheet, what it came with under
   the hood (airbox, manifold, turbo, intercooler) are real parts: they come off onto the shelf,
   have a condition, and sell. A turbo sells best with its manifold and O2 housing.
+- **A tune after the work**: change cams, a head, a turbo, a manifold, the pump or the computer,
+  and the car runs on a tune made for what was there before: down on power until it is tuned.
+  Your own laptop at the rollers does it; or the shop does, on the factory map, for a fee.
 - **Getting rid of a car**: one with a build sheet can go three ways from the yard. The dealer
   takes it whole if it runs; a shell good enough to sell (body no worse than 70) goes for the
   shell, with every part stripped onto the shelf first, in four hours; or the scrapyard takes it
@@ -327,6 +330,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
+  | `tuneup` | the shop tunes the car in the bay on its factory map, for the pack's `tuneup` cost and hours |
   | `shootout` | enter the shootout, on a day it is held |
   | `charge` | put the battery of the car in the bay on the charger: 5 dollars, two hours |
   | `bodywork` | straighten the body of the car in the bay: 20 dollars and 4 for each point of damage |
@@ -438,6 +442,9 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"needs": ["a 4-bolt diff"]` and `"gives": ["a 4-bolt diff"]` tie parts together: a part's
   needs must each be given by something else fitted, or the car will not run, and says which.
   `"holds": 380` is the torque, in pound-feet, a driveline part takes before it can break.
+  `"retune": true` means swapping it, on or off, leaves the engine needing a tune: it runs 15 per
+  cent down until it is tuned, either on the car's own laptop at the rollers (which keeps its
+  tune) or by the shop with `tuneup` (which puts it back on the factory map).
   `"rare": 6` makes it a factory part only some cars came with: that per cent of cars whose
   build sheet has its slot get it in place of the stock one, and the paper never sells it new.
   A spare whose `needs` are all met by other spares sells with them as a set, for 15 per cent
@@ -482,7 +489,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 - `"shootout": { "entry": 50, "purse": 400, "rounds": 3, "every": 7 }` holds one every
   seventh day. Left out, there is none.
 - `"title": "title.pic"` is a picture for the title screen, 320 by 240. `"respray": { "cost": 60,
-  "hours": 3 }` is what the `paint` action charges.
+  "hours": 3 }` is what the `paint` action charges, and `"tuneup": { "cost": 80, "hours": 3 }`
+  what the `tuneup` action does.
 - **bets** and **paints** may be left out. So may `"rebuild": { "cost": 250, "cond": 85 }`:
   what an engine rebuild costs and how healthy it comes back.
 - **cars** may have `"tank": 17`, in gallons. A small dial in the cockpit with `"reads": "gas"`

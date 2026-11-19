@@ -16,7 +16,7 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["pokerrun", "A poker run down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"], ["shootout", "Enters the shootout"], ["bodywork", "Knocks the dents out"], ["charge", "Charges the battery"], ["tyres", "Fits new tyres"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["pokerrun", "A poker run down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"], ["shootout", "Enters the shootout"], ["bodywork", "Knocks the dents out"], ["charge", "Charges the battery"], ["tuneup", "The shop tunes it on the factory map"], ["tyres", "Fits new tyres"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
@@ -941,6 +941,7 @@ function partsPanel() {
         field("Rare from the factory: per cent of cars that came with it in place of the stock one (never sold new)", p.rare ?? "", (v) => { if (v > 0) p.rare = Math.min(100, Math.floor(v)); else delete p.rare; }, { type: "number", min: 0, max: 100 }),
         field("It wears: per cent of itself a pass takes (blank: it does not)", p.wears ?? "", (v) => { if (v > 0) p.wears = v; else delete p.wears; }, { type: "number", min: 0, step: "0.1" }),
         field("Worn out in use, it takes the parts in these slots with it (Valves), with commas between", (p.takes ?? []).join(", "), (v) => { const n = v.split(",").map((x) => x.trim()).filter(Boolean); if (n.length) p.takes = n; else delete p.takes; })),
+      tick("Swapping it means the engine needs a tune again (cams, a turbo, injectors)", !!p.retune, (v) => { if (v) p.retune = true; else delete p.retune; }),
       tick("It is a battery: run down it is flat, and a charge brings it back", !!p.charges, (v) => { if (v) p.charges = true; else delete p.charges; }),
       tick("It is a clutch: over what it holds it slips and wears, and does not snap", !!p.slips, (v) => { if (v) p.slips = true; else delete p.slips; }),
       tick("It is a laptop and a cable: the car can be tuned at the rollers", !!p.tuner, (v) => { if (v) p.tuner = true; else delete p.tuner; }),
@@ -1033,6 +1034,8 @@ function gamePanel() {
       field("An engine rebuild costs", m.rebuild?.cost ?? 250, (n) => { m.rebuild = { cond: 85, ...m.rebuild, cost: Math.max(0, Math.floor(n ?? 250)) }; }, { type: "number", min: 0 }),
       field("And brings it back to, per cent", m.rebuild?.cond ?? 85, (n) => { m.rebuild = { cost: 250, ...m.rebuild, cond: Math.max(1, Math.min(100, Math.floor(n ?? 85))) }; }, { type: "number", min: 1, max: 100 })),
     h("div", { class: "two" },
+      field("A shop tune costs", m.tuneup?.cost ?? 80, (n) => { m.tuneup = { hours: 3, ...m.tuneup, cost: Math.max(0, Math.floor(n ?? 80)) }; }, { type: "number", min: 0 }),
+      field("And takes, hours", m.tuneup?.hours ?? 3, (n) => { m.tuneup = { cost: 80, ...m.tuneup, hours: Math.max(0, Math.floor(n ?? 3)) }; }, { type: "number", min: 0 }),
       field("A respray costs", m.respray?.cost ?? 60, (n) => { m.respray = { hours: 3, ...m.respray, cost: Math.max(0, Math.floor(n ?? 60)) }; }, { type: "number", min: 0 }),
       field("And takes, hours", m.respray?.hours ?? 3, (n) => { m.respray = { cost: 60, ...m.respray, hours: Math.max(0, Math.floor(n ?? 3)) }; }, { type: "number", min: 0 })),
     dropZone(m.title ? "The title screen (it has a picture; drop another to change it)" : "The title screen: a picture, made 320 by 240 (without one the pack's name is written up)", async (f) => {
