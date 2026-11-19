@@ -80,6 +80,10 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Day and night**: the last third of each day is dusk and then dark, on the road and in town:
   the sky goes, places marked as out of doors darken, the country beyond the lamps is dim, other cars are their lights, and the dash
   is lit if the cockpit has a night picture.
+- **Wear and damage**: every knock on the road or in town marks the body, which shows as
+  scuffs on the car, takes a little off its top speed and up to half off what it is worth, until
+  it is straightened. Tyres wear with every launch and every mile, and worn ones have up to three
+  tenths less grip, until a new set goes on. The rollers' sheet says how both stand.
 - **Nitrous**: a kit is a part and a bottle. The bottle is filled where the pack says, lasts
   seconds, and is more power while the button is held.
 - **The rollers**: somewhere to take the car. Pick the four rings in the floor to strap it
@@ -289,6 +293,8 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
   | `shootout` | enter the shootout, on a day it is held |
+  | `bodywork` | straighten the body of the car in the bay: 20 dollars and 4 for each point of damage |
+  | `tyres` | a new set of tyres, 80 dollars |
   | `sleep` | bed: the rest of today is gone and it is morning |
   | `nitrous` | fill the bottle of the nitrous kit on the car in the bay |
   | `dyno` | the rollers: strap the car down, make a pull, read the sheet, open the laptop |

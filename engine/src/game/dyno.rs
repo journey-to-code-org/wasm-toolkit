@@ -382,8 +382,8 @@ impl Game {
             ("ROAD", format!("{:.0} MPH", sheet.top)),
             ("ENGINE", o.map_or(String::new(), |o| format!("{}%", o.cond))),
             ("WORTH", o.map_or(String::new(), |o| format!("${}", self.value(o)))),
-            ("WON", format!("{}", self.state.wins)),
-            ("LOST", format!("{}", self.state.losses)),
+            ("BODY", o.map_or(String::new(), |o| format!("{}%", 100 - o.body))),
+            ("TYRES", o.map_or(String::new(), |o| format!("{:.0}%", 100.0 - o.tyres))),
         ];
         for (i, (name, value)) in lines.iter().enumerate() {
             let y = 26 + i as i32 * 12;

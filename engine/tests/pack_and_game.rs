@@ -1730,3 +1730,33 @@ fn a_road_can_have_water_trailers_and_a_ladder_to_climb_first() {
     assert!(m.roads["ohio"].rung > 0 && m.roads["ohio"].rigs > 0.0 && m.places.contains_key("norwalk") && m.maps["town"].blocks.values().any(|b| b.water));
     assert!(["ridge", "pike", "ohio"].iter().all(|r| m.maps["town"].gate(r).is_some()), "every road out of town leaves from its edge");
 }
+
+#[test]
+fn bodies_get_knocked_about_and_tyres_wear() {
+    let manifest = MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"bodywork\"").replace("\"do\": \"lamps\", \"needs_car\": true", "\"do\": \"tyres\"");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    click(&mut g, 100, 10);
+    assert_eq!(g.note.as_deref(), Some("There is not a mark on it."));
+    click(&mut g, 60, 10);
+    assert_eq!(g.note.as_deref(), Some("They are nearly new."));
+    let car = g.car().unwrap().clone();
+    let (worth, grip, top) = (g.value(g.owned().unwrap()), g.tuned_drive(g.owned().unwrap(), &car).grip, g.pace().top);
+    // Three knocks and a lot of miles later it is worth less, slower, and has less bite.
+    for _ in 0..3 { g.dent(); }
+    g.scrub(60.0);
+    let o = g.owned().unwrap().clone();
+    assert_eq!((o.body, o.tyres), (24, 60.0));
+    assert!(g.value(&o) < worth && g.pace().top < top && (g.tuned_drive(&o, &car).grip / grip - 0.82).abs() < 0.001);
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    // Straightened for twenty dollars and four a point; tyres for eighty.
+    click(&mut g, 100, 10);
+    assert_eq!((g.owned().unwrap().body, g.state.cash, g.state.hours), (0, 1000 - 116, 3));
+    click(&mut g, 60, 10);
+    assert_eq!((g.owned().unwrap().tyres, g.state.cash), (0.0, 1000 - 196));
+    assert_eq!(g.value(g.owned().unwrap()), worth);
+}
