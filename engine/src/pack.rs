@@ -191,6 +191,30 @@ pub struct Drive {
     pub boost: Option<Boost>,
     /// An automatic: it changes gear itself, on the strip and on the road.
     pub auto: bool,
+    /// Which wheels it drives: the front ones pull it sideways on a hard launch (torque steer),
+    /// all four less so, the back ones hardly at all.
+    pub driven: Driven,
+}
+
+/// The wheels the engine turns.
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum Driven {
+    #[default]
+    Rear,
+    Front,
+    All,
+}
+
+impl Driven {
+    /// How hard a full-grip launch in first pulls the car sideways, in metres a second each second.
+    pub fn torque_steer(self) -> f64 {
+        match self {
+            Driven::Front => 3.2,
+            Driven::All => 1.3,
+            Driven::Rear => 0.15,
+        }
+    }
 }
 
 impl Default for Drive {
@@ -204,6 +228,7 @@ impl Default for Drive {
             launch: 5600.0,
             weight_lb: 3060.0,
             auto: false,
+            driven: Driven::Rear,
             grip: 12.0,
             boost: Some(Boost { from: 2200.0, psi: 20.0, lag: 6.0 }),
         }

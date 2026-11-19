@@ -630,6 +630,14 @@ impl Game {
     }
 
     /// What blowing an engine up does to it: it runs, barely, until it is rebuilt.
+    /// Which way the car in the bay pulls under power, and how hard: the same for a car all day,
+    /// to one side or the other, give or take a fifth.
+    pub fn lean(&self) -> f64 {
+        let Some(o) = self.owned() else { return 0.0 };
+        let k = hash(o.car.bytes().fold(self.day() as u32 * 977, |a, b| a.wrapping_mul(31).wrapping_add(b as u32)));
+        (if k & 1 == 0 { 1.0 } else { -1.0 }) * (0.8 + (k >> 8) as f64 % 40.0 / 100.0)
+    }
+
     fn blew(&mut self) {
         if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
             o.cond = (o.cond - 20).max(25);
@@ -1262,6 +1270,7 @@ impl Game {
         // A launch is hard on the tyres.
         self.scrub(2.0);
         let mut race = Race::new(&drive, gain, boost, rival_et, rt);
+        race.lean = self.lean();
         if let Some(spray) = spray {
             (race.shot, race.bottle) = spray;
         }
@@ -2143,18 +2152,25 @@ impl Game {
             return self.settle((!alone).then_some(false));
         }
         if race.phase == Phase::Slip && hit & KEY_A != 0 {
-            let (won, blown, left) = (race.won, race.blown, race.bottle);
+            let (won, blown, left, out) = (race.won, race.blown, race.bottle, race.out);
             tone(0, 0);
             self.keep_bottle(left);
             self.settle((!alone).then_some(won));
             if blown {
                 self.blew();
+            } else if out == 1 {
+                self.no("Over the centre line. Disqualified.");
+            } else if out == -1 {
+                self.dent();
+                self.no("Into the wall. Disqualified.");
             }
             return;
         }
         let was = race.phase;
-        race.tick(Controls { throttle: keys & KEY_UP != 0, stage: hit & KEY_A != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0, nitrous: keys & KEY_N != 0 });
-        if was != Phase::Slip && race.phase == Phase::Slip {
+        race.tick(Controls { throttle: keys & KEY_UP != 0, stage: hit & KEY_A != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0, nitrous: keys & KEY_N != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
+        if was != Phase::Slip && race.phase == Phase::Slip && race.out != 0 {
+            tone(90, 400);
+        } else if was != Phase::Slip && race.phase == Phase::Slip {
             tone(990, 200);
         } else if was == Phase::Stage && race.phase == Phase::Tree {
             tone(660, 60);
@@ -2790,11 +2806,24 @@ impl Game {
             s.rect(mark(r.rival_pos), 13, 5, 3, shade(ramp(self.opponent().and_then(|v| v.1).as_deref().unwrap_or("GREY")), 24));
             s.rect(mark(r.pos), 8, 5, 3, shade(ramp(self.owned().and_then(|o| o.paint.as_deref()).unwrap_or("WHITE")), 26));
         }
+        if r.lean != 0.0 && r.phase == Phase::Run {
+            // Where the car is in its lane: the wall on the left, the centre line on the right.
+            let (x0, w, y) = (120, 80, 22);
+            let warn = r.drift.abs() > crate::race::LANE * 0.7;
+            s.rect(x0, y, 2, 7, shade(ramp("CONCRETE"), 20));
+            s.rect(x0 + w, y, 2, 7, shade(ramp("WHITE"), 28));
+            s.rect(x0 + 2, y + 3, w - 2, 1, shade(ramp("CHROME"), 9));
+            let at = x0 + w / 2 + (r.drift / crate::race::LANE * (w / 2 - 3) as f64) as i32;
+            s.rect(at - 2, y + 1, 5, 5, if warn { shade(ramp("RED"), 28) } else { shade(ramp("LIME"), 26) });
+        }
         let versus = self.versus_says();
         let say = match r.phase {
             Phase::Stage if versus.is_some() => versus.as_ref().unwrap().0,
             Phase::Stage => "ENTER TO STAGE",
             Phase::Tree if r.gear == 0 => "HOLD UP FOR REVS. SPACE ON THE GREEN.",
+            Phase::Run if r.lean != 0.0 && r.gear == 1 && r.pos < 40.0 && !r.red => "LEFT AND RIGHT: HOLD YOUR LANE",
+            _ if r.out == 1 => "OVER THE CENTRE LINE",
+            _ if r.out == -1 => "INTO THE WALL",
             _ if r.red => "RED LIGHT",
             _ => "",
         };
@@ -2817,7 +2846,7 @@ impl Game {
                 s.text(164, 110, &match &versus { Some((_, theirs)) => theirs.clone().unwrap_or_else(|| "...".into()), None => ms(r.rival_rt + r.rival_et) }, ink);
                 let (words, c) = if let Some((words, _)) = &versus {
                     (*words, if r.won { shade(ramp("FOREST"), 14) } else { red })
-                } else if r.blown { ("IT LET GO.", red) } else if r.won { ("YOU WIN.", shade(ramp("FOREST"), 14)) } else if r.red { ("RED LIGHT.", red) } else if r.et > 0 { ("YOU LOSE.", red) } else { ("HE IS GONE.", red) };
+                } else if r.blown { ("IT LET GO.", red) } else if r.out != 0 { ("OVER THE LINE.", red) } else if r.won { ("YOU WIN.", shade(ramp("FOREST"), 14)) } else if r.red { ("RED LIGHT.", red) } else if r.et > 0 { ("YOU LOSE.", red) } else { ("HE IS GONE.", red) };
                 s.text(100, 126, words, c);
             }
             if versus.as_ref().is_none_or(|v| v.0 != "WAITING FOR THEM") {
@@ -2897,7 +2926,7 @@ impl Game {
         s.vgrad(0, 0, 320, horizon, ramp("NAVY"), 1, 7);
         s.vgrad(0, horizon, 320, view - horizon, ramp("ASPHALT"), 5, 10);
         s.clip(0, 0, 320, view);
-        let cam = Cam { pos: [-3.0, 1.125, r.pos], yaw: 0.0, pitch: 0.0, focal: 200.0, cx: 160, cy: horizon };
+        let cam = Cam { pos: [-3.0 + r.drift, 1.125, r.pos], yaw: 0.0, pitch: 0.0, focal: 200.0, cx: 160, cy: horizon };
         let mut scene = Scene3::new(cam);
         let (asphalt, rubber, white) = (ramp("ASPHALT"), ramp("RUBBER"), ramp("WHITE"));
         let here = (r.pos / 20.0).floor() as i32 * 20;
@@ -2979,7 +3008,7 @@ impl Game {
             }
         }
         s.clip_off();
-        self.draw_cockpit(s, seat, true, r.rpm, r.v * 2.237, r.boost, r.gear, 0.0, r.rpm > r.redline() - 700.0 && r.phase == Phase::Run);
+        self.draw_cockpit(s, seat, true, r.rpm, r.v * 2.237, r.boost, r.gear, r.wheel * 90.0, r.rpm > r.redline() - 700.0 && r.phase == Phase::Run);
         self.draw_race_over(s, r, seat.view_h * 92 / 136);
     }
 

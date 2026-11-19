@@ -4,7 +4,7 @@
 //!
 //! Everything about the car comes from the pack (`Drive`); nothing here knows what it is.
 
-use crate::pack::{Boost, Drive};
+use crate::pack::{Boost, Drive, Driven};
 
 pub const HZ: f64 = 30.0;
 pub const QUARTER: f64 = 402.0;
@@ -38,7 +38,14 @@ pub struct Controls {
     pub down: bool,
     /// The button on the wheel: nitrous, if there is a bottle and something in it.
     pub nitrous: bool,
+    /// The wheel, to keep it in its lane.
+    pub left: bool,
+    pub right: bool,
 }
+
+/// How far either way of the middle of its lane a car can wander before it is over a line: the
+/// lane is six metres, the car under two.
+pub const LANE: f64 = 2.1;
 
 pub struct Race {
     /// Nitrous: how much more it makes while it sprays (0.35 is 35 per cent), the seconds left in
@@ -82,6 +89,16 @@ pub struct Race {
     /// The other lane is someone real, somewhere else: where they are and who won is told to the
     /// race, not worked out by it.
     pub net: bool,
+    /// Which way, and how hard, this car pulls when it launches: 1 is to the right as hard as its
+    /// driven wheels make it, -1 to the left. Nothing on the rollers, where it cannot wander.
+    pub lean: f64,
+    /// Metres right of the middle of its lane (the centre line is to the right, the wall to the
+    /// left), how fast it is going that way, and where the wheel is, from -1 to 1.
+    pub drift: f64,
+    sideways: f64,
+    pub wheel: f64,
+    /// Over a line: 1 across the centre line, -1 into the wall. Either is the race lost.
+    pub out: i8,
 }
 
 impl Race {
@@ -94,6 +111,7 @@ impl Race {
             drive: drive.clone(), gain,
             phase: Phase::Stage, gear: 0, rpm: IDLE, boost: 0.0, pos: 0.0, v: 0.0, launch: 0.0, shift: 0, clock: 0, tree: 0,
             red: false, rt: 0, sixty: 0, et: 0, mph: 0, rival_et, rival_rt, rival_pos: 0.0, won: false, strain: 0.0, blown: false, net: false,
+            lean: 0.0, drift: 0.0, sideways: 0.0, wheel: 0.0, out: 0,
         }
     }
 
@@ -133,6 +151,31 @@ impl Race {
 
     fn ratio(&self) -> f64 {
         self.drive.gears[self.gear - 1] * self.drive.final_drive
+    }
+
+    /// Torque steer: on the power the driven wheels drag the car to one side, hardest in first
+    /// with the tyres at their limit; the wheel brings it back, and more quickly the faster it goes.
+    fn wander(&mut self, c: Controls, asked: f64) {
+        if self.lean == 0.0 {
+            return;
+        }
+        let spin = asked >= 1.0;
+        let pull = match self.drive.driven {
+            // A car driven from the back only pulls when its tyres are spinning.
+            Driven::Rear if !spin => 0.0,
+            d => d.torque_steer() * asked.min(1.0) / (self.gear.max(1) as f64).powf(1.5) * if spin { 1.4 } else { 1.0 },
+        };
+        let want = if c.left { -1.0 } else if c.right { 1.0 } else { 0.0 };
+        self.wheel += (want - self.wheel) / 5.0;
+        let bite = (self.v / 8.0).min(1.0);
+        self.sideways = (self.sideways + (pull * self.lean + self.wheel * 4.0 * bite) / HZ) * 0.92;
+        if self.v <= 0.0 {
+            self.sideways = 0.0;
+        }
+        self.drift += self.sideways / HZ;
+        if self.drift.abs() > LANE {
+            self.out = if self.drift > 0.0 { 1 } else { -1 };
+        }
     }
 
     pub fn tick(&mut self, c: Controls) {
@@ -214,6 +257,8 @@ impl Race {
             return;
         }
         let mut push;
+        // How hard the tyres are being asked to drive it, as a share of all they have.
+        let mut asked = 0.0;
         self.spraying = false;
         // Held flat against the limiter in gear, an engine does not last: a second and a half of it,
         // and something lets go. Shifting, or lifting, gives it back.
@@ -240,7 +285,9 @@ impl Race {
             if self.spraying {
                 self.bottle = (self.bottle - 1.0 / HZ).max(0.0);
             }
-            push = (force / (self.drive.weight_lb * KG) * self.gain * part * more).min(self.drive.grip);
+            let want = force / (self.drive.weight_lb * KG) * self.gain * part * more;
+            asked = (want / self.drive.grip.max(1.0)).min(1.3);
+            push = want.min(self.drive.grip);
         } else {
             push = -1.0;
         }
@@ -248,6 +295,13 @@ impl Race {
         self.v = (self.v + push / HZ).max(0.0);
         if self.blown && self.v == 0.0 {
             // Rolled to a stop with a hole in the block: there is no timeslip for that.
+            self.et = 0;
+            self.won = false;
+            self.phase = Phase::Slip;
+            return;
+        }
+        self.wander(c, asked);
+        if self.out != 0 {
             self.et = 0;
             self.won = false;
             self.phase = Phase::Slip;

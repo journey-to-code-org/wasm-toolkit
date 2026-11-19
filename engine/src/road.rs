@@ -77,11 +77,14 @@ pub struct Pace {
     pub slide: f64,
     /// How hard the brakes stop it, as a share of an ordinary car's.
     pub brakes: f64,
+    /// Torque steer: how far across the road the power drags it, each second, flat out from a
+    /// stop in first; to the right if more than nothing.
+    pub pull: f64,
 }
 
 impl Default for Pace {
     fn default() -> Pace {
-        Pace { accel: 5.0, top: 56.0, slide: 1.0, brakes: 1.0 }
+        Pace { accel: 5.0, top: 56.0, slide: 1.0, brakes: 1.0, pull: 0.0 }
     }
 }
 
@@ -288,6 +291,9 @@ impl Trip {
             pull = if b.rpm >= b.redline { 0.0 } else { 0.75 * (b.ratios[b.gear] / last).sqrt() * (b.rpm / b.peak).clamp(0.4, 1.0) };
         }
         if p.go {
+            // On the power the driven wheels drag it to one side: hardest low in the gears, going.
+            let low = match self.gearbox.as_ref() { Some(b) => 1.0 / ((b.gear + 1) as f64).powf(1.5), None => (1.0 - self.speed / self.pace.top).max(0.0).powi(2) };
+            self.x += self.pace.pull * pull.min(1.0) * low * (self.speed / 12.0).min(1.0) / HZ;
             self.speed += pull * self.pace.accel * (1.0 + self.spray) / HZ * (1.0 - self.speed / (self.pace.top * (1.0 + self.spray * 0.3)));
         } else {
             self.speed -= 1.0 / HZ;
