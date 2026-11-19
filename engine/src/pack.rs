@@ -243,6 +243,13 @@ pub struct Part {
     /// what the clutch will pass, and every launch like that wears it, until it is done for.
     #[serde(default)]
     pub slips: bool,
+    /// How fast it wears: the per cent of itself a pass down the strip takes, and four kilometres
+    /// of road the same. Under half it costs power; at nothing it is done for.
+    #[serde(default)]
+    pub wears: f64,
+    /// Slots whose parts go with it when it wears out in use: a timing belt takes the valves.
+    #[serde(default)]
+    pub takes: Vec<String>,
     /// A battery: run down to 15 per cent or less it is flat, not finished, and a charge brings it back.
     #[serde(default)]
     pub charges: bool,

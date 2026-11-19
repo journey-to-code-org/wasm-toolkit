@@ -1127,12 +1127,14 @@
     "s-struts": {
       "name": "Struts and springs",
       "slot": "Suspension",
-      "price": 160
+      "price": 160,
+      "wears": 0.5
     },
     "s-coils": {
       "name": "Ignition coils",
       "slot": "Coils",
-      "price": 90
+      "price": 90,
+      "wears": 0.5
     },
     "s-ptu": {
       "name": "Power transistor",
@@ -1142,12 +1144,14 @@
     "s-wires": {
       "name": "Plug wires",
       "slot": "Plug wires",
-      "price": 40
+      "price": 40,
+      "wears": 1
     },
     "s-plugs": {
       "name": "Spark plugs",
       "slot": "Spark plugs",
-      "price": 24
+      "price": 24,
+      "wears": 2
     },
     "s-vcover": {
       "name": "Valve cover",
@@ -1177,7 +1181,11 @@
     "s-belt": {
       "name": "Timing belt",
       "slot": "Timing belt",
-      "price": 45
+      "price": 45,
+      "wears": 1.5,
+      "takes": [
+        "Valves"
+      ]
     },
     "s-head": {
       "name": "Cylinder head",
@@ -1264,7 +1272,8 @@
     "s-calipers": {
       "name": "Brake calipers",
       "slot": "Brakes",
-      "price": 140
+      "price": 140,
+      "wears": 1
     },
     "s-rims": {
       "name": "Steel rims",
@@ -1284,7 +1293,8 @@
     "s-pump": {
       "name": "Fuel pump",
       "slot": "Fuel pump",
-      "price": 90
+      "price": 90,
+      "wears": 0.5
     },
     "s-ecu": {
       "name": "Factory ECU",
@@ -1306,7 +1316,8 @@
       "slot": "Suspension",
       "price": 600,
       "pitch": "Lower, stiffer. It turns.",
-      "grip": 6
+      "grip": 6,
+      "wears": 0.3
     },
     "mani-sheet": {
       "name": "Sheet-metal intake",
@@ -1320,7 +1331,8 @@
       "slot": "Plug wires",
       "price": 70,
       "pitch": "A fatter spark.",
-      "torque": 1
+      "torque": 1,
+      "wears": 0.5
     },
     "cams-272": {
       "name": "272 camshafts",
@@ -1419,7 +1431,8 @@
       "slot": "Brakes",
       "price": 520,
       "pitch": "Four pots up front.",
-      "grip": 2
+      "grip": 2,
+      "wears": 0.6
     },
     "rims-alloy": {
       "name": "Light alloy rims",
@@ -1435,7 +1448,8 @@
       "pitch": "Enough fuel for a big turbo.",
       "gives": [
         "a big fuel pump"
-      ]
+      ],
+      "wears": 0.4
     },
     "ecu-socket": {
       "name": "Socketed ECU",
