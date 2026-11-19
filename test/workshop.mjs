@@ -78,5 +78,28 @@ check(threw, "a file that is not a pack is refused by the page");
   check(knockOut(new Uint8ClampedArray(16 * 4).fill(90), 4, 4, 40) === null, "a box of nothing but background is nothing");
 }
 
+// The workshop has to keep up with the engine: every field a pack can have, and everything a spot
+// can do, has to be named somewhere in the workshop's code.
+{
+  const { readFileSync } = await import("node:fs");
+  const rust = readFileSync(new URL("../engine/src/pack.rs", import.meta.url), "utf8"), shop = readFileSync(new URL("../web/workshop.js", import.meta.url), "utf8");
+  const missing = [];
+  for (const [whole, name, body] of rust.matchAll(/pub struct (\w+) \{(.*?)\n\}/gs)) {
+    if (!rust.slice(Math.max(0, rust.indexOf(whole) - 300), rust.indexOf(whole)).includes("Deserialize")) continue;
+    let renamed = null;
+    for (const line of body.split("\n")) {
+      renamed = line.match(/rename = "(\w+)"/)?.[1] ?? renamed;
+      const field = line.match(/^\s*pub (\w+):/)?.[1];
+      if (!field) continue;
+      const key = renamed ?? field;
+      renamed = null;
+      if (!new RegExp(`[.\\[" ]${key}\\b`).test(shop)) missing.push(`${name}.${key}`);
+    }
+  }
+  const actions = rust.match(/pub const ACTIONS: \[&str; \d+\] = \[([^\]]*)\]/)[1].split(",").map((a) => a.trim().replaceAll('"', "")).filter(Boolean);
+  for (const a of [...actions, "go", "say", "drive", "road", "roadrace", "pokerrun"]) if (!shop.includes(`["${a}"`)) missing.push(`the action ${a}`);
+  check(missing.length === 0, "the workshop has a place for everything a pack can hold: " + missing.join(", "));
+}
+
 console.log(fails ? `${fails} FAILED` : "workshop test passes");
 process.exit(fails ? 1 : 0);

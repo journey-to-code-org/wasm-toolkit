@@ -119,6 +119,9 @@ engine itself, drawing the pack as it stands; if the engine would refuse the pac
 there. **Save the pack** downloads it, **Play it** opens the game on it in another tab, and work
 in progress is kept in the browser between visits.
 
+Everything a pack can hold can be set here: a test in the build reads the engine's own list of
+what a pack is made of and fails if the workshop has no place for any of it.
+
 **Cutting pictures out of a sheet.** Wherever a picture can be dropped there is also "Or cut one
 out of a sheet". Open a sheet of sprites, drag a box round the one you want, and it is cut out,
 its background taken away, trimmed, and used as if you had dropped it. The background is

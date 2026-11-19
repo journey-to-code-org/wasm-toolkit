@@ -33,7 +33,7 @@ function h(tag, props = {}, ...kids) {
     if (k === "class") el.className = v; else if (k === "text") el.textContent = v; else if (k.startsWith("on")) el[k] = v;
     else if (v === true) el.setAttribute(k, ""); else if (v !== false && v != null) el.setAttribute(k, v);
   }
-  el.append(...kids.flat().filter((k) => k != null));
+  el.append(...kids.flat(Infinity).filter((k) => k != null));
   return el;
 }
 let ids = 0;
@@ -379,7 +379,7 @@ function tidy() {
   const m = pack.manifest, used = new Set();
   for (const c of Object.values(m.cars)) {
     for (const p of Object.values(m.parts ?? {})) { used.add(p.picture); used.add(p.side); }
-    for (const name of [c.side, c.side_lamps, c.hood?.picture, c.rear?.picture, c.front?.picture, c.cockpit?.picture, c.cockpit?.night, c.cockpit?.bonnet, c.cockpit?.wheel?.picture, c.cockpit?.wheel?.night]) used.add(name);
+    for (const name of [c.side, c.side_lamps, c.hood?.picture, c.rear?.picture, c.front?.picture, c.cockpit?.wheel?.night, c.cockpit?.picture, c.cockpit?.night, c.cockpit?.bonnet, c.cockpit?.wheel?.picture, c.cockpit?.wheel?.night]) used.add(name);
   }
   for (const p of Object.values(m.places)) { used.add(p.picture); for (const who of p.people ?? []) used.add(who.picture); }
   for (const r of m.rivals ?? []) used.add(r.figure);
@@ -486,8 +486,17 @@ function seatForm(c) {
       drop("The bonnet through the glass, in the car's paint (optional)", `${at.car}-bonnet.pic`, 240, (n) => { k.bonnet = n; }),
       drop("The steering wheel: a square picture, up to 176", `${at.car}-wheel.pic`, 176, (n) => { k.wheel = { at: [120, 216], ...k.wheel, picture: n }; }, "square"),
       k.wheel ? pair("Where the middle of the wheel goes", () => k.wheel.at, (v) => { k.wheel.at = v; }) : null,
+      k.wheel ? drop("The steering wheel at night (optional)", `${at.car}-wheel-night.pic`, 176, (n) => { k.wheel.night = n; }, "square") : null,
       field("How far down the view out goes", k.view_h, (n) => { k.view_h = n ?? 136; }, { type: "number", min: 60, max: 240 }),
       dial("A tachometer", "tach", 9000), dial("A speedometer", "speedo", 160), dial("A boost gauge", "boost", 30),
+      h("label", { text: "Small dials: the gas gauge, and ones that only sit there" }),
+      (k.minis ?? []).map((d, i) => h("div", { class: "card" }, h("div", { class: "three" },
+        field("Across", d.at[0], (n) => { d.at[0] = n ?? 0; }, { type: "number" }), field("Down", d.at[1], (n) => { d.at[1] = n ?? 0; }, { type: "number" }),
+        field("Needle length", d.r, (n) => { d.r = Math.max(2, n ?? 4); }, { type: "number", min: 2 })),
+        choice("What it shows", d.reads === "gas" ? "gas" : "", [["gas", "What is in the tank"], ["", "Nothing: its needle stays where it is put"]], (v) => { if (v) { d.reads = v; delete d.value; } else { delete d.reads; d.value ??= 50; } }),
+        d.reads ? null : field("Where its needle points, 0 to 100", d.value ?? 50, (n) => { d.value = Math.max(0, Math.min(100, n ?? 50)); }, { type: "number", min: 0, max: 100 }),
+        h("div", { class: "row" }, h("button", { text: "Remove", onclick: () => { k.minis.splice(i, 1); if (!k.minis.length) delete k.minis; render(); } })))),
+      (k.minis ?? []).length < 6 ? h("div", { class: "row" }, h("button", { id: "addMini", text: "Add a small dial", onclick: () => { (k.minis ??= []).push({ at: [120, 190], r: 4, reads: "gas" }); render(); } })) : null,
       tick("A shift light", !!k.shift_light, (on) => { if (on) k.shift_light = [120, 170]; else delete k.shift_light; }),
       k.shift_light ? pair("Where it is", () => k.shift_light, (v) => { k.shift_light = v; }) : null,
       tick("The gear lights up in the lever's gate", !!k.gear_gate, (on) => { if (on) k.gear_gate = [286, 224]; else delete k.gear_gate; }),
@@ -496,6 +505,16 @@ function seatForm(c) {
     ] : null,
     drop("The car from behind, for when it is ahead of you (up to 96 wide)", `${at.car}-rear.pic`, 96, (n) => { c.rear = { width_m: 1.7, ...c.rear, picture: n }; }, "small"),
     drop("The car from in front, for when it is coming the other way on a road (up to 96 wide)", `${at.car}-front.pic`, 96, (n) => { c.front = { width_m: 1.7, ...c.front, picture: n }; }, "small"),
+    c.rear || c.front ? h("div", { class: "two" },
+      c.rear ? field("How wide it is from behind, metres", c.rear.width_m ?? 1.7, (n) => { c.rear.width_m = Math.max(0.5, Math.min(4, n ?? 1.7)); }, { type: "number", step: "0.05", min: 0.5, max: 4 }) : null,
+      c.front ? field("How wide it is from in front, metres", c.front.width_m ?? 1.7, (n) => { c.front.width_m = Math.max(0.5, Math.min(4, n ?? 1.7)); }, { type: "number", step: "0.05", min: 0.5, max: 4 }) : null) : null,
+    c.paint_ramps?.mid ? h("details", {}, h("summary", { text: "Which colours in the pictures are its paint" }),
+      h("p", { class: "hint", text: "A respray moves these colours and leaves the rest. The body's own colour is found when the picture is made; the others are for a picture painted with shadows and shine in colours of their own." }),
+      h("div", { class: "two" },
+        choice("The body", c.paint_ramps.mid, colours(), (v) => { c.paint_ramps.mid = v; }),
+        choice("Its shadows", c.paint_ramps.dark ?? "", colours("The same as the body"), (v) => { if (v) c.paint_ramps.dark = v; else delete c.paint_ramps.dark; }),
+        choice("Its highlights", c.paint_ramps.light ?? "", colours("The same as the body"), (v) => { if (v) c.paint_ramps.light = v; else delete c.paint_ramps.light; }),
+        choice("Its glints", c.paint_ramps.glint ?? "", colours("The same as the body"), (v) => { if (v) c.paint_ramps.glint = v; else delete c.paint_ramps.glint; }))) : null,
     field("Gallons its tank holds", c.tank ?? 17, (n) => { if (n > 0) c.tank = n; else delete c.tank; }, { type: "number", min: 1 }),
     Object.keys(pack.manifest.maps ?? {}).length ? h("p", { class: "hint", text: "While this is open, the game beside it is seen from this car's seat." }) : null);
 }
@@ -998,6 +1017,21 @@ function gamePanel() {
     }),
     m.title ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "No picture: write the name up", onclick: () => { delete m.title; tidy(); render(); } })) : null,
     h("p", { class: "hint", text: "The title is seen with Play it. Leave the bottom fifth of the picture plain: \"Press Enter\" is written there." }),
+    h("label", { text: "Work in the paper (up to 6 jobs)" }),
+    (m.jobs ?? []).map((j, i) => h("div", { class: "three" },
+      field("The job", j.name, (v) => { j.name = v; }, { maxlength: 22 }),
+      field("Hours", j.hours, (n) => { j.hours = Math.max(1, Math.floor(n ?? 1)); }, { type: "number", min: 1 }),
+      h("div", {}, field("Pays", j.pay, (n) => { j.pay = Math.max(1, Math.floor(n ?? 1)); }, { type: "number", min: 1 }),
+        h("button", { text: "Remove", style: "margin-top:4px", onclick: () => { m.jobs.splice(i, 1); if (!m.jobs.length) delete m.jobs; render(); } })))),
+    (m.jobs ?? []).length < 6 ? h("div", { class: "row" }, h("button", { id: "addJob", text: "Add a job", onclick: () => { (m.jobs ??= []).push({ name: "Sweep the shop", hours: 4, pay: 30 }); render(); } })) : null,
+    field("The colours cars come in and can be sprayed, by name (blank: the usual eight; up to 12)", (m.paints ?? []).join(" "), (v) => {
+      const picked = v.toUpperCase().split(/[\s,]+/).filter((x) => RAMPS.includes(x) && x !== RAMPS[0]).slice(0, 12);
+      if (picked.length) m.paints = [...new Set(picked)]; else delete m.paints;
+    }, { id: "paints", placeholder: RAMPS.slice(1, 9).join(" "), redo: true }),
+    h("p", { class: "hint", text: "The colours there are: " + RAMPS.slice(1).map(nice).join(", ") + "." }),
+    h("div", { class: "two" },
+      field("A poker run costs to ride", m.poker?.entry ?? 20, (n) => { m.poker = { riders: 5, ...m.poker, entry: Math.max(0, Math.floor(n ?? 20)) }; }, { type: "number", min: 0 }),
+      field("And this many others ride", m.poker?.riders ?? 5, (n) => { m.poker = { entry: 20, ...m.poker, riders: Math.max(1, Math.min(9, Math.floor(n ?? 5))) }; }, { type: "number", min: 1, max: 9 })),
     tick("There is a shootout: a knockout on the strip, every so many days", !!m.shootout, (v) => { if (v) m.shootout = { entry: 50, purse: 400, rounds: 3, every: 7 }; else delete m.shootout; }),
     m.shootout ? h("div", { class: "two" },
       field("It costs to enter", m.shootout.entry, (n) => { m.shootout.entry = Math.max(0, Math.floor(n ?? 50)); }, { type: "number", min: 0 }),
