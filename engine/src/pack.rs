@@ -54,6 +54,20 @@ pub struct Rebuild {
     pub cond: i32,
 }
 
+/// What a respray costs, and how many hours it takes.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct Respray {
+    pub cost: i32,
+    pub hours: i32,
+}
+
+impl Default for Respray {
+    fn default() -> Respray {
+        Respray { cost: 60, hours: 3 }
+    }
+}
+
 impl Default for Rebuild {
     fn default() -> Rebuild {
         Rebuild { cost: 250, cond: 85 }
@@ -141,6 +155,10 @@ pub struct Part {
     /// A redline, in place of the car's own: for a built bottom end.
     #[serde(default)]
     pub redline: Option<f64>,
+    /// A different engine: its torque curve, in place of the car's own. Pairs of rpm and
+    /// pound-feet, rising, as for a car.
+    #[serde(default)]
+    pub curve: Vec<[f64; 2]>,
     /// A radar detector: it warns of police ahead on a road.
     #[serde(default)]
     pub radar: bool,
@@ -593,6 +611,11 @@ pub struct Manifest {
     /// What it costs to have a tired or blown engine rebuilt, and how healthy it comes back, as a percentage.
     #[serde(default)]
     pub rebuild: Rebuild,
+    #[serde(default)]
+    pub respray: Respray,
+    /// A picture for the title screen, 320 by 240. Without one the pack's name is written up.
+    #[serde(default)]
+    pub title: Option<String>,
     /// What can be put on a race, in dollars. Left out: 10, 25, 50, 100.
     #[serde(default)]
     pub bets: Vec<i32>,
@@ -618,7 +641,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 13] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild"];
+pub const ACTIONS: [&str; 14] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 
@@ -669,6 +692,9 @@ impl Pack {
         let need = |what: &str, name: &str| -> Result<(), String> {
             if self.pictures.contains_key(name) { Ok(()) } else { Err(format!("{what} names the picture {name}, which is not in the pack")) }
         };
+        if let Some(name) = &m.title {
+            need("the title screen", name)?;
+        }
         if !m.places.contains_key(&m.start.place) {
             return Err(format!("the game starts in {}, which is not a place", m.start.place));
         }
@@ -698,6 +724,9 @@ impl Pack {
         for (id, part) in &m.parts {
             if let Some(name) = &part.picture {
                 need(&format!("the part {id}"), name)?;
+            }
+            if part.curve.len() == 1 || part.curve.windows(2).any(|w| w[1][0] <= w[0][0]) || part.curve.iter().any(|p| p[1] <= 0.0) {
+                return Err(format!("the part {id} has a torque curve that is not rising pairs of rpm and torque"));
             }
             if let Some(name) = &part.side {
                 need(&format!("the part {id}"), name)?;

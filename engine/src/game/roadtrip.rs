@@ -212,8 +212,7 @@ impl Game {
         let view = seat.map_or(200, |c| c.view_h);
         let horizon = view * 60 / 136;
         let (sky, land) = (ramp(road.sky.as_deref().unwrap_or("SKY")), ramp(road.ground.as_deref().unwrap_or("GRASS")));
-        s.vgrad(0, 0, 320, horizon, sky, 15, 29);
-        s.vgrad(0, horizon, 320, view - horizon, land, 12, 17);
+        let dim = self.sky(s, horizon, view, sky, land);
         s.clip(0, 0, 320, view);
 
         // The road ahead, laid out from where the car is: each piece turns a little from the last.
@@ -235,6 +234,7 @@ impl Game {
         let eye = [f * SEG * h0.sin() + h0.cos() * trip.x * HALF, here + 1.125, f * SEG * h0.cos() - h0.sin() * trip.x * HALF];
         let cam = Cam { pos: eye, yaw: h0 + trip.steer * 0.05, pitch: -slope.atan(), focal: 200.0, cx: 160, cy: horizon };
         let mut scene = Scene3::new(cam);
+        (scene.dim, scene.lamps) = (dim, 60.0);
         // A point so many half-widths out from the middle of the road at a joint.
         let at = |k: usize, out: f64, up: f64| -> V3 {
             let (x, z, h, y) = joints[k];
@@ -330,6 +330,17 @@ impl Game {
             let (fwd, key) = ((hd.sin(), hd.cos()), k as f64 * 10.0 + 3.0 - t);
             Self::obox(&mut scene, [p[0], p[1] + 0.25, p[2]], fwd, 2.1, 0.9, 0.65, paint, key);
             Self::obox(&mut scene, [p[0], p[1] + 0.9, p[2]], fwd, 1.0, 0.75, 0.5, ramp(if kind == 1 { "WHITE" } else { "GLASS" }), key - 0.3);
+            if dim > 4 {
+                // After dark a car is its lamps: white coming, red going.
+                let was = std::mem::replace(&mut scene.dim, 0);
+                let (nose, lamp) = (2.15, ramp(if back { "CREAM" } else { "RED" }));
+                let hd0 = joints[k].2;
+                for side in [-0.6, 0.6] {
+                    let q = [p[0] + hd0.sin() * -nose + hd0.cos() * side, p[1] + 0.55, p[2] + hd0.cos() * -nose - hd0.sin() * side];
+                    Self::obox(&mut scene, q, fwd, 0.04, 0.2, 0.22, lamp, key - 0.5);
+                }
+                scene.dim = was;
+            }
             if kind == 1 {
                 // The lights on its roof, which are lit only if it has seen you.
                 Self::obox(&mut scene, [p[0], p[1] + 1.4, p[2]], fwd, 0.15, 0.5, 0.2, ramp(if self.ticks / 6 % 2 == 0 { "RED" } else { "BLUE" }), key - 0.6);
@@ -351,7 +362,7 @@ impl Game {
         let mph = trip.speed * MPH;
         if let Some(seat) = seat {
             let rpm = if trip.speed > 0.0 { 1500.0 + (v % 110) as f64 * 50.0 } else { 900.0 };
-            self.draw_cockpit(s, seat, false, rpm, mph, if trip.speed > 8.0 { 6.0 } else { 0.0 }, if trip.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, trip.steer * 90.0, false);
+            self.draw_cockpit(s, seat, self.dark() == 2, rpm, mph, if trip.speed > 8.0 { 6.0 } else { 0.0 }, if trip.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, trip.steer * 90.0, false);
         } else {
             self.panel(s, &road.title, &format!("{} mph", mph as i32), "Arrows drive. Escape turns back.");
         }

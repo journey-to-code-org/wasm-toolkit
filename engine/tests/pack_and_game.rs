@@ -911,6 +911,12 @@ fn a_road_is_driven_to_its_other_end() {
     assert_eq!(g.scene, Scene::Road);
     assert!(g.trip.as_ref().is_some_and(|t| !t.backwards && t.x == 0.5));
     g.draw(&mut s);
+    assert_eq!(s.at(160, 2) / 32, ramp("SKY") as u16);
+    g.state.hours = 3;
+    g.draw(&mut s);
+    assert_eq!(s.at(160, 2) / 32, ramp("INDIGO") as u16, "late in the day the sky goes");
+    g.state.hours = 0;
+    g.draw(&mut s);
     assert_eq!(s.at(160, 150), shade(ramp("ASPHALT"), 15), "the road is under the nose of the car");
 
     // Turning round costs nothing but the gas.
@@ -1138,4 +1144,41 @@ fn people_stand_about_and_parts_show_on_the_car() {
     assert_eq!(g.note, Some(format!("Day 1 of 3. Won {}, lost {}.", g.state.wins, g.state.losses)));
     // Pictures that are named have to be there.
     assert!(Pack::parse(&files(&manifest)).err().unwrap().contains("which is not in the pack"));
+}
+
+#[test]
+fn a_respray_a_swap_a_title_and_the_dark() {
+    let manifest = MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"paint\"").replace("\"name\": \"Test Pack\",", "\"name\": \"Test Pack\", \"title\": \"shed.pic\",")
+        .replace("\"torque\": 10 }", "\"torque\": 10, \"curve\": [[1000, 100], [4000, 400], [6000, 380]] }");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    assert_eq!(s.at(5, 5), shade(ramp("WOOD"), 12), "the title is the pack's picture");
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+
+    // The third tin along is gold, and it is sixty dollars and three hours.
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Paint);
+    g.draw(&mut s);
+    assert_eq!(s.at(95, 186) / 32, ramp("GOLD") as u16);
+    click(&mut g, 95, 186);
+    assert_eq!((g.scene, g.owned().unwrap().paint.as_deref(), g.state.cash, g.state.hours), (Scene::Place, Some("GOLD"), 940, 3));
+    click(&mut g, 100, 10);
+    click(&mut g, 95, 186);
+    assert_eq!((g.note.as_deref(), g.state.cash), (Some("It is that colour already."), 940));
+
+    // Three hours into a day of four it is getting dark.
+    assert_eq!(g.dark(), 1);
+    g.state.hours = 4;
+    assert_eq!(g.dark(), 0);
+
+    // A different engine is a different curve.
+    let car = g.car().unwrap().clone();
+    g.state.cars[0].fitted.insert("Exhaust".into(), "pipe".into());
+    assert_eq!(g.tuned_drive(g.owned().unwrap(), &car).torque, vec![[1000.0, 100.0], [4000.0, 400.0], [6000.0, 380.0]]);
+    assert!(Pack::parse(&files(&manifest.replace("[4000, 400]", "[900, 400]"))).err().unwrap().contains("torque curve"));
+    assert!(Pack::parse(&files(&MANIFEST.replace("\"name\": \"Test Pack\",", "\"name\": \"Test Pack\", \"title\": \"none.pic\","))).err().unwrap().contains("title"));
 }

@@ -381,6 +381,18 @@
           "do": "rebuild",
           "button": "Rebuild",
           "needs_car": true
+        },
+        {
+          "rect": [
+            72,
+            3,
+            66,
+            16
+          ],
+          "label": "A respray: any colour you like",
+          "do": "paint",
+          "button": "Respray",
+          "needs_car": true
         }
       ]
     },
@@ -655,6 +667,75 @@
       "price": 120,
       "pitch": "Beeps when the law is ahead",
       "radar": true
+    },
+    "stroker": {
+      "name": "2.3 stroker",
+      "slot": "Engine",
+      "price": 900,
+      "pitch": "A built motor. Pulls from idle.",
+      "redline": 7600,
+      "curve": [
+        [
+          800,
+          90
+        ],
+        [
+          2000,
+          150
+        ],
+        [
+          3000,
+          215
+        ],
+        [
+          3400,
+          260
+        ],
+        [
+          3800,
+          300
+        ],
+        [
+          4200,
+          335
+        ],
+        [
+          4600,
+          345
+        ],
+        [
+          5000,
+          340
+        ],
+        [
+          5400,
+          330
+        ],
+        [
+          5800,
+          315
+        ],
+        [
+          6200,
+          300
+        ],
+        [
+          6600,
+          280
+        ],
+        [
+          7200,
+          250
+        ],
+        [
+          7600,
+          225
+        ],
+        [
+          8000,
+          180
+        ]
+      ]
     }
   },
   "rivals": [
