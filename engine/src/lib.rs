@@ -141,6 +141,7 @@ pub extern "C" fn wtk_mode() -> i32 {
     match engine().game.scene {
         game::Scene::Title => 0,
         game::Scene::Race => 2,
+        game::Scene::Dyno if engine().game.rollers.phase == 1 => 2,
         game::Scene::Drive | game::Scene::Road => 3,
         game::Scene::Over(_) => 4,
         _ => 1,
@@ -151,7 +152,8 @@ pub extern "C" fn wtk_mode() -> i32 {
 #[no_mangle]
 pub extern "C" fn wtk_flags() -> i32 {
     let g = &engine().game;
-    g.owned().is_some_and(|o| g.kit(o).is_some()) as i32
+    // And 2 if it is on a road with a gearbox to work.
+    g.owned().is_some_and(|o| g.kit(o).is_some()) as i32 | if g.scene == game::Scene::Road && g.trip.as_ref().is_some_and(|t| t.gearbox.is_some()) { 2 } else { 0 }
 }
 
 #[no_mangle]

@@ -124,6 +124,8 @@ pub struct Drive {
     /// The hardest the tyres can push it, in metres a second, each second.
     pub grip: f64,
     pub boost: Option<Boost>,
+    /// An automatic: it changes gear itself, on the strip and on the road.
+    pub auto: bool,
 }
 
 impl Default for Drive {
@@ -136,6 +138,7 @@ impl Default for Drive {
             redline: 7200.0,
             launch: 5600.0,
             weight_lb: 3060.0,
+            auto: false,
             grip: 12.0,
             boost: Some(Boost { from: 2200.0, psi: 20.0, lag: 6.0 }),
         }
@@ -178,6 +181,12 @@ pub struct Part {
     /// pound-feet, rising, as for a car.
     #[serde(default)]
     pub curve: Vec<[f64; 2]>,
+    /// A laptop and a cable: with it the car's fuel, timing and boost can be changed at the rollers.
+    #[serde(default)]
+    pub tuner: bool,
+    /// For a part that is a gearbox: whether it is an automatic. Left out, the car's own kind stays.
+    #[serde(default)]
+    pub auto: Option<bool>,
     /// A nitrous kit: how much more the engine makes while it sprays, as a percentage, and how
     /// many seconds a full bottle lasts.
     #[serde(default)]

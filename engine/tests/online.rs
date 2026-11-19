@@ -280,6 +280,8 @@ fn cruise(g: &mut Game, mph: f64) {
     let Some(t) = g.trip.as_ref() else { return g.tick(0, 300, 100) };
     let mut keys = if t.speed * 2.237 < mph { KEY_UP } else { 0 };
     if t.x > 0.55 { keys |= 4 } else if t.x < 0.45 { keys |= 8 }
+    // Up a gear short of the redline, on every other tick so that each is a fresh press.
+    if t.gearbox.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && t.clock % 2 == 0 { keys |= KEY_X }
     g.tick(keys, 300, 100);
 }
 

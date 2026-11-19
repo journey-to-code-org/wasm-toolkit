@@ -45,6 +45,9 @@ pub struct Pedals {
     pub stop: bool,
     pub left: bool,
     pub right: bool,
+    /// A gear up and a gear down, for a car with a gearbox to work.
+    pub up: bool,
+    pub down: bool,
 }
 
 impl Town {

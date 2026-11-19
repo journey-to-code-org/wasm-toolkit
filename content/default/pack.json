@@ -180,7 +180,8 @@
         "launch": 4500,
         "weight_lb": 2700,
         "grip": 9,
-        "boost": null
+        "boost": null,
+        "auto": true
       },
       "hood": {
         "picture": "bay.pic",
@@ -401,18 +402,6 @@
             54,
             16
           ],
-          "label": "The rollers: what it makes",
-          "do": "dyno",
-          "button": "Dyno",
-          "needs_car": true
-        },
-        {
-          "rect": [
-            172,
-            3,
-            54,
-            16
-          ],
           "label": "Bed: sleep until morning",
           "do": "sleep",
           "button": "Sleep"
@@ -623,6 +612,39 @@
         }
       ],
       "outdoors": true
+    },
+    "rollers": {
+      "title": "Rix Racing: the rollers",
+      "backdrop": "GREY",
+      "car_at": [
+        26,
+        150
+      ],
+      "spots": [
+        {
+          "rect": [
+            4,
+            178,
+            154,
+            18
+          ],
+          "label": "Strap it down and make a pull",
+          "do": "dyno",
+          "button": "On the rollers",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            162,
+            178,
+            154,
+            18
+          ],
+          "label": "Back out on the road",
+          "do": "drive:town",
+          "button": "Drive off"
+        }
+      ]
     }
   },
   "season": {
@@ -679,7 +701,7 @@
       "name": "Close-ratio gearbox",
       "slot": "Gearbox",
       "price": 650,
-      "pitch": "Keeps it on the boil",
+      "pitch": "Five on the floor. You shift it.",
       "gears": [
         2.85,
         1.9,
@@ -687,7 +709,8 @@
         1.03,
         0.82
       ],
-      "final": 4.6
+      "final": 4.6,
+      "auto": false
     },
     "forged": {
       "name": "Forged bottom end",
@@ -785,6 +808,13 @@
         "seconds": 8,
         "fill": 20
       }
+    },
+    "laptop": {
+      "name": "Laptop and cable",
+      "slot": "Computer",
+      "price": 400,
+      "pitch": "Log it and tune it yourself",
+      "tuner": true
     }
   },
   "rivals": [
@@ -995,7 +1025,7 @@
       "rows": [
         "BOTRCB",
         "G.BPOT",
-        "TB.GB.",
+        "TB.GBD",
         "HCOB.S",
         "B.TGCB"
       ],
@@ -1039,6 +1069,12 @@
         "R": {
           "road": "ridge",
           "name": "Ridge road"
+        },
+        "D": {
+          "wall": "GREY",
+          "height": 7,
+          "to": "rollers",
+          "name": "The dyno"
         }
       }
     }
