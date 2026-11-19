@@ -1,7 +1,7 @@
 //! The engine, given packs made here and the default pack: reading them, saying what is wrong with
 //! a bad one, and playing a season with the keys.
 
-use engine::game::{Game, Loose, Owned, Scene, KEY_A, KEY_B, KEY_UP, KEY_X};
+use engine::game::{Game, Loose, Owned, Scene, KEY_A, KEY_B, KEY_N, KEY_UP, KEY_X};
 use engine::gfx::{ramp, shade, Picture, Screen, CLEAR};
 use engine::pack::{bolts_round, Boost, Manifest, Pack};
 use engine::race::{Controls, Phase, Race};
@@ -1240,4 +1240,69 @@ fn a_car_with_a_picture_of_its_back_is_seen_on_the_road() {
     g.trip.as_mut().unwrap().others[0] = engine::road::Other { z: 20.0, lane: -0.5, speed: -1.0, paint: "PINK" };
     g.draw(&mut s);
     assert_eq!(count(&s), 0);
+}
+
+#[test]
+fn nitrous_is_a_bottle_that_empties() {
+    let manifest = MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"nitrous\"").replace("\"do\": \"lamps\", \"needs_car\": true", "\"do\": \"road:pass\"")
+        .replace("\"puffer\": {", "\"juice\": { \"name\": \"Juice\", \"slot\": \"Nitrous\", \"price\": 50, \"nitrous\": { \"gain\": 50, \"seconds\": 4 } }, \"puffer\": {");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(7);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    click(&mut g, 100, 10);
+    assert_eq!(g.note.as_deref(), Some("There is no bottle on this car."));
+    g.state.cars[0].fitted.insert("Nitrous".into(), "juice".into());
+    click(&mut g, 100, 10);
+    assert_eq!((g.owned().unwrap().bottle, g.state.cash), (4.0, 980), "a kit comes empty, and a fill is twenty dollars");
+    click(&mut g, 100, 10);
+    assert_eq!(g.note.as_deref(), Some("The bottle is full."));
+
+    // On the strip it is quicker with the button down, and the bottle is what it costs.
+    let drive = g.car().unwrap().drive.clone();
+    let run = |spray: bool| {
+        let mut r = Race::new(&drive, 1.0, None, 0, 0);
+        (r.shot, r.bottle) = (0.5, 4.0);
+        r.tick(Controls { stage: true, ..Controls::default() });
+        for _ in 0..3000 {
+            if r.phase == Phase::Slip { break; }
+            let up = (r.gear == 0 && r.tree >= 51) || (r.gear > 0 && r.rpm > drive.redline - 250.0);
+            r.tick(Controls { throttle: true, up, nitrous: spray, ..Controls::default() });
+        }
+        (r.et, r.bottle)
+    };
+    let ((dry, kept), (wet, left)) = (run(false), run(true));
+    assert!(wet < dry - 200 && kept == 4.0 && left < 0.01, "{:?}", (dry, wet, left));
+
+    // A race in the game takes it out of the car's own bottle.
+    click(&mut g, 20, 10);
+    click(&mut g, 150, 10);
+    click(&mut g, 40, 186);
+    g.tick(KEY_A, 0, 0);
+    for _ in 0..4000 {
+        let Some(r) = &g.race else { break };
+        if r.phase == Phase::Slip { break; }
+        let up = (r.gear == 0 && r.tree >= 51) || (r.gear > 0 && r.rpm > r.redline() - 250.0);
+        g.tick(KEY_UP | KEY_N | if up { KEY_X } else { 0 }, 0, 0);
+        g.tick(KEY_UP | KEY_N, 0, 0);
+    }
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    g.tick(0, 0, 0);
+    g.tick(KEY_A, 0, 0);
+    g.tick(0, 0, 0);
+    assert_eq!(g.owned().unwrap().bottle, 0.0);
+
+    // And on a road it is more shove while it lasts.
+    g.state.cars[0].bottle = 1.0;
+    click(&mut g, 20, 10);
+    click(&mut g, 60, 10);
+    assert_eq!(g.scene, Scene::Road);
+    g.tick(KEY_UP | KEY_N, 0, 0);
+    assert_eq!(g.trip.as_ref().unwrap().spray, 0.5);
+    g.draw(&mut s);
+    for _ in 0..40 { g.tick(KEY_UP | KEY_N, 0, 0); }
+    assert_eq!((g.trip.as_ref().unwrap().spray, g.owned().unwrap().bottle), (0.0, 0.0));
+    assert!(Pack::parse(&files(&manifest.replace("\"gain\": 50", "\"gain\": 0"))).err().unwrap().contains("nitrous"));
 }

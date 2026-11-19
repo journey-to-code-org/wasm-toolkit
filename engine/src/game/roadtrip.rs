@@ -101,6 +101,15 @@ impl Game {
                 None => self.scene = Scene::Place,
             };
         }
+        // The bottle, if there is one with something in it and a foot on the gas.
+        let spray = self.state.cur.and_then(|i| self.state.cars.get(i)).filter(|o| keys & KEY_N != 0 && keys & KEY_UP != 0 && o.bottle > 0.0 && trip.hold == 0 && trip.crash == 0)
+            .and_then(|o| o.fitted.values().filter_map(|id| self.pack.manifest.parts.get(id)).find_map(|p| p.nitrous.as_ref())).map_or(0.0, |k| k.gain as f64 / 100.0);
+        trip.spray = spray;
+        if spray > 0.0 {
+            if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
+                o.bottle = (o.bottle - 1.0 / 30.0).max(0.0);
+            }
+        }
         let h = trip.tick(road, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
         let (speed, chased, stopped, warned) = (trip.speed, trip.chase.is_some(), trip.crash > 0, trip.radar);
         let (racing, counting) = (trip.rival.is_some(), trip.hold);
@@ -395,6 +404,7 @@ impl Game {
         }
         let gas = self.owned().map_or(0.0, |o| o.gas);
         s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { red } else { white }, BLACK);
+        self.draw_bottle(s, 45, self.owned().map_or(0.0, |o| o.bottle), trip.spray > 0.0);
         let blink = self.ticks / 8 % 2 == 0;
         if trip.chase.is_some() {
             // In the mirror: red and blue.

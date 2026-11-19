@@ -130,6 +130,8 @@ pub struct Trip {
     /// Police are waiting not far ahead: what a radar detector would say.
     pub radar: bool,
     pub pace: Pace,
+    /// Nitrous going in: how much more the car makes just now, as a fraction.
+    pub spray: f64,
     /// A race: who against, and how many ticks until the off.
     pub rival: Option<Rival>,
     pub hold: i32,
@@ -160,7 +162,7 @@ impl Trip {
             y += p.hill;
         }
         let len = segs.len() as f64 * SEG;
-        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), rival: None, hold: 0, rng: seed | 1 };
+        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, rival: None, hold: 0, rng: seed | 1 };
         for i in 0..road.traffic {
             let z = 80.0 + (trip.rand() % (len - 80.0).max(1.0) as u32) as f64;
             let other = trip.other(z, i);
@@ -230,7 +232,7 @@ impl Trip {
             return out;
         }
         if p.go {
-            self.speed += self.pace.accel / HZ * (1.0 - self.speed / self.pace.top);
+            self.speed += self.pace.accel * (1.0 + self.spray) / HZ * (1.0 - self.speed / (self.pace.top * (1.0 + self.spray * 0.3)));
         } else {
             self.speed -= 1.0 / HZ;
         }

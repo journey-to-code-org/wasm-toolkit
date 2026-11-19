@@ -504,7 +504,7 @@
           "rect": [
             4,
             178,
-            154,
+            100,
             18
           ],
           "label": "A dollar buys three gallons",
@@ -514,9 +514,21 @@
         },
         {
           "rect": [
-            162,
+            108,
             178,
-            154,
+            100,
+            18
+          ],
+          "label": "A full bottle of nitrous",
+          "do": "nitrous",
+          "button": "Bottle",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            212,
+            178,
+            104,
             18
           ],
           "label": "Back out on the road",
@@ -748,6 +760,17 @@
           180
         ]
       ]
+    },
+    "bottle": {
+      "name": "Nitrous kit",
+      "slot": "Nitrous",
+      "price": 350,
+      "pitch": "N to spray. Comes empty.",
+      "nitrous": {
+        "gain": 35,
+        "seconds": 8,
+        "fill": 20
+      }
     }
   },
   "rivals": [
