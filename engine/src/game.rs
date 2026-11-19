@@ -1185,6 +1185,10 @@ impl Game {
     fn drive_tick(&mut self, keys: u32, hit: u32) {
         let Some(town) = self.town.as_mut() else { return };
         let Some(map) = self.pack.manifest.maps.get(&town.map) else { return };
+        if hit & KEY_B != 0 && town.chase.is_some() {
+            self.note = Some("Not with him behind you.".into());
+            return;
+        }
         if hit & KEY_B != 0 {
             if self.town_by_road {
                 // The garage is a road away.
@@ -1194,6 +1198,10 @@ impl Game {
             tone(0, 0);
             self.town = None;
             self.scene = Scene::Place;
+            return;
+        }
+        if hit & (KEY_A | KEY_B) != 0 && town.chase.is_some() {
+            self.note = Some("Not with him behind you.".into());
             return;
         }
         if hit & KEY_A != 0 {
@@ -1216,7 +1224,47 @@ impl Game {
             let slope = (map.height(town.x + hs * 6.0, town.z + hc * 6.0) - map.height(town.x, town.z)) / 6.0;
             town.speed = (town.speed - 9.8 * slope / 30.0).max(0.0);
         }
+        // The law: past one of them well over the limit and he is behind you until you stop.
+        let over = town.speed * 2.237 - map.limit;
+        let mut said: Option<String> = None;
+        let mut fine = None;
+        match town.chase {
+            None => {
+                if over > 10.0 && town.cops.iter().any(|&(cx, cz)| (cx - town.x).abs() + (cz - town.z).abs() < 34.0) {
+                    town.chase = Some((0, over));
+                    said = Some("Police! Pull over.".into());
+                }
+            }
+            Some((ticks, worst)) => {
+                let worst = worst.max(over);
+                if town.speed < 0.5 || crashed {
+                    fine = Some(map.ticket + worst.max(0.0) as i32 * 2);
+                    town.chase = None;
+                } else if ticks > 25 * 30 {
+                    // He will not be lost in town: run long enough and it is twice the ticket.
+                    fine = Some((map.ticket + worst.max(0.0) as i32 * 2) * 2);
+                    town.speed = 0.0;
+                    town.chase = None;
+                } else {
+                    town.chase = Some((ticks + 1, worst));
+                }
+            }
+        }
+        let chased = town.chase.is_some();
         let (speed, per_km) = (town.speed, map.gas_per_km);
+        if let Some(words) = said {
+            self.say(&words);
+        }
+        if let Some(fine) = fine {
+            let paid = fine.min(self.state.cash.max(0));
+            self.state.cash -= paid;
+            self.say(&format!("Speeding. That is a ${paid} ticket."));
+            tone(160, 400);
+            self.save();
+        } else if chased && !crashed {
+            tone(if self.ticks / 9 % 2 == 0 { 760 } else { 570 }, 60);
+        }
+        let Some(town) = self.town.as_ref() else { return };
         if crashed {
             tone(70, 500);
         } else if town.crash == 0 {
@@ -2416,6 +2464,14 @@ impl Game {
             Self::box3(&mut scene, ox - hl, oz - hw, ox + hl, oz + hw, oy + 0.25, oy + 0.9, ramp(o.paint), 0.0);
             Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, oy + 0.9, oy + 1.4, ramp("GLASS"), 0.5);
         }
+        for &(cx, cz) in &town.cops {
+            if (cx - town.x).abs() + (cz - town.z).abs() < SEE as f64 * p {
+                let cy = g(cx, cz);
+                Self::box3(&mut scene, cx - 0.9, cz - 2.1, cx + 0.9, cz + 2.1, cy + 0.25, cy + 0.9, ramp("RUBBER"), 0.0);
+                Self::box3(&mut scene, cx - 0.75, cz - 1.0, cx + 0.75, cz + 1.0, cy + 0.9, cy + 1.4, ramp("WHITE"), 0.5);
+                Self::box3(&mut scene, cx - 0.5, cz - 0.15, cx + 0.5, cz + 0.15, cy + 1.4, cy + 1.6, ramp(if town.chase.is_some() && self.ticks / 6 % 2 == 0 { "RED" } else { "BLUE" }), 0.8);
+            }
+        }
         // The name of each place there is to go, written over it where it can be seen.
         let mut names: Vec<(i32, i32, String, bool)> = Vec::new();
         for (c, r, b) in map.places() {
@@ -2463,12 +2519,27 @@ impl Game {
                 s.rect(mx0 + c * cell + 1, my0 + (depth - 1 - r) * cell + 1, cell - 1, cell - 1, colour);
             }
         }
+        if self.radar() {
+            // A detector puts them on the map.
+            for &(cx, cz) in &town.cops {
+                s.rect(mx0 + (cx / p * cell as f64) as i32, my0 + depth * cell - (cz / p * cell as f64) as i32, 2, 2, shade(ramp("CYAN"), 28));
+            }
+        }
         let (ux, uy) = (mx0 + (town.x / p * cell as f64) as i32, my0 + depth * cell - (town.z / p * cell as f64) as i32);
         s.line(ux, uy, ux + (hs * 4.0) as i32, uy - (hc * 4.0) as i32, WHITE);
         s.disc(ux, uy, 1, shade(ramp("RED"), 28));
         let gas = self.owned().map_or(0.0, |o| o.gas);
         s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { shade(ramp("RED"), 27) } else { shade(ramp("WHITE"), 26) }, BLACK);
-        s.text_sh(216, 27, &format!("MPH {:3}", (town.speed * 2.237) as i32), shade(ramp("WHITE"), 26), BLACK);
+        let fast = map.cops > 0 && town.speed * 2.237 > map.limit + 10.0;
+        s.text_sh(216, 27, &format!("MPH {:3}", (town.speed * 2.237) as i32), shade(ramp(if fast { "RED" } else { "WHITE" }), 26), BLACK);
+        if map.cops > 0 {
+            s.text_sh(216, 36, &format!("LIMIT {}", map.limit as i32), shade(ramp("WHITE"), 26), BLACK);
+        }
+        if town.chase.is_some() {
+            let blink = self.ticks / 8 % 2 == 0;
+            s.rect(0, 0, 320, 4, shade(ramp(if blink { "RED" } else { "BLUE" }), 26));
+            s.text_sh(132, 8, "POLICE!", shade(ramp(if blink { "RED" } else { "WHITE" }), 27), BLACK);
+        }
         if seat.is_some() && town.speed < 0.5 && town.beside(map).is_none() && self.note.is_none() && town.crash == 0 {
             let words = "ARROWS DRIVE. PULL UP AND PRESS ENTER.";
             s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, words, shade(ramp("GOLD"), 28), BLACK);

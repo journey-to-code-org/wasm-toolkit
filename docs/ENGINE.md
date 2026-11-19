@@ -54,6 +54,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
   says they are; other cars are about. A map in the corner shows the blocks, where there is to
   go in gold, and you; every place to go has a sign on a pole on its roof and its name written
   over it in the windscreen. When it rains the wipers go. A hill slows the car going up it and hurries it going down.
+  A town can have police at its corners and a limit: pass one more than ten over and he is
+  behind you until you stop for the ticket; he is not to be lost in town, and running for
+  twenty-five seconds doubles it. A radar detector puts them on the corner map.
   Pull up beside somewhere, press Enter, and you are in it, an hour later.
 - **Roads**: out of town there are roads between two places: two lanes that bend and climb,
   through trees, cuttings and along drops, with cars coming the other way and police parked
@@ -439,6 +442,8 @@ a `wall` colour and a `height` in metres, or neither for open ground. A block wi
 somewhere to go: it gets an awning (or a gold lot, if nothing is built on it), it is on the list
 in the windscreen under `name`, and pulling up beside it and pressing Enter puts you in that
 place. `hills` is how high the ground rolls, in metres, up to 30; left out, the town is flat.
+`cops`, `limit` and `ticket` put police at that many corners, with a limit in miles an hour
+and what a ticket costs; with no police there is no limit.
 `drive:<map>` from a place starts you beside the block that leads to it. A block with
 `road` in place of `to` is the way onto that road.
 
