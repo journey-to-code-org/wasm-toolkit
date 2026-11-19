@@ -197,6 +197,8 @@ export async function makeViewer(wasmBytes) {
       const step = (keys, mx, my) => { x.wtk_input(keys, mx, my); x.wtk_step(); };
       if (ok) {
         step(16, 160, 100); step(0, 160, 100);
+        // A new game outlines what can be picked; the picture here is wanted without that.
+        step(512, 160, 100); step(0, 160, 100);
         if (lamps && spot) { const [sx, sy, sw, sh] = spot; step(0, sx + (sw >> 1), sy + (sh >> 1)); step(16, sx + (sw >> 1), sy + (sh >> 1)); }
         step(0, 319, 199);
         // A little way down the road, foot down, so it is seen moving.

@@ -32,6 +32,8 @@ pub const KEY_X: u32 = 64;
 pub const KEY_Y: u32 = 128;
 /// N: the button on the wheel.
 pub const KEY_N: u32 = 256;
+/// H or ?: show what there is to pick.
+pub const KEY_H: u32 = 512;
 
 /// The most cars you can keep.
 pub const MOST_CARS: usize = 16;
@@ -172,6 +174,10 @@ pub struct Game {
     selling: bool,
     pub carrying: Option<Loose>,
     saved: bool,
+    /// Whether everything that can be picked in a place is being outlined, and whether E has been
+    /// pressed once on the title with a game kept, so that once more starts over.
+    pub hints: bool,
+    sure: bool,
     rng: u32,
     last_under: Option<String>,
     last_keys: u32,
@@ -202,7 +208,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, net: Net::default(), selling: false, carrying: None, saved: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -841,13 +847,23 @@ impl Game {
         let (pick, back) = (hit & KEY_A != 0, hit & KEY_B != 0);
         match self.scene {
             Scene::Title => {
-                if pick || hit & KEY_X != 0 {
+                if hit & KEY_X != 0 && self.saved && !self.sure {
+                    // A game is kept: starting over is asked for twice.
+                    self.sure = true;
+                    tone(200, 120);
+                } else if pick || hit & KEY_X != 0 {
+                    // Someone new is shown round; someone carrying on knows where things are.
+                    self.hints = !(pick && self.saved);
+                    self.sure = false;
                     self.state = if pick && self.saved { self.kept().unwrap_or_else(|| self.fresh()) } else { self.fresh() };
                     self.note = None;
                     self.lamps = false;
                     tone(880, 80);
                     let place = self.state.place.clone();
                     self.enter(&place);
+                    if self.hints && self.state.cars.is_empty() && self.scene == Scene::Place {
+                        self.say("No car yet. The paper has some.");
+                    }
                     self.check_over();
                 }
             }
@@ -860,6 +876,10 @@ impl Game {
                 }
             }
             Scene::Place => {
+                if hit & KEY_H != 0 {
+                    self.hints = !self.hints;
+                    tone(if self.hints { 620 } else { 420 }, 50);
+                }
                 // What was last said stays until the pointer finds something else to talk about.
                 let under = self.spot_under().map(|s| s.label.clone());
                 if under != self.last_under {
@@ -1419,7 +1439,10 @@ impl Game {
                 s.text_big(x, 60 + i as i32 * 22, line, shade(ramp("GOLD"), 27), 2);
             }
         }
-        if self.saved {
+        if self.saved && self.sure {
+            s.text_sh(92, 190, "ENTER: CARRY ON", WHITE, BLACK);
+            s.text_sh(28, 204, "E AGAIN: START OVER, AND LOSE IT", shade(ramp("RED"), 27), BLACK);
+        } else if self.saved {
             s.text_sh(92, 190, "ENTER: CARRY ON", WHITE, BLACK);
             s.text_sh(100, 204, "E: A NEW GAME", shade(ramp("CHROME"), 20), BLACK);
         } else if (self.ticks / 15) & 1 == 1 {
@@ -1458,6 +1481,15 @@ impl Game {
         if place.outdoors && self.dark() > 0 {
             s.darken(0, 0, 320, 200, if self.dark() == 1 { 5 } else { 11 });
         }
+        if self.scene == Scene::Place && self.hints {
+            // Everything there is to pick that the picture does not mark: a box round each.
+            let under = self.spot_under().map(|s| s.rect);
+            for spot in self.spots().into_iter().filter(|sp| sp.button.is_none()) {
+                let [x, y, w, h] = spot.rect;
+                s.frame(x, y, w, h, if under == Some(spot.rect) { WHITE } else { shade(ramp("GOLD"), 26) });
+                s.frame(x + 1, y + 1, w - 2, h - 2, BLACK);
+            }
+        }
         if self.scene == Scene::Place {
             let over = self.spot_under().map(|s| s.rect);
             for spot in self.spots() {
@@ -1491,7 +1523,7 @@ impl Game {
             let line = self.note.clone().or(under).unwrap_or_else(|| r.says.clone());
             self.panel(s, &r.name, &line, &format!("Runs {:.1}. Day {}, {} hours left.", r.et, self.day(), self.hours_left()));
         } else {
-            let line = self.note.clone().or(under).unwrap_or_else(|| "Look round.".into());
+            let line = self.note.clone().or(under).unwrap_or_else(|| if self.hints { "Point at a box. H hides them.".into() } else { "Look round. H shows what there is.".into() });
             self.panel(s, &place.title, &line, &clock);
         }
     }
@@ -2154,6 +2186,11 @@ impl Game {
         }
         let gas = self.owned().map_or(0.0, |o| o.gas);
         s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { shade(ramp("RED"), 27) } else { shade(ramp("WHITE"), 26) }, BLACK);
+        s.text_sh(216, 27, &format!("MPH {:3}", (town.speed * 2.237) as i32), shade(ramp("WHITE"), 26), BLACK);
+        if seat.is_some() && town.speed < 0.5 && town.beside(map).is_none() && self.note.is_none() && town.crash == 0 {
+            let words = "ARROWS DRIVE. PULL UP AND PRESS ENTER.";
+            s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, words, shade(ramp("GOLD"), 28), BLACK);
+        }
         if let Some(b) = town.beside(map) {
             let name = b.name.clone().or_else(|| b.to.as_ref().and_then(|to| self.pack.manifest.places.get(to)).map(|pl| pl.title.clone())).unwrap_or_default();
             let words = format!("ENTER: {}", name.to_uppercase());

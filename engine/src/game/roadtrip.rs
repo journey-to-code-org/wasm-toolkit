@@ -404,14 +404,21 @@ impl Game {
         }
         let gas = self.owned().map_or(0.0, |o| o.gas);
         s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { red } else { white }, BLACK);
-        self.draw_bottle(s, 45, self.owned().map_or(0.0, |o| o.bottle), trip.spray > 0.0);
+        s.text_sh(216, 27, &format!("MPH {:3}", mph as i32), if trip.rival.is_none() && mph > road.limit + 10.0 { red } else { white }, BLACK);
+        if seat.is_some() && trip.z < 50.0 && trip.hold == 0 && self.note.is_none() && trip.crash == 0 {
+            // Setting out: what the keys are.
+            let kit = self.owned().is_some_and(|o| self.kit(o).is_some());
+            let words = if trip.rival.is_some() { "FIRST TO THE END. ESCAPE GIVES IT UP." } else if kit { "ARROWS DRIVE. N SPRAYS. ESC: BACK." } else { "ARROWS DRIVE. ESCAPE TURNS BACK." };
+            s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, words, gold, BLACK);
+        }
+        self.draw_bottle(s, 36, self.owned().map_or(0.0, |o| o.bottle), trip.spray > 0.0);
         let blink = self.ticks / 8 % 2 == 0;
         if trip.chase.is_some() {
             // In the mirror: red and blue.
             s.rect(0, 0, 320, 4, shade(ramp(if blink { "RED" } else { "BLUE" }), 26));
             s.text_sh(132, 8, "POLICE!", if blink { red } else { white }, BLACK);
         } else if trip.radar && self.radar() && blink {
-            s.text_sh(216, 27, "RADAR!", red, BLACK);
+            s.text_sh(216, 54, "RADAR!", red, BLACK);
         }
         if let Some(note) = &self.note {
             s.text_sh(160 - note.len() as i32 * 4, view * 92 / 136, &note.to_uppercase(), gold, BLACK);
