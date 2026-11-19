@@ -16,7 +16,7 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"], ["shootout", "Enters the shootout"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
@@ -992,6 +992,12 @@ function gamePanel() {
     }),
     m.title ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "No picture: write the name up", onclick: () => { delete m.title; tidy(); render(); } })) : null,
     h("p", { class: "hint", text: "The title is seen with Play it. Leave the bottom fifth of the picture plain: \"Press Enter\" is written there." }),
+    tick("There is a shootout: a knockout on the strip, every so many days", !!m.shootout, (v) => { if (v) m.shootout = { entry: 50, purse: 400, rounds: 3, every: 7 }; else delete m.shootout; }),
+    m.shootout ? h("div", { class: "two" },
+      field("It costs to enter", m.shootout.entry, (n) => { m.shootout.entry = Math.max(0, Math.floor(n ?? 50)); }, { type: "number", min: 0 }),
+      field("The winner takes", m.shootout.purse, (n) => { m.shootout.purse = Math.max(0, Math.floor(n ?? 400)); }, { type: "number", min: 0 }),
+      field("Rounds", m.shootout.rounds, (n) => { m.shootout.rounds = Math.max(1, Math.min(6, Math.floor(n ?? 3))); }, { type: "number", min: 1, max: 6 }),
+      field("Held every so many days", m.shootout.every, (n) => { m.shootout.every = Math.max(1, Math.floor(n ?? 7)); }, { type: "number", min: 1 })) : null,
     field("What can be bet, in dollars (blank: 10 25 50 100)", (m.bets ?? []).join(" "), (v) => { const n = v.split(/[\s,]+/).map(Number).filter((x) => x > 0).slice(0, 4); if (n.length) m.bets = n; else delete m.bets; }),
     h("p", { class: "hint", text: "Reading the paper takes an hour, taking a part off takes an hour, a race takes two. When the days run out the game is over." }))];
 }

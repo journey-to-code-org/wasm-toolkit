@@ -489,6 +489,18 @@
           "label": "Straight back to the garage",
           "do": "go:garage",
           "button": "Home"
+        },
+        {
+          "rect": [
+            4,
+            4,
+            84,
+            16
+          ],
+          "label": "The shootout: three rounds, every seventh day",
+          "do": "shootout",
+          "button": "Shootout",
+          "needs_car": true
         }
       ],
       "outdoors": true
@@ -1353,5 +1365,11 @@
         }
       ]
     }
+  },
+  "shootout": {
+    "entry": 50,
+    "purse": 400,
+    "rounds": 3,
+    "every": 7
   }
 }
