@@ -67,6 +67,10 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Under the hood on the build sheet**: on a car with a build sheet, what it came with under
   the hood (airbox, manifold, turbo, intercooler) are real parts: they come off onto the shelf,
   have a condition, and sell. A turbo sells best with its manifold and O2 housing.
+- **Getting rid of a car**: one with a build sheet can go three ways from the yard. The dealer
+  takes it whole if it runs; a shell good enough to sell (body no worse than 70) goes for the
+  shell, with every part stripped onto the shelf first, in four hours; or the scrapyard takes it
+  as it stands, for $50 and a little for each part still on it. Any car can also just sit.
 - **Wear**: parts a pack says wear do, with every pass and every kilometre. A tired one costs
   power, a note says when one will not last, and one that wears out stops the car. A battery
   runs down with the lamps left on overnight, or sitting in the yard, and charges as you drive.
