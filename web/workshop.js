@@ -509,7 +509,7 @@ function seatForm(c) {
       c.rear ? field("How wide it is from behind, metres", c.rear.width_m ?? 1.7, (n) => { c.rear.width_m = Math.max(0.5, Math.min(4, n ?? 1.7)); }, { type: "number", step: "0.05", min: 0.5, max: 4 }) : null,
       c.front ? field("How wide it is from in front, metres", c.front.width_m ?? 1.7, (n) => { c.front.width_m = Math.max(0.5, Math.min(4, n ?? 1.7)); }, { type: "number", step: "0.05", min: 0.5, max: 4 }) : null) : null,
     h("details", { id: "sheetForm" }, h("summary", { text: "Its build sheet: the parts it left the factory with" }),
-      h("p", { class: "hint", text: "A car with a build sheet is made of real parts: each can come off, wear out, break and be sold. One line for each: the slot, an equals sign, and the part that fills it (by the short name it has in the pack). Slots under the hood stay off this list." }),
+      h("p", { class: "hint", text: "A car with a build sheet is made of real parts: each can come off, wear out, break and be sold. One line for each: the slot, an equals sign, and the part that fills it (by the short name it has in the pack). Slots under the hood can be on it too: then what is there is a real part, with no stock one left lying on the floor when it comes off." }),
       (() => {
         const box = h("textarea", { id: "stock", spellcheck: "false", rows: 8 });
         box.value = Object.entries(c.stock ?? {}).map(([slot, part]) => `${slot} = ${part}`).join("\n");
@@ -938,6 +938,7 @@ function partsPanel() {
       field("What it gives other parts that need it, in the same words", (p.gives ?? []).join(", "), (v) => { const n = v.split(",").map((x) => x.trim()).filter(Boolean); if (n.length) p.gives = n; else delete p.gives; }),
       field("For the driveline: the torque it holds, lb-ft (blank: it does not break)", p.holds ?? "", (v) => { if (v > 0) p.holds = v; else delete p.holds; }, { type: "number", min: 1 }),
       h("div", { class: "two" },
+        field("Rare from the factory: per cent of cars that came with it in place of the stock one (never sold new)", p.rare ?? "", (v) => { if (v > 0) p.rare = Math.min(100, Math.floor(v)); else delete p.rare; }, { type: "number", min: 0, max: 100 }),
         field("It wears: per cent of itself a pass takes (blank: it does not)", p.wears ?? "", (v) => { if (v > 0) p.wears = v; else delete p.wears; }, { type: "number", min: 0, step: "0.1" }),
         field("Worn out in use, it takes the parts in these slots with it (Valves), with commas between", (p.takes ?? []).join(", "), (v) => { const n = v.split(",").map((x) => x.trim()).filter(Boolean); if (n.length) p.takes = n; else delete p.takes; })),
       tick("It is a battery: run down it is flat, and a charge brings it back", !!p.charges, (v) => { if (v) p.charges = true; else delete p.charges; }),

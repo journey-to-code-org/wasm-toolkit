@@ -243,6 +243,10 @@ pub struct Part {
     /// what the clutch will pass, and every launch like that wears it, until it is done for.
     #[serde(default)]
     pub slips: bool,
+    /// A factory part only some cars came with: the per cent of cars with this slot on their
+    /// build sheet that have it in place of the stock one. It is never in the paper new.
+    #[serde(default)]
+    pub rare: u32,
     /// How fast it wears: the per cent of itself a pass down the strip takes, and four kilometres
     /// of road the same. Under half it costs power; at nothing it is done for.
     #[serde(default)]
@@ -1034,7 +1038,6 @@ impl Pack {
                 match m.parts.get(part) {
                     None => return Err(format!("the car {id} leaves the factory with {part} for its {slot}, which is not a part in the pack")),
                     Some(p) if p.slot != *slot => return Err(format!("the car {id} has {part} down for its {slot}, but that part goes in {}", p.slot)),
-                    Some(_) if car.hood.as_ref().is_some_and(|h| h.slots.contains_key(slot)) => return Err(format!("the {slot} of the car {id} is under its hood, and cannot be on its build sheet as well")),
                     _ => {}
                 }
             }

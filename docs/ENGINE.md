@@ -64,6 +64,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
   keep your foot in it and lose him. A bend taken too fast throws the car wide, and what is beside
   the road decides what that costs. A road takes hours off the day and gas out of the tank.
   Rivals can be raced down one as well as on the strip.
+- **Under the hood on the build sheet**: on a car with a build sheet, what it came with under
+  the hood (airbox, manifold, turbo, intercooler) are real parts: they come off onto the shelf,
+  have a condition, and sell. A turbo sells best with its manifold and O2 housing.
 - **Wear**: parts a pack says wear do, with every pass and every kilometre. A tired one costs
   power, a note says when one will not last, and one that wears out stops the car. A battery
   runs down with the lamps left on overnight, or sitting in the yard, and charges as you drive.
@@ -416,8 +419,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"stock": { "Valves": "s-valves", "Rear diff": "s-diff" }` is its build sheet: for each
   slot, the part of the pack it left the factory with. A car bought or won comes with these
   fitted, each in a state near the car's own, and is then only what is fitted to it.
-  `"optional": ["Seats"]` are the slots it will run without. Slots under the hood are not put on
-  the sheet. A car with no sheet is as before: whatever has not been changed is stock.
+  `"optional": ["Seats"]` are the slots it will run without. A slot under the hood may be on the
+  sheet too: its part is then real, and comes off onto the shelf rather than the floor. A car with no sheet is as before: whatever has not been changed is stock.
   `rear` is also how the car looks ahead of you on a road, and `"front": { "picture":
   "front.pic", "width_m": 1.7 }` is how it looks coming the other way. Other cars on a road are
   drawn as whichever of the pack's cars have these pictures, in their own paint, and whoever you
@@ -431,6 +434,10 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"needs": ["a 4-bolt diff"]` and `"gives": ["a 4-bolt diff"]` tie parts together: a part's
   needs must each be given by something else fitted, or the car will not run, and says which.
   `"holds": 380` is the torque, in pound-feet, a driveline part takes before it can break.
+  `"rare": 6` makes it a factory part only some cars came with: that per cent of cars whose
+  build sheet has its slot get it in place of the stock one, and the paper never sells it new.
+  A spare whose `needs` are all met by other spares sells with them as a set, for 15 per cent
+  more than apart; with them missing it fetches a fifth less.
   `"wears": 2` is the per cent of itself a pass down the strip takes off it, and four
   kilometres of road or town the same. Past half it costs a little power; at nothing it is done
   for and the car will not run. `"takes": ["Valves"]` names slots whose parts are finished with
