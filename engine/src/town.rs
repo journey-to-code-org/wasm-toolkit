@@ -94,7 +94,7 @@ impl Town {
         if lx < edge || lx > map.pitch - edge || lz < edge || lz > map.pitch - edge {
             return false;
         }
-        map.block(c, r).is_some_and(|b| b.height > 0.0)
+        map.block(c, r).is_some_and(|b| b.height > 0.0 || b.water)
     }
 
     /// Somewhere to go that you are stopped beside: within a street's width of its block.

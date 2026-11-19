@@ -945,6 +945,10 @@ fn a_road_is_driven_to_its_other_end() {
     g.draw(&mut s);
     cruise(&mut g, 45.0, &|g| g.scene != Scene::Road);
     assert_eq!((g.scene, g.state.hours, g.state.cash), (Scene::Drive, 2, 1000), "two hours, and no ticket");
+    // In off the road still rolling, on the street beside the block it comes in by, facing into town.
+    let t = g.town.as_ref().unwrap();
+    assert!(t.speed > 5.0 && t.heading == 0.0 && (t.x - 130.0).abs() < 1.0 && t.z < 0.0, "{:?}", (t.x, t.z, t.speed));
+    for _ in 0..90 { g.tick(2, 0, 0); }
     let t = g.town.as_ref().unwrap();
     assert!(t.beside(&g.pack.manifest.maps["grid"]).is_some_and(|b| b.road.as_deref() == Some("pass")), "{:?}", (t.x, t.z));
     let gas = g.owned().unwrap().gas;
@@ -1033,7 +1037,7 @@ fn the_road_has_edges_and_other_cars() {
     let mut t = engine::road::Trip::new("pass", &road, false, 4);
     assert_eq!(t.others.len(), 12);
     assert!(t.others.iter().all(|o| (o.lane == 0.5) == (o.speed > 0.0)) && t.others.iter().any(|o| o.speed < 0.0) && t.others.iter().any(|o| o.speed > 0.0));
-    t.others[0] = engine::road::Other { z: 40.0, lane: 0.5, speed: 5.0, paint: "RED" };
+    t.others[0] = engine::road::Other { z: 40.0, lane: 0.5, speed: 5.0, paint: "RED", rig: false };
     let mut hit = false;
     for _ in 0..600 {
         hit |= t.tick(&road, Pedals { go: true, left: t.x > 0.55, right: t.x < 0.45, ..Pedals::default() }).crashed;
@@ -1043,7 +1047,7 @@ fn the_road_has_edges_and_other_cars() {
     // In the game a crash is a tired car, and running dry is a walk.
     let mut g = road_game();
     click(&mut g, 100, 10);
-    g.trip.as_mut().unwrap().others.push(engine::road::Other { z: 60.0, lane: 0.5, speed: 0.0, paint: "RED" });
+    g.trip.as_mut().unwrap().others.push(engine::road::Other { z: 60.0, lane: 0.5, speed: 0.0, paint: "RED", rig: false });
     let cond = g.owned().unwrap().cond;
     cruise(&mut g, 40.0, &|g| g.trip.as_ref().unwrap().crash > 0);
     assert_eq!(g.owned().unwrap().cond, cond - 3);
@@ -1301,12 +1305,12 @@ fn a_car_with_a_picture_of_its_back_is_seen_on_the_road() {
     g.draw(&mut s);
     assert_eq!(count(&s), 0);
     // One going the same way, twenty metres up the road, in your lane: 1.7 metres is 17 pixels there.
-    g.trip.as_mut().unwrap().others.push(engine::road::Other { z: 20.0, lane: 0.5, speed: 0.0, paint: "PINK" });
+    g.trip.as_mut().unwrap().others.push(engine::road::Other { z: 20.0, lane: 0.5, speed: 0.0, paint: "PINK", rig: false });
     g.draw(&mut s);
     let n = count(&s);
     assert!((100..260).contains(&n), "its back is on the screen: {n} pixels");
     // One coming the other way has no picture of its front, and is a plain shape.
-    g.trip.as_mut().unwrap().others[0] = engine::road::Other { z: 20.0, lane: -0.5, speed: -1.0, paint: "PINK" };
+    g.trip.as_mut().unwrap().others[0] = engine::road::Other { z: 20.0, lane: -0.5, speed: -1.0, paint: "PINK", rig: false };
     g.draw(&mut s);
     assert_eq!(count(&s), 0);
 }
@@ -1620,4 +1624,109 @@ fn the_law_is_in_town_too() {
     click(&mut g, 100, 10);
     for _ in 0..200 { g.tick(KEY_UP, 0, 0); }
     assert!(g.town.as_ref().unwrap().chase.is_none() && g.town.as_ref().unwrap().cops.is_empty());
+}
+
+#[test]
+fn the_street_out_of_town_is_the_road() {
+    let mut g = road_game();
+    click(&mut g, 100, 10);
+    cruise(&mut g, 45.0, &|g| g.scene != Scene::Road);
+    assert_eq!(g.scene, Scene::Drive);
+    // Turned about and driven back off the end of the street: on the road again without stopping or asking.
+    let (gx, gz, heading) = g.pack.manifest.maps["grid"].gate("pass").unwrap();
+    assert_eq!((gx, gz, heading), (130.0, -2.0, 0.0));
+    let t = g.town.as_mut().unwrap();
+    (t.x, t.z, t.heading, t.speed) = (126.0, 6.0, 180.0, 12.0);
+    for _ in 0..30 {
+        if g.scene == Scene::Road { break; }
+        g.tick(KEY_UP, 0, 0);
+    }
+    let trip = g.trip.as_ref().expect("out of town and onto the road");
+    assert!(g.scene == Scene::Road && trip.backwards && trip.speed > 10.0);
+    // Along the edge of town, and not out of it, nothing happens.
+    let mut g = road_game();
+    click(&mut g, 100, 10);
+    cruise(&mut g, 45.0, &|g| g.scene != Scene::Road);
+    let t = g.town.as_mut().unwrap();
+    (t.x, t.z, t.heading, t.speed) = (126.0, 0.0, 90.0, 12.0);
+    g.tick(KEY_UP, 0, 0);
+    assert_eq!(g.scene, Scene::Drive);
+}
+
+#[test]
+fn a_poker_run_is_five_cards_and_the_best_hand() {
+    use engine::game::cards::{name, rank, short};
+    // Hands, from nothing up: each beats the one before.
+    let c = |text: &str| -> Vec<u8> { text.split(' ').map(|t| (b"23456789TJQKA".iter().position(|&r| r == t.as_bytes()[0]).unwrap() + 13 * b"CDHS".iter().position(|&s| s == t.as_bytes()[1]).unwrap()) as u8).collect() };
+    let hands = ["KS 9H 7D 4C 2S", "AS 9H 7D 4C 2S", "4S 4H AD KC QS", "KS KH 7D 4C 2S", "2S 2H 3D 3C 4S", "5S 5H 5D AC KS", "AS 2H 3D 4C 5S", "6S 2H 3D 4C 5D", "2H 9H JH KH 4H", "3S 3H 3D 2C 2S", "9S 9H 9D 9C 2S", "5C 6C 7C 8C 9C"];
+    for pair in hands.windows(2) {
+        assert!(rank(&c(pair[1])) > rank(&c(pair[0])), "{} should beat {}", pair[1], pair[0]);
+    }
+    assert_eq!((name(&rank(&c(hands[3]))), name(&rank(&c(hands[5]))), name(&rank(&c(hands[0]))), short(c("TH")[0])), ("A pair of kings".into(), "Three fives".into(), "King high".into(), "TH".to_string()));
+
+    let manifest = MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"pokerrun:pass\"");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.seed(11);
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    click(&mut g, 100, 10);
+    assert_eq!((g.scene, g.state.cash), (Scene::Road, 980));
+    assert!(g.trip.as_ref().unwrap().poker);
+    let mut s = Screen::new();
+    cruise(&mut g, 40.0, &|g| g.trip.as_ref().is_none_or(|t| t.cards.len() == 3));
+    g.draw(&mut s);
+    assert!(g.note.as_deref().is_some_and(|n| n.starts_with("Card 3: the ")), "{:?}", g.note);
+    let mut hand = Vec::new();
+    cruise(&mut g, 40.0, &|g| { g.scene != Scene::Road });
+    hand.extend(g.note.clone());
+    // Back where it started, two hours on, five cards played: twenty dollars down, or a hundred up.
+    assert_eq!((g.scene, g.state.place.as_str(), g.state.hours), (Scene::Place, "shed", 2));
+    assert!(g.state.cash == 980 || g.state.cash == 1100, "{} {:?}", g.state.cash, hand);
+    // Dropping out leaves the money in the pot.
+    click(&mut g, 100, 10);
+    g.tick(KEY_B, 0, 0);
+    assert_eq!((g.scene, g.note.as_deref()), (Scene::Place, Some("You dropped out of the run.")));
+}
+
+#[test]
+fn a_road_can_have_water_trailers_and_a_ladder_to_climb_first() {
+    let g = road_game();
+    let mut road = g.pack.manifest.roads["pass"].clone();
+    road.parts[0].right = "water".into();
+    road.rigs = 1.0;
+    road.traffic = 10;
+    let mut t = engine::road::Trip::new("pass", &road, false, 4);
+    assert!(t.others.iter().all(|o| o.rig) && t.seg(50.0).right == engine::road::Side::Water);
+    // Into the lake is as bad as into the trees.
+    let mut wet = false;
+    t.others.clear();
+    for _ in 0..200 {
+        wet |= t.tick(&road, Pedals { go: true, right: true, ..Pedals::default() }).crashed;
+    }
+    assert!(wet);
+    // The back of a trailer is a long way behind the truck.
+    let mut t = engine::road::Trip::new("pass", &road, false, 4);
+    t.others = vec![engine::road::Other { z: 30.0, lane: 0.5, speed: 0.0, paint: "RED", rig: true }];
+    let mut at = None;
+    for _ in 0..300 {
+        if t.tick(&road, Pedals { go: true, left: t.x > 0.55, right: t.x < 0.45, ..Pedals::default() }).crashed { at = Some(t.z); break; }
+    }
+    assert!(at.is_some_and(|z| z < 23.0), "{at:?}");
+    // A road that asks for two wins is shut until there are two, from its first end only.
+    let manifest = MANIFEST.replace("\"places\": {", &ROADS.replace("\"limit\": 50,", "\"limit\": 50, \"rung\": 2,")).replace("\"do\": \"say:Hello.\"", "\"do\": \"road:pass\"");
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
+    g.tick(KEY_A, 160, 100);
+    g.tick(0, 160, 100);
+    click(&mut g, 100, 10);
+    assert_eq!((g.scene, g.note.as_deref()), (Scene::Place, Some("Not yet. Beat 2 more here first.")));
+    g.state.rung = 2;
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Road);
+    let Some(bytes) = default_pack() else { return };
+    let pack = Pack::parse(&bytes).unwrap();
+    let m = &pack.manifest;
+    assert!(m.roads["ohio"].rung > 0 && m.roads["ohio"].rigs > 0.0 && m.places.contains_key("norwalk") && m.maps["town"].blocks.values().any(|b| b.water));
+    assert!(["ridge", "pike", "ohio"].iter().all(|r| m.maps["town"].gate(r).is_some()), "every road out of town leaves from its edge");
 }
