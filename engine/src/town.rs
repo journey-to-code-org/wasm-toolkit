@@ -37,6 +37,9 @@ pub struct Town {
     pub crash: i32,
     pub dents: i32,
     pub others: Vec<Other>,
+    /// Where the police sit, and a chase: for how many ticks, and the most over the limit you were seen at.
+    pub cops: Vec<(f64, f64)>,
+    pub chase: Option<(u32, f64)>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -65,7 +68,13 @@ impl Town {
             Other { north, street: (k % streets as u32) as i32, along: ((k >> 8) % 1000) as f64 / 1000.0 * length as f64 * map.pitch, speed: 8.0 + ((k >> 20) % 8) as f64, paint: PAINTS[(k >> 4) as usize % 8] }
         }).collect();
         // On the street along the block's south side, in the right-hand lane, facing east.
-        Town { map: id.to_string(), x: (c as f64 + 0.5) * map.pitch, z: r as f64 * map.pitch - 4.0, heading: 90.0, speed: 0.0, steer: 0.0, crash: 0, dents: 0, others }
+        // The police park on the pavement at a corner, never the one you set out from.
+        let cops = (0..map.cops.min(12)).map(|_| {
+            let k = rand();
+            let (cc, cr) = ((k % (map.cols() as u32 + 1)) as i32, ((k >> 8) % (map.depth() as u32 + 1)) as i32);
+            (cc as f64 * map.pitch + map.road + 2.0, if (cc - c).abs() + (cr - r).abs() < 2 { (cr + 2) as f64 } else { cr as f64 } * map.pitch + map.road + 2.0)
+        }).collect();
+        Town { cops, chase: None, map: id.to_string(), x: (c as f64 + 0.5) * map.pitch, z: r as f64 * map.pitch - 4.0, heading: 90.0, speed: 0.0, steer: 0.0, crash: 0, dents: 0, others }
     }
 
     /// The block this point is over: its column and row.

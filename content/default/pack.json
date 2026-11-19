@@ -1151,7 +1151,10 @@
           "name": "The dyno"
         }
       },
-      "hills": 7
+      "hills": 7,
+      "cops": 2,
+      "limit": 35,
+      "ticket": 30
     }
   },
   "rebuild": {

@@ -528,6 +528,14 @@ pub struct Map {
     /// How hilly the ground is: the height of the hills, in metres. Left out, it is flat.
     #[serde(default)]
     pub hills: f64,
+    /// The law in town: how many police sit at its corners, the limit in miles an hour, and what
+    /// being caught well over it costs. With no police there is no limit.
+    #[serde(default)]
+    pub cops: usize,
+    #[serde(default = "town_limit")]
+    pub limit: f64,
+    #[serde(default = "town_ticket")]
+    pub ticket: i32,
 }
 
 fn pitch() -> f64 {
@@ -634,6 +642,12 @@ pub struct Road {
     pub ground: Option<String>,
 }
 
+fn town_limit() -> f64 {
+    35.0
+}
+fn town_ticket() -> i32 {
+    30
+}
 fn limit() -> f64 {
     55.0
 }

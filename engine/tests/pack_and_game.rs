@@ -1589,3 +1589,35 @@ fn the_shootout_is_a_knockout() {
     assert_eq!((g.scene, g.bracket, g.state.cash, g.note.as_deref(), g.state.losses), (Scene::Place, None, 1200, Some("Out in round 1. There is always the next."), 1));
     assert!(Pack::parse(&files(&with(0))).err().unwrap().contains("shootout"));
 }
+
+#[test]
+fn the_law_is_in_town_too() {
+    let mut g = town_game();
+    {
+        let map = g.pack.manifest.maps.get_mut("grid").unwrap();
+        (map.cops, map.limit, map.ticket) = (1, 30.0, 20);
+    }
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Drive);
+    // One of them, parked up the street; past him at twice the limit.
+    g.town.as_mut().unwrap().cops = vec![(110.0, 2.0)];
+    for _ in 0..400 {
+        if g.town.as_ref().unwrap().chase.is_some() { break; }
+        g.tick(KEY_UP, 0, 0);
+    }
+    let t = g.town.as_ref().unwrap();
+    assert!(t.chase.is_some() && t.x > 70.0 && t.speed * 2.237 > 40.0 && g.note.as_deref() == Some("Police! Pull over."), "{:?}", (t.x, t.speed));
+    let mut s = Screen::new();
+    g.draw(&mut s);
+    g.tick(KEY_B, 0, 0);
+    assert_eq!((g.scene, g.note.as_deref()), (Scene::Drive, Some("Not with him behind you.")));
+    for _ in 0..300 { g.tick(2, 0, 0); }
+    let paid = 1000 - g.state.cash;
+    assert!(g.town.as_ref().unwrap().chase.is_none() && (20 + 2 * 10..20 + 2 * 60).contains(&paid), "{paid}");
+    assert_eq!(g.note, Some(format!("Speeding. That is a ${paid} ticket.")));
+    // With no police there is no limit.
+    let mut g = town_game();
+    click(&mut g, 100, 10);
+    for _ in 0..200 { g.tick(KEY_UP, 0, 0); }
+    assert!(g.town.as_ref().unwrap().chase.is_none() && g.town.as_ref().unwrap().cops.is_empty());
+}
