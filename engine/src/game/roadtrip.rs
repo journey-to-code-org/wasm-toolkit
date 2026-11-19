@@ -238,6 +238,9 @@ impl Game {
         let (sky, land) = (ramp(road.sky.as_deref().unwrap_or("SKY")), ramp(road.ground.as_deref().unwrap_or("GRASS")));
         let dim = self.sky(s, horizon, view, sky, land);
         s.clip(0, 0, 320, view);
+        let seg0 = trip.segs[((trip.z / SEG) as usize).min(trip.segs.len() - 1)];
+        // The mountains turn with the road: a bend swings them across the glass.
+        self.draw_ridge(s, trip.z / 900.0 + seg0.curve * 0.4 + trip.steer * 0.05, horizon);
 
         // The road ahead, laid out from where the car is: each piece turns a little from the last.
         let i0 = ((trip.z / SEG) as usize).min(trip.segs.len() - 1);

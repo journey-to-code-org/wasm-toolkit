@@ -687,6 +687,7 @@ function mapsPanel() {
       field("Blocks across", cols, () => {}, { type: "number", min: 1, max: 24, id: "mapCols", onchange: (e) => { size(Math.max(1, Math.min(24, +e.target.value || cols)), rows); render(); } }),
       field("Blocks down", rows, () => {}, { type: "number", min: 1, max: 24, id: "mapRows", onchange: (e) => { size(cols, Math.max(1, Math.min(24, +e.target.value || rows))); render(); } }),
       field("Other cars about", mp.traffic ?? 8, (n) => { mp.traffic = Math.max(0, Math.min(40, Math.floor(n ?? 8))); }, { type: "number", min: 0, max: 40 }),
+      field("How high its hills are, metres (0: flat)", mp.hills ?? 0, (n) => { if (n > 0) mp.hills = Math.min(30, n); else delete mp.hills; }, { type: "number", min: 0, max: 30 }),
       field("Gallons burned a kilometre", mp.gas_per_km ?? 0.4, (n) => { mp.gas_per_km = Math.max(0, n ?? 0.4); }, { type: "number", step: "0.1", min: 0 })),
     h("p", { class: "hint", text: "There is a street between every two blocks and one round the outside. The top of the map is north." })));
   const places = [["", "Nowhere: it is only a building"], ...Object.entries(m.places).map(([id, p]) => [id, p.title])];

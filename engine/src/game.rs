@@ -327,6 +327,34 @@ impl Game {
         }
     }
 
+    /// The wipers, when it is raining: two arms across the glass and back.
+    pub(crate) fn draw_wipers(&self, s: &mut Screen, view: i32) {
+        if !self.raining() {
+            return;
+        }
+        let t = (self.ticks % 40) as f64 / 40.0;
+        let sweep = (if t < 0.5 { t * 2.0 } else { 2.0 - t * 2.0 }) * 1.45 + 0.12;
+        for pivot in [96, 216] {
+            let (ex, ey) = (pivot as f64 - sweep.cos() * 92.0, view as f64 - sweep.sin() * 92.0);
+            for d in 0..3 {
+                s.line(pivot + d, view, ex as i32 + d, ey as i32, shade(ramp("RUBBER"), 3));
+            }
+        }
+    }
+
+    /// Mountains along the horizon: a far range and a nearer one, which turn as the car does.
+    pub(crate) fn draw_ridge(&self, s: &mut Screen, yaw: f64, horizon: i32) {
+        let dark = self.dark();
+        for (layer, (scale, tall, name)) in [(1.0, 26.0, "INDIGO"), (1.7, 15.0, "FOREST")].into_iter().enumerate() {
+            let c = shade(ramp(name), if dark == 2 { 3 } else if dark == 1 { 6 } else { 11 + layer as i32 * 2 } - if self.raining() { 2 } else { 0 });
+            for x in 0..320 {
+                let a = (yaw + (x - 160) as f64 / 200.0) * scale + layer as f64 * 2.0;
+                let h = ((a * 3.0).sin() * 0.5 + (a * 7.3).sin() * 0.3 + (a * 17.0).sin() * 0.12 + 0.6).max(0.05) * tall;
+                s.rect(x, horizon - h as i32, 1, h as i32, c);
+            }
+        }
+    }
+
     /// How dark it is out: 0 by day, 1 as the day's last hours come on, 2 in its last sixth.
     pub fn dark(&self) -> i32 {
         let per = self.pack.manifest.season.hours_per_day.max(1);
@@ -2043,6 +2071,7 @@ impl Game {
     fn draw_cockpit(&self, s: &mut Screen, seat: &Cockpit, night: bool, rpm: f64, mph: f64, boost: f64, gear: usize, wheel: f64, shift: bool) {
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let pic = |name: &Option<String>| name.as_ref().and_then(|n| self.pack.pictures.get(n));
+        self.draw_wipers(s, seat.view_h);
         if let Some(bonnet) = pic(&seat.bonnet) {
             s.picture_tint(bonnet, 0, 0, Some(&Self::tint(car, o.paint.as_deref(), if night { 17 } else { 0 })));
         }
@@ -2199,6 +2228,7 @@ impl Game {
         let horizon = view * 60 / 136;
         const SEE: i32 = 5;
         let (p, road) = (map.pitch, map.road);
+        let g = |x: f64, z: f64| map.height(x, z);
         let dim = if self.dark() == 0 && !self.raining() {
             s.vgrad(0, 0, 320, horizon, ramp("SKY"), 15, 29);
             s.vgrad(0, horizon, 320, view - horizon, ramp("GRASS"), 14, 20);
@@ -2206,8 +2236,12 @@ impl Game {
         } else {
             self.sky(s, horizon, view, ramp("SKY"), ramp("GRASS"))
         };
+        self.draw_ridge(s, town.heading.to_radians(), horizon);
         s.clip(0, 0, 320, view);
-        let cam = Cam { pos: [town.x, 1.125, town.z], yaw: town.heading.to_radians(), pitch: 0.0, focal: 200.0, cx: 160, cy: horizon };
+        // The car sits on the hill it is on, and looks up or down it.
+        let (hs, hc) = town.heading.to_radians().sin_cos();
+        let here = g(town.x, town.z);
+        let cam = Cam { pos: [town.x, here + 1.125, town.z], yaw: town.heading.to_radians(), pitch: -((g(town.x + hs * 8.0, town.z + hc * 8.0) - here) / 8.0).atan(), focal: 200.0, cx: 160, cy: horizon };
         let mut scene = Scene3::new(cam);
         (scene.dim, scene.lamps) = (dim, 45.0);
         let (tar, tar2, line) = (shade(ramp("ASPHALT"), 15), shade(ramp("ASPHALT"), 16), shade(ramp("YELLOW"), 23));
@@ -2219,20 +2253,20 @@ impl Game {
                 let (c, r) = (cbx + i, cbz + j);
                 if (0..=cols).contains(&c) && (0..depth).contains(&r) {
                     let (sx, sz) = (c as f64 * p, r as f64 * p);
-                    scene.poly(&[[sx - road, 0.0, sz - road], [sx + road, 0.0, sz - road], [sx + road, 0.0, sz + p + road], [sx - road, 0.0, sz + p + road]], tar, tar2, -4000.0);
+                    scene.poly(&[[sx - road, g(sx - road, sz - road), sz - road], [sx + road, g(sx + road, sz - road), sz - road], [sx + road, g(sx + road, sz + p + road), sz + p + road], [sx - road, g(sx - road, sz + p + road), sz + p + road]], tar, tar2, -4000.0);
                     if i.abs() <= 3 && j.abs() <= 3 {
                         for a in [16.0, 40.0] {
-                            scene.poly(&[[sx - 0.2, 0.0, sz + a], [sx - 0.2, 0.0, sz + a + 8.0], [sx + 0.2, 0.0, sz + a + 8.0], [sx + 0.2, 0.0, sz + a]], line, line, -3000.0);
+                            scene.poly(&[[sx - 0.2, g(sx - 0.2, sz + a), sz + a], [sx - 0.2, g(sx - 0.2, sz + a + 8.0), sz + a + 8.0], [sx + 0.2, g(sx + 0.2, sz + a + 8.0), sz + a + 8.0], [sx + 0.2, g(sx + 0.2, sz + a), sz + a]], line, line, -3000.0);
                         }
                     }
                 }
                 let (c, r) = (cbx + j, cbz + i);
                 if (0..cols).contains(&c) && (0..=depth).contains(&r) {
                     let (ex, ez) = (c as f64 * p, r as f64 * p);
-                    scene.poly(&[[ex, 0.0, ez - road], [ex + p, 0.0, ez - road], [ex + p, 0.0, ez + road], [ex, 0.0, ez + road]], tar, tar2, -4000.0);
+                    scene.poly(&[[ex, g(ex, ez - road), ez - road], [ex + p, g(ex + p, ez - road), ez - road], [ex + p, g(ex + p, ez + road), ez + road], [ex, g(ex, ez + road), ez + road]], tar, tar2, -4000.0);
                     if i.abs() <= 3 && j.abs() <= 3 {
                         for a in [16.0, 40.0] {
-                            scene.poly(&[[ex + a, 0.0, ez - 0.2], [ex + a + 8.0, 0.0, ez - 0.2], [ex + a + 8.0, 0.0, ez + 0.2], [ex + a, 0.0, ez + 0.2]], line, line, -3000.0);
+                            scene.poly(&[[ex + a, g(ex + a, ez - 0.2), ez - 0.2], [ex + a + 8.0, g(ex + a + 8.0, ez - 0.2), ez - 0.2], [ex + a + 8.0, g(ex + a + 8.0, ez + 0.2), ez + 0.2], [ex + a, g(ex + a, ez + 0.2), ez + 0.2]], line, line, -3000.0);
                         }
                     }
                 }
@@ -2247,27 +2281,45 @@ impl Game {
                 let (x0, z0) = (c as f64 * p + road + 4.0, r as f64 * p + road + 4.0);
                 let (x1, z1) = (x0 + p - 2.0 * road - 8.0, z0 + p - 2.0 * road - 8.0);
                 let block = map.block(c, r);
+                let base = g((x0 + x1) / 2.0, (z0 + z1) / 2.0);
+                if block.is_none() && i.abs() <= 3 && j.abs() <= 3 {
+                    // Open country between the streets: a few trees, the same ones each time.
+                    for t in 0..3u32 {
+                        let k = hash((c as u32).wrapping_mul(131) ^ (r as u32).wrapping_mul(977) ^ t.wrapping_mul(7919));
+                        let (tx, tz, tall) = (x0 + 4.0 + (k % 100) as f64 / 100.0 * (x1 - x0 - 8.0), z0 + 4.0 + ((k >> 8) % 100) as f64 / 100.0 * (z1 - z0 - 8.0), 6.0 + (k >> 16) as f64 % 5.0);
+                        let ty = g(tx, tz);
+                        Self::box3(&mut scene, tx - 0.25, tz - 0.25, tx + 0.25, tz + 0.25, ty, ty + 2.0, ramp("WOOD"), 0.5);
+                        let green = ramp(if k & 1 == 0 { "FOREST" } else { "GRASS" });
+                        for (a, b) in [((-2.0, -2.0), (2.0, -2.0)), ((2.0, -2.0), (2.0, 2.0)), ((2.0, 2.0), (-2.0, 2.0)), ((-2.0, 2.0), (-2.0, -2.0))] {
+                            scene.lit(&[[tx + a.0, ty + 1.6, tz + a.1], [tx + b.0, ty + 1.6, tz + b.1], [tx, ty + tall, tz]], green, 0.6);
+                        }
+                    }
+                }
                 let Some(b) = block.filter(|b| b.height > 0.0) else {
                     // Grass, and nothing to hit. Somewhere to go that is only a lot gets a marked kerb.
                     let name = if block.is_some_and(|b| b.to.is_some() || b.road.is_some()) { "GOLD" } else { "GRASS" };
-                    scene.poly(&[[x0, 0.0, z0], [x1, 0.0, z0], [x1, 0.0, z1], [x0, 0.0, z1]], shade(ramp(name), 20), shade(ramp(name), 22), -3500.0);
+                    scene.poly(&[[x0, g(x0, z0), z0], [x1, g(x1, z0), z0], [x1, g(x1, z1), z1], [x0, g(x0, z1), z1]], shade(ramp(name), 20), shade(ramp(name), 22), -3500.0);
                     continue;
                 };
                 let wall = ramp(b.wall.as_deref().unwrap_or("CONCRETE"));
-                Self::box3(&mut scene, x0, z0, x1, z1, 0.0, b.height, wall, 0.0);
+                Self::box3(&mut scene, x0, z0, x1, z1, base - 2.5, base + b.height, wall, 0.0);
                 // Rows of glass, a storey at a time, on the ones near enough to see them.
                 let (near, mid) = (i.abs() <= 1 && j.abs() <= 1, i.abs() <= 3 && j.abs() <= 3);
                 if mid {
                     let mut f = 0;
                     while (f * 4 + 4) as f64 <= b.height && f < if near { 9 } else { 3 } {
-                        Self::box3(&mut scene, x0 - 0.05, z0 - 0.05, x1 + 0.05, z1 + 0.05, f as f64 * 4.0 + 1.5, f as f64 * 4.0 + 3.0, ramp("GLASS"), 1.0);
+                        Self::box3(&mut scene, x0 - 0.05, z0 - 0.05, x1 + 0.05, z1 + 0.05, base + f as f64 * 4.0 + 1.5, base + f as f64 * 4.0 + 3.0, ramp("GLASS"), 1.0);
                         f += 1;
                     }
                 }
                 // A cap round the top; and somewhere to go has an awning over the pavement.
-                Self::box3(&mut scene, x0 - 0.03, z0 - 0.03, x1 + 0.03, z1 + 0.03, b.height - 0.5, b.height, ramp("RUBBER"), 1.0);
-                if b.to.is_some() {
-                    Self::box3(&mut scene, x0 - 1.5, z0 - 1.5, x1 + 1.5, z1 + 1.5, 3.2, 4.0, ramp("GOLD"), 2.0);
+                Self::box3(&mut scene, x0 - 0.03, z0 - 0.03, x1 + 0.03, z1 + 0.03, base + b.height - 0.5, base + b.height, ramp("RUBBER"), 1.0);
+                if b.to.is_some() || b.road.is_some() {
+                    Self::box3(&mut scene, x0 - 1.5, z0 - 1.5, x1 + 1.5, z1 + 1.5, base + 3.2, base + 4.0, ramp("GOLD"), 2.0);
+                    // And a sign on a pole on the roof, to be seen from streets away.
+                    let (mx, mz) = ((x0 + x1) / 2.0, (z0 + z1) / 2.0);
+                    Self::box3(&mut scene, mx - 0.3, mz - 0.3, mx + 0.3, mz + 0.3, base + b.height, base + b.height + 7.0, ramp("CHROME"), 1.5);
+                    Self::box3(&mut scene, mx - 4.0, mz - 4.0, mx + 4.0, mz + 4.0, base + b.height + 7.0, base + b.height + 10.0, ramp("GOLD"), 2.5);
                 }
             }
         }
@@ -2278,10 +2330,33 @@ impl Game {
             }
             // A body, and a cabin on it.
             let (hl, hw) = if o.north { (0.9, 2.1) } else { (2.1, 0.9) };
-            Self::box3(&mut scene, ox - hl, oz - hw, ox + hl, oz + hw, 0.25, 0.9, ramp(o.paint), 0.0);
-            Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, 0.9, 1.4, ramp("GLASS"), 0.5);
+            let oy = g(ox, oz);
+            Self::box3(&mut scene, ox - hl, oz - hw, ox + hl, oz + hw, oy + 0.25, oy + 0.9, ramp(o.paint), 0.0);
+            Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, oy + 0.9, oy + 1.4, ramp("GLASS"), 0.5);
+        }
+        // The name of each place there is to go, written over it where it can be seen.
+        let mut names: Vec<(i32, i32, String, bool)> = Vec::new();
+        for (c, r, b) in map.places() {
+            let (mx, mz) = ((c as f64 + 0.5) * p, (r as f64 + 0.5) * p);
+            let name = b.name.clone().or_else(|| b.to.as_ref().and_then(|to| self.pack.manifest.places.get(to)).map(|pl| pl.title.clone())).unwrap_or_default();
+            if let Some((x, y, depth)) = scene.point([mx, g(mx, mz) + b.height + 12.0, mz]) {
+                if depth > 6.0 && depth < p * 5.5 && (0..320).contains(&x) {
+                    names.push((x, y.clamp(14, view - 30), name.to_uppercase().chars().take(14).collect(), depth < p * 1.6));
+                }
+            }
         }
         scene.end(s);
+        // One that would be written over another goes on the line above it.
+        let mut put: Vec<(i32, i32, i32)> = Vec::new();
+        for (x, y, name, near) in &names {
+            let (wide, mut y) = (name.len() as i32 * 8, *y);
+            let left = (x - wide / 2).clamp(2, 318 - wide);
+            while put.iter().any(|&(l, w, py)| (py - y).abs() < 9 && left < l + w && l < left + wide) {
+                y -= 9;
+            }
+            put.push((left, wide, y));
+            s.text_sh(left, y, name, if *near { WHITE } else { shade(ramp("GOLD"), 28) }, BLACK);
+        }
         self.draw_rain(s, 320, view);
         s.clip_off();
         let v = (town.speed * 10.0) as i32;
@@ -2291,15 +2366,24 @@ impl Game {
         } else {
             self.panel(s, &map.title, &format!("{} mph", (town.speed * 2.237) as i32), "Arrows drive. Escape turns back.");
         }
-        // Where there is to go, and how many blocks off it is.
-        for (n, (c, r, b)) in map.places().into_iter().enumerate().take(5) {
-            // Counted from the middle of its block, so the one you are beside is simply here.
-            let (dc, dr) = ((((c as f64 + 0.5) * p - town.x) / p).trunc() as i32, (((r as f64 + 0.5) * p - town.z) / p).trunc() as i32);
-            let far = |d: i32, plus: char, minus: char| if d == 0 { String::new() } else { format!(" {}{}", d.abs(), if d > 0 { plus } else { minus }) };
-            let name = b.name.clone().or_else(|| b.to.as_ref().and_then(|to| self.pack.manifest.places.get(to)).map(|pl| pl.title.clone())).unwrap_or_default();
-            let line = format!("{}{}{}", name.to_uppercase().chars().take(16).collect::<String>(), far(dr, 'N', 'S'), far(dc, 'E', 'W'));
-            s.text_sh(44, 18 + n as i32 * 9, &line, shade(ramp("WHITE"), 26), BLACK);
+        // The town from above, in the corner: what is built, where there is to go, and you.
+        let (mx0, my0, cell) = (44, 16, if cols.max(depth) <= 8 { 7 } else { 4 });
+        s.rect(mx0 - 2, my0 - 2, cols * cell + 4, depth * cell + 4, BLACK);
+        for r in 0..depth {
+            for c in 0..cols {
+                let b = map.block(c, r);
+                let colour = match b {
+                    Some(b) if b.to.is_some() || b.road.is_some() => shade(ramp("GOLD"), 27),
+                    Some(b) if b.height > 0.0 => shade(ramp("GREY"), 10),
+                    _ => shade(ramp("GRASS"), 12),
+                };
+                // North is up, so the far rows of the map are drawn first.
+                s.rect(mx0 + c * cell + 1, my0 + (depth - 1 - r) * cell + 1, cell - 1, cell - 1, colour);
+            }
         }
+        let (ux, uy) = (mx0 + (town.x / p * cell as f64) as i32, my0 + depth * cell - (town.z / p * cell as f64) as i32);
+        s.line(ux, uy, ux + (hs * 4.0) as i32, uy - (hc * 4.0) as i32, WHITE);
+        s.disc(ux, uy, 1, shade(ramp("RED"), 28));
         let gas = self.owned().map_or(0.0, |o| o.gas);
         s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { shade(ramp("RED"), 27) } else { shade(ramp("WHITE"), 26) }, BLACK);
         s.text_sh(216, 27, &format!("MPH {:3}", (town.speed * 2.237) as i32), shade(ramp("WHITE"), 26), BLACK);
