@@ -158,7 +158,11 @@
         "Fuel pump": "s-pump",
         "ECU": "s-ecu",
         "Seats": "s-seats",
-        "Dashboard": "s-dash"
+        "Dashboard": "s-dash",
+        "Intake": "s-airbox",
+        "Exhaust": "s-exmani",
+        "Turbo": "s-turbo",
+        "Intercooler": "s-sidemount"
       },
       "optional": [
         "Cruise control",
@@ -1217,7 +1221,7 @@
       "slot": "O2 housing",
       "price": 80,
       "gives": [
-        "a stock-frame O2 housing"
+        "a stock O2 housing"
       ]
     },
     "s-tcase": {
@@ -1458,6 +1462,61 @@
       "pitch": "Chipped. Now it can be tuned.",
       "gives": [
         "a tunable ECU"
+      ]
+    },
+    "s-airbox": {
+      "name": "Stock airbox",
+      "slot": "Intake",
+      "price": 40,
+      "pitch": "The box and filter it came with.",
+      "fits": [
+        "umbra"
+      ]
+    },
+    "s-exmani": {
+      "name": "Cast manifold",
+      "slot": "Exhaust",
+      "price": 110,
+      "pitch": "The factory exhaust manifold. Fits the small turbo.",
+      "gives": [
+        "a stock manifold"
+      ],
+      "fits": [
+        "umbra"
+      ]
+    },
+    "s-turbo": {
+      "name": "Stock turbo",
+      "slot": "Turbo",
+      "price": 380,
+      "pitch": "The factory turbo. Wants its own manifold and O2 housing.",
+      "needs": [
+        "a stock manifold",
+        "a stock O2 housing"
+      ],
+      "wears": 0.2,
+      "fits": [
+        "umbra"
+      ]
+    },
+    "s-sidemount": {
+      "name": "Side mount",
+      "slot": "Intercooler",
+      "price": 90,
+      "pitch": "The factory intercooler, behind the bumper.",
+      "fits": [
+        "umbra"
+      ]
+    },
+    "sidemount-twin": {
+      "name": "Double-core side mount",
+      "slot": "Intercooler",
+      "price": 420,
+      "pitch": "A factory side mount with two cores. Hardly anybody's car came with one.",
+      "torque": 3,
+      "rare": 6,
+      "fits": [
+        "umbra"
       ]
     }
   },

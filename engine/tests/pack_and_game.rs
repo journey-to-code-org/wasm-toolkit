@@ -2020,3 +2020,63 @@ fn parts_wear_with_use_and_a_battery_runs_down() {
     click(&mut g, 100, 10);
     assert_eq!((g.state.cars[0].fitted["Battery"].as_str(), g.note.as_deref()), ("cell@55", Some("You slept. It is morning.")));
 }
+
+#[test]
+fn what_is_under_the_hood_is_on_the_build_sheet() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra", None, 100);
+    g.outfit(&mut o);
+    for slot in ["Intake", "Exhaust", "Turbo", "Intercooler"] {
+        assert!(o.fitted.contains_key(slot), "{slot} is on the sheet");
+    }
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    assert_eq!(g.wont_run(), None);
+    // The stock turbo wants the stock manifold: a header on its own will not do.
+    g.state.cars[0].fitted.insert("Exhaust".into(), "header".into());
+    assert!(g.wont_run().is_some_and(|w| w == "Stock turbo needs a stock manifold."));
+    // Off the car it is a real part, and nothing is left lying on the floor in its place.
+    g.state.cars[0].fitted.remove("Exhaust");
+    g.state.cars[0].off.push("Exhaust".into());
+    assert!(!g.floor().iter().any(|l| matches!(l, Loose::Stock(_))));
+
+    // A turbo sells best with its manifold and its housing; alone it fetches less.
+    g.state.spares = vec!["s-turbo".into(), "s-exmani".into(), "s-o2".into(), "s-plugs".into()];
+    let apart: i32 = ["s-turbo", "s-exmani", "s-o2"].iter().map(|p| g.spare_offer(p)).sum();
+    let (paid, set) = g.sale(0);
+    assert_eq!((set.len(), paid), (3, apart * 115 / 100));
+    g.state.spares.remove(2);
+    assert_eq!(g.sale(0), (g.spare_offer("s-turbo") * 80 / 100, vec![0]));
+    assert_eq!(g.sale(2), (g.spare_offer("s-plugs"), vec![2]));
+    g.state.spares.insert(2, "s-o2".into());
+    g.scene = Scene::Bench;
+    click(&mut g, 200, 185);
+    let before = g.state.cash;
+    click(&mut g, 200, 35);
+    assert_eq!((g.state.spares.clone(), g.state.cash - before), (vec!["s-plugs".to_string()], paid));
+    assert_eq!(g.note.as_deref(), Some(format!("Sold as a set of 3: ${paid}.").as_str()));
+
+    // The double-core side mount: only ever from the factory, on a few cars, and never in the paper.
+    assert!(g.shop().iter().all(|(id, _)| *id != "sidemount-twin"));
+    let lucky = (0..100).filter(|&c| { let mut o = Owned::new("umbra", None, c); g.outfit(&mut o); o.fitted["Intercooler"] == "sidemount-twin" || o.fitted["Intercooler"].starts_with("sidemount-twin@") }).count();
+    assert!((1..20).contains(&lucky), "{lucky} in a hundred");
+
+    // A game saved before: what was implied under the hood is fitted, or on the shelf if it was off.
+    let mut st = g.state.clone();
+    st.spares.clear();
+    let mut old = Owned::new("umbra", None, 80);
+    g.outfit(&mut old);
+    for slot in ["Intake", "Exhaust", "Turbo", "Intercooler"] {
+        old.fitted.remove(slot);
+    }
+    old.off.push("Intake".into());
+    old.fitted.insert("Exhaust".into(), "header".into());
+    st.cars = vec![old];
+    g.settle_hood(&mut st);
+    g.settle_hood(&mut st);
+    let o = &st.cars[0];
+    assert_eq!((o.fitted["Turbo"].as_str(), o.fitted["Exhaust"].as_str(), o.fitted.contains_key("Intake")), ("s-turbo@80", "header", false));
+    assert_eq!(st.spares, vec!["s-exmani@80".to_string(), "s-airbox@80".to_string()], "once each, run twice");
+}
