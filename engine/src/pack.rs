@@ -90,6 +90,19 @@ impl Default for Shootout {
     }
 }
 
+#[derive(Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct Poker {
+    pub entry: i32,
+    pub riders: usize,
+}
+
+impl Default for Poker {
+    fn default() -> Poker {
+        Poker { entry: 20, riders: 5 }
+    }
+}
+
 /// What a respray costs, and how many hours it takes.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
@@ -504,6 +517,9 @@ pub struct Block {
     /// The way out of town: pull up beside it and you are on this road.
     #[serde(default)]
     pub road: Option<String>,
+    /// Water: a pond or a river, which cannot be driven on.
+    #[serde(default)]
+    pub water: bool,
 }
 
 /// A town to drive round: blocks in rows, with a street between every two and round the outside.
@@ -571,6 +587,25 @@ impl Map {
     }
 
     /// Every block that is somewhere to go: its column, its row from the south, and the block.
+    /// Where a road leaves this map, if the block that leads onto it is at the edge: a point on
+    /// the street beside it, in the lane coming in, and the way that faces, in degrees.
+    pub fn gate(&self, road: &str) -> Option<(f64, f64, f64)> {
+        let (c, r, _) = self.places().into_iter().find(|(_, _, b)| b.road.as_deref() == Some(road))?;
+        let (p, w, d) = (self.pitch, self.cols() as f64 * self.pitch, self.depth() as f64 * self.pitch);
+        let (cf, rf) = (c as f64, r as f64);
+        if r == self.depth() - 1 {
+            Some(((cf + 1.0) * p - 2.0, d + self.road - 6.0, 180.0))
+        } else if r == 0 {
+            Some((cf * p + 2.0, 6.0 - self.road, 0.0))
+        } else if c == self.cols() - 1 {
+            Some((w + self.road - 6.0, rf * p + 2.0, 270.0))
+        } else if c == 0 {
+            Some((6.0 - self.road, (rf + 1.0) * p - 2.0, 90.0))
+        } else {
+            None
+        }
+    }
+
     /// How high the ground is at a point: long, slow hills, the same ones every time.
     pub fn height(&self, x: f64, z: f64) -> f64 {
         if self.hills == 0.0 {
@@ -612,7 +647,7 @@ fn trees() -> String {
     "trees".into()
 }
 
-pub const SIDES: [&str; 5] = ["trees", "rock", "drop", "fields", "posts"];
+pub const SIDES: [&str; 6] = ["trees", "rock", "drop", "fields", "posts", "water"];
 
 /// A road out of town: two lanes that bend and climb between two ends, with other cars on it and
 /// the law beside it. An end is a place, or `map:<id>` for a block of that map marked with this road.
@@ -640,6 +675,12 @@ pub struct Road {
     pub sky: Option<String>,
     #[serde(default)]
     pub ground: Option<String>,
+    /// How much of the other traffic is trucks towing cars on trailers: 0 none, 1 all of it.
+    #[serde(default)]
+    pub rigs: f64,
+    /// How many rivals have to have been beaten before it can be taken from its first end.
+    #[serde(default)]
+    pub rung: usize,
 }
 
 fn town_limit() -> f64 {
@@ -697,6 +738,9 @@ pub struct Manifest {
     /// The shootout: a knockout on the strip every so many days. Left out, there is none.
     #[serde(default)]
     pub shootout: Option<Shootout>,
+    /// What a poker run costs to ride in, and how many others ride.
+    #[serde(default)]
+    pub poker: Poker,
     /// A picture for the title screen, 320 by 240. Without one the pack's name is written up.
     #[serde(default)]
     pub title: Option<String>,
@@ -946,6 +990,10 @@ impl Pack {
                 if let Some(to) = spot.action.strip_prefix("go:") {
                     if !m.places.contains_key(to) {
                         return Err(format!("in {id}, \"{}\" goes to {to}, which is not a place", spot.label));
+                    }
+                } else if let Some(road) = spot.action.strip_prefix("pokerrun:") {
+                    if !m.roads.contains_key(road) {
+                        return Err(format!("in {id}, \"{}\" is a poker run down the road {road}, which is not in the pack", spot.label));
                     }
                 } else if let Some(road) = spot.action.strip_prefix("roadrace:") {
                     if !m.roads.contains_key(road) {

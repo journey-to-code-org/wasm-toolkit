@@ -498,9 +498,8 @@
             16
           ],
           "label": "The shootout: three rounds, every seventh day",
-          "do": "shootout",
-          "button": "Shootout",
-          "needs_car": true
+          "do": "say:It is in Ohio. Take the road south.",
+          "button": "Shootout"
         }
       ],
       "outdoors": true
@@ -664,9 +663,10 @@
             154,
             18
           ],
-          "label": "Back out on the road",
-          "do": "drive:town",
-          "button": "Drive off"
+          "label": "The river pike, back to town",
+          "do": "road:pike",
+          "button": "Back to town",
+          "needs_car": true
         }
       ]
     },
@@ -716,6 +716,92 @@
           "label": "Mountain road, down to the overlook",
           "do": "road:mountain",
           "button": "Back down",
+          "needs_car": true
+        }
+      ]
+    },
+    "norwalk": {
+      "title": "Summit Raceway, Norwalk",
+      "backdrop": "CONCRETE",
+      "outdoors": true,
+      "car_at": [
+        6,
+        138
+      ],
+      "rival_at": [
+        72,
+        174
+      ],
+      "spots": [
+        {
+          "rect": [
+            4,
+            178,
+            50,
+            18
+          ],
+          "label": "The Shootout: three rounds for the purse",
+          "do": "shootout",
+          "button": "Enter",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            56,
+            178,
+            50,
+            18
+          ],
+          "label": "The poker run, out along the lake",
+          "do": "pokerrun:lake",
+          "button": "Poker",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            108,
+            178,
+            50,
+            18
+          ],
+          "label": "Race whoever this is",
+          "do": "race",
+          "button": "Race",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            160,
+            178,
+            50,
+            18
+          ],
+          "label": "Wave them on: see who else came",
+          "do": "next",
+          "button": "Next"
+        },
+        {
+          "rect": [
+            212,
+            178,
+            50,
+            18
+          ],
+          "label": "Fill the tank",
+          "do": "gas",
+          "button": "Gas",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            264,
+            178,
+            50,
+            18
+          ],
+          "label": "Six hours home to West Virginia",
+          "do": "road:ohio",
+          "button": "Home",
           "needs_car": true
         }
       ]
@@ -1098,10 +1184,10 @@
       "traffic": 8,
       "rows": [
         "BOTRCB",
-        "G.BPOT",
+        "GWBPOT",
         "TB.GBD",
         "HCOB.S",
-        "B.TGCB"
+        "BNTGCB"
       ],
       "blocks": {
         "B": {
@@ -1145,10 +1231,15 @@
           "name": "Ridge road"
         },
         "D": {
-          "wall": "GREY",
-          "height": 7,
-          "to": "rollers",
-          "name": "The dyno"
+          "road": "pike",
+          "name": "To the dyno"
+        },
+        "W": {
+          "water": true
+        },
+        "N": {
+          "road": "ohio",
+          "name": "To Ohio"
         }
       },
       "hills": 7,
@@ -1367,12 +1458,270 @@
           "right": "posts"
         }
       ]
+    },
+    "pike": {
+      "title": "River pike",
+      "ends": [
+        "map:town",
+        "rollers"
+      ],
+      "limit": 45,
+      "ticket": 40,
+      "traffic": 5,
+      "cops": 1,
+      "hours": 1,
+      "gas_per_km": 0.25,
+      "parts": [
+        {
+          "len": 220,
+          "curve": 0,
+          "hill": 0,
+          "left": "fields",
+          "right": "fields"
+        },
+        {
+          "len": 260,
+          "curve": 0.4,
+          "hill": -6,
+          "left": "trees",
+          "right": "water"
+        },
+        {
+          "len": 300,
+          "curve": -0.3,
+          "hill": 0,
+          "left": "trees",
+          "right": "water"
+        },
+        {
+          "len": 240,
+          "curve": 0.5,
+          "hill": 4,
+          "left": "rock",
+          "right": "water"
+        },
+        {
+          "len": 280,
+          "curve": 0,
+          "hill": -4,
+          "left": "fields",
+          "right": "water"
+        },
+        {
+          "len": 240,
+          "curve": -0.5,
+          "hill": 6,
+          "left": "trees",
+          "right": "trees"
+        },
+        {
+          "len": 220,
+          "curve": 0,
+          "hill": 0,
+          "left": "posts",
+          "right": "posts"
+        }
+      ]
+    },
+    "ohio": {
+      "title": "The road to Ohio",
+      "ends": [
+        "map:town",
+        "norwalk"
+      ],
+      "limit": 65,
+      "ticket": 60,
+      "traffic": 12,
+      "cops": 3,
+      "hours": 6,
+      "gas_per_km": 0.2,
+      "rigs": 0.45,
+      "rung": 6,
+      "parts": [
+        {
+          "len": 300,
+          "curve": 0,
+          "hill": 0,
+          "left": "fields",
+          "right": "fields"
+        },
+        {
+          "len": 500,
+          "curve": 0.4,
+          "hill": 22,
+          "left": "trees",
+          "right": "rock"
+        },
+        {
+          "len": 450,
+          "curve": -0.5,
+          "hill": -18,
+          "left": "rock",
+          "right": "trees"
+        },
+        {
+          "len": 600,
+          "curve": 0.3,
+          "hill": 26,
+          "left": "trees",
+          "right": "trees"
+        },
+        {
+          "len": 500,
+          "curve": -0.3,
+          "hill": -30,
+          "left": "trees",
+          "right": "drop"
+        },
+        {
+          "len": 700,
+          "curve": 0,
+          "hill": -10,
+          "left": "fields",
+          "right": "trees"
+        },
+        {
+          "len": 800,
+          "curve": 0.2,
+          "hill": 0,
+          "left": "fields",
+          "right": "fields"
+        },
+        {
+          "len": 900,
+          "curve": 0,
+          "hill": 0,
+          "left": "fields",
+          "right": "posts"
+        },
+        {
+          "len": 700,
+          "curve": -0.2,
+          "hill": 0,
+          "left": "posts",
+          "right": "fields"
+        },
+        {
+          "len": 900,
+          "curve": 0,
+          "hill": 0,
+          "left": "fields",
+          "right": "fields"
+        },
+        {
+          "len": 600,
+          "curve": 0.3,
+          "hill": 0,
+          "left": "fields",
+          "right": "trees"
+        },
+        {
+          "len": 700,
+          "curve": 0,
+          "hill": 0,
+          "left": "trees",
+          "right": "water"
+        },
+        {
+          "len": 600,
+          "curve": -0.2,
+          "hill": 0,
+          "left": "fields",
+          "right": "water"
+        },
+        {
+          "len": 400,
+          "curve": 0,
+          "hill": 0,
+          "left": "posts",
+          "right": "posts"
+        }
+      ]
+    },
+    "lake": {
+      "title": "Lake road",
+      "ends": [
+        "norwalk",
+        "norwalk"
+      ],
+      "limit": 45,
+      "ticket": 40,
+      "traffic": 8,
+      "cops": 2,
+      "hours": 2,
+      "gas_per_km": 0.2,
+      "rigs": 0.2,
+      "parts": [
+        {
+          "len": 300,
+          "curve": 0,
+          "hill": 0,
+          "left": "posts",
+          "right": "posts"
+        },
+        {
+          "len": 500,
+          "curve": 0.3,
+          "hill": 0,
+          "left": "trees",
+          "right": "water"
+        },
+        {
+          "len": 600,
+          "curve": -0.2,
+          "hill": 0,
+          "left": "fields",
+          "right": "water"
+        },
+        {
+          "len": 450,
+          "curve": 0.5,
+          "hill": 3,
+          "left": "trees",
+          "right": "water"
+        },
+        {
+          "len": 500,
+          "curve": 0,
+          "hill": -3,
+          "left": "posts",
+          "right": "water"
+        },
+        {
+          "len": 550,
+          "curve": -0.4,
+          "hill": 0,
+          "left": "trees",
+          "right": "water"
+        },
+        {
+          "len": 500,
+          "curve": 0.3,
+          "hill": 0,
+          "left": "fields",
+          "right": "water"
+        },
+        {
+          "len": 450,
+          "curve": -0.5,
+          "hill": 0,
+          "left": "trees",
+          "right": "fields"
+        },
+        {
+          "len": 350,
+          "curve": 0,
+          "hill": 0,
+          "left": "posts",
+          "right": "posts"
+        }
+      ]
     }
   },
   "shootout": {
     "entry": 50,
-    "purse": 400,
+    "purse": 600,
     "rounds": 3,
-    "every": 7
+    "every": 1
   }
 }

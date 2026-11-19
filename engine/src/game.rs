@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 pub mod online;
 pub mod roadtrip;
 pub mod dyno;
+pub mod cards;
 use online::Net;
 
 pub const KEY_UP: u32 = 1;
@@ -193,6 +194,8 @@ pub struct Game {
     pub sheet: Option<dyno::Sheet>,
     /// The round of the shootout being run, counted from nothing, while one is on.
     pub bracket: Option<usize>,
+    /// How fast the car was going as it came off a road into a town, to carry on at.
+    rolling: f64,
     pub rollers: dyno::Rollers,
     pub net: Net,
     selling: bool,
@@ -232,7 +235,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -621,7 +624,9 @@ impl Game {
     fn act(&mut self, action: &str) {
         self.note = None;
         self.road_race = None;
-        if let Some(road) = action.strip_prefix("roadrace:") {
+        if let Some(road) = action.strip_prefix("pokerrun:") {
+            self.start_poker(&road.to_string());
+        } else if let Some(road) = action.strip_prefix("roadrace:") {
             if self.state.cur.is_none() {
                 self.no("You have nothing to race.");
             } else if let Some(why) = self.cannot_race() {
@@ -1203,6 +1208,21 @@ impl Game {
         if hit & (KEY_A | KEY_B) != 0 && town.chase.is_some() {
             self.note = Some("Not with him behind you.".into());
             return;
+        }
+        // The street out of town is the road: drive off the end of it and you are on it, still rolling.
+        if town.speed > 3.0 && town.chase.is_none() {
+            let out = map.blocks.values().filter_map(|b| b.road.as_ref()).find(|road| map.gate(road).is_some_and(|(gx, gz, heading)| {
+                let turned = ((town.heading - (heading + 180.0)).rem_euclid(360.0) + 180.0).rem_euclid(360.0) - 180.0;
+                (gx - town.x).abs() < map.road + 2.0 && (gz - town.z).abs() < map.road + 2.0 && turned.abs() < 55.0 && ((gx - town.x).abs() < 7.0 || (gz - town.z).abs() < 7.0)
+            })).cloned();
+            if let Some(road) = out {
+                let (from, speed) = (town.map.clone(), town.speed);
+                self.take_road(&road, Some(&from));
+                if let Some(trip) = self.trip.as_mut() {
+                    trip.speed = speed;
+                }
+                return;
+            }
         }
         if hit & KEY_A != 0 {
             if let Some(road) = town.beside(map).and_then(|b| b.road.clone()) {
@@ -2427,6 +2447,12 @@ impl Game {
                 }
                 let Some(b) = block.filter(|b| b.height > 0.0) else {
                     // Grass, and nothing to hit. Somewhere to go that is only a lot gets a marked kerb.
+                    if block.is_some_and(|b| b.water) {
+                        // A pond: flat, a little below the kerb, and catching the light.
+                        let (wy, wave) = (base.min(g(x0, z0)).min(g(x1, z1)) - 0.4, ((self.ticks / 8 + c as u32) % 3) as i32);
+                        scene.poly(&[[x0, wy, z0], [x1, wy, z0], [x1, wy, z1], [x0, wy, z1]], shade(ramp("BLUE"), 15 + wave * 2), shade(ramp("BLUE"), 17 + wave * 2), -3500.0);
+                        continue;
+                    }
                     let name = if block.is_some_and(|b| b.to.is_some() || b.road.is_some()) { "GOLD" } else { "GRASS" };
                     scene.poly(&[[x0, g(x0, z0), z0], [x1, g(x1, z0), z0], [x1, g(x1, z1), z1], [x0, g(x0, z1), z1]], shade(ramp(name), 20), shade(ramp(name), 22), -3500.0);
                     continue;
@@ -2463,6 +2489,20 @@ impl Game {
             let oy = g(ox, oz);
             Self::box3(&mut scene, ox - hl, oz - hw, ox + hl, oz + hw, oy + 0.25, oy + 0.9, ramp(o.paint), 0.0);
             Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, oy + 0.9, oy + 1.4, ramp("GLASS"), 0.5);
+        }
+        for road_id in map.blocks.values().filter_map(|b| b.road.as_ref()) {
+            // Where a road leaves town it is seen leaving: tar on out past the last street, with its line.
+            let Some((gx, gz, heading)) = map.gate(road_id) else { continue };
+            let (os, oc) = (heading + 180.0).to_radians().sin_cos();
+            let (sx, sz) = (if os.abs() > 0.5 { gx } else { (gx / p).round() * p }, if oc.abs() > 0.5 { gz } else { (gz / p).round() * p });
+            for step in 0..6 {
+                let (a, b) = (step as f64 * 40.0, step as f64 * 40.0 + 40.0);
+                let q = |d: f64, side: f64| { let (x, z) = (sx + os * d + oc * side, sz + oc * d - os * side); [x, g(x, z), z] };
+                let tar = shade(ramp("ASPHALT"), 15 + step % 2);
+                scene.poly(&[q(a, -road), q(b, -road), q(b, road), q(a, road)], tar, tar, -3900.0);
+                let line = shade(ramp("YELLOW"), 23);
+                scene.poly(&[q(a + 8.0, -0.15), q(a + 24.0, -0.15), q(a + 24.0, 0.15), q(a + 8.0, 0.15)], line, line, -3000.0);
+            }
         }
         for &(cx, cz) in &town.cops {
             if (cx - town.x).abs() + (cz - town.z).abs() < SEE as f64 * p {
@@ -2512,6 +2552,7 @@ impl Game {
                 let b = map.block(c, r);
                 let colour = match b {
                     Some(b) if b.to.is_some() || b.road.is_some() => shade(ramp("GOLD"), 27),
+                    Some(b) if b.water => shade(ramp("BLUE"), 18),
                     Some(b) if b.height > 0.0 => shade(ramp("GREY"), 10),
                     _ => shade(ramp("GRASS"), 12),
                 };

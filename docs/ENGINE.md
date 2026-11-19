@@ -283,6 +283,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `drive:<map>` | out onto that map, beside the block that leads back here |
   | `road:<road>` | onto that road, from whichever of its ends this place is |
   | `roadrace:<road>` | race whoever has pulled in down that road, for a bet |
+  | `pokerrun:<road>` | a poker run down that road and back to here |
   | `gas` | fill the tank, a dollar for three gallons |
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
@@ -442,6 +443,7 @@ a `wall` colour and a `height` in metres, or neither for open ground. A block wi
 somewhere to go: it gets an awning (or a gold lot, if nothing is built on it), it is on the list
 in the windscreen under `name`, and pulling up beside it and pressing Enter puts you in that
 place. `hills` is how high the ground rolls, in metres, up to 30; left out, the town is flat.
+A block with `"water": true` is a pond: blue, flat, and not to be driven on.
 `cops`, `limit` and `ticket` put police at that many corners, with a limit in miles an hour
 and what a ticket costs; with no police there is no limit.
 `drive:<map>` from a place starts you beside the block that leads to it. A block with
@@ -480,6 +482,7 @@ and what is on its `left` and `right`:
 | `drop` | a rail, and the valley | a crash |
 | `fields` | open ground and a fence | only slow |
 | `posts` | open ground and marker posts | only slow |
+| `water` | a shore, and a lake or a river | a crash |
 
 The rules of the road:
 
@@ -503,6 +506,24 @@ The rules of the road:
   its health, is how hard it pulls and how fast it will go, and its tyres are how much a bend
   throws it. The default car with nothing done to it pulls 5 metres a second each second from
   rest and runs out at 125 mph.
+
+**Leaving town.** When the block that leads onto a road is at the edge of its map, the street
+beside it runs on out of town as the road: drive off the end of it and you are on the road
+without stopping, at the speed you were doing, and coming the other way you roll in off it onto
+that street. Pulling up beside the block and pressing Enter still works.
+
+**Trucks and trailers.** `"rigs": 0.45` makes that share of a road's traffic trucks towing a
+car on a trailer: longer to get past, and a little slower. Traffic runs quicker on a road with
+a higher limit.
+
+**A road that has to be earned.** `"rung": 6` shuts a road from its first end until six rivals
+have been beaten. Coming back along it is always open.
+
+**A poker run.** A spot that does `pokerrun:<road>` is a ride down that road and back to where
+you are: it costs `"poker": { "entry": 20, "riders": 5 }` to ride, a card is dealt at each of
+five stops along the way, and the best hand among you and the other riders takes everything
+paid in. It is not a race: the police are out, and Escape drops out and leaves your money in
+the pot. It takes two hours.
 
 **Racing down a road.** A spot that does `roadrace:<road>`, in a place where rivals pull in, is
 a race against whoever is there, bet on like a race on the strip: kicks, money, or cars. It is

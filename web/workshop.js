@@ -16,7 +16,7 @@ const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
   ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"], ["shootout", "Enters the shootout"]];
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["pokerrun", "A poker run down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"], ["shootout", "Enters the shootout"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
@@ -627,11 +627,11 @@ function roomsPanel() {
     const others = Object.entries(m.places).filter(([id]) => id !== at.place).map(([id, pl]) => [id, pl.title]);
     spots.append(h("div", { class: "card" },
       field("What it is called", s.label, (v) => { s.label = v; }, { maxlength: 38, id: "spotLabel" }),
-      choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v === "drive" ? "drive:" + (Object.keys(m.maps ?? {})[0] ?? "") : v === "road" || v === "roadrace" ? v + ":" + (Object.keys(m.roads ?? {})[0] ?? "") : v; }),
+      choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v === "drive" ? "drive:" + (Object.keys(m.maps ?? {})[0] ?? "") : v === "road" || v === "roadrace" || v === "pokerrun" ? v + ":" + (Object.keys(m.roads ?? {})[0] ?? "") : v; }),
       kind === "say" ? field("What it says", arg, (v) => { s.do = "say:" + v; }, { maxlength: 38, id: "spotSays" }) : null,
       kind === "go" ? choice("Where to", arg, others, (v) => { s.do = "go:" + v; }) : null,
       kind === "drive" ? choice("Which map", arg, Object.entries(m.maps ?? {}).map(([id, mp]) => [id, mp.title]), (v) => { s.do = "drive:" + v; }) : null,
-      kind === "road" || kind === "roadrace" ? choice("Which road", arg, Object.entries(m.roads ?? {}).map(([id, r]) => [id, r.title]), (v) => { s.do = kind + ":" + v; }) : null,
+      kind === "road" || kind === "roadrace" || kind === "pokerrun" ? choice("Which road", arg, Object.entries(m.roads ?? {}).map(([id, r]) => [id, r.title]), (v) => { s.do = kind + ":" + v; }) : null,
       field("Draw it as a button with this word on it (blank: the picture shows it)", s.button, (v) => { if (v) s.button = v; else delete s.button; }, { maxlength: 9 }),
       tick("Only there when you have a car", s.needs_car, (v) => { if (v) s.needs_car = true; else delete s.needs_car; })));
   }
@@ -712,6 +712,7 @@ function mapsPanel() {
         choice("Built of", kind.wall ?? "CONCRETE", colours(), (v) => { kind.wall = v; }),
         field("How tall, in metres (0: open ground)", kind.height ?? 0, (n) => { kind.height = Math.max(0, n ?? 0); }, { type: "number", min: 0, max: 80, redo: true })),
       choice("Pulling up beside it takes you to", kind.to ?? "", places, (v) => { if (v) { kind.to = v; delete kind.road; } else { delete kind.to; delete kind.name; } }),
+      tick("It is water: a pond, which cannot be driven on", !!kind.water, (v) => { if (v) { kind.water = true; delete kind.to; delete kind.road; delete kind.wall; delete kind.height; } else delete kind.water; }),
       choice("Or it is the way onto a road", kind.road ?? "", [["", "No"], ...Object.entries(m.roads ?? {}).filter(([, r]) => r.ends.includes("map:" + at.map)).map(([id, r]) => [id, r.title])], (v) => { if (v) { kind.road = v; delete kind.to; kind.name ??= m.roads[v].title.slice(0, 16); } else delete kind.road; }),
       kind.to || kind.road ? field("What it is called on the list in the windscreen", kind.name, (v) => { if (v) kind.name = v; else delete kind.name; }, { maxlength: 16, redo: true }) : null) : null));
   return out;
@@ -750,7 +751,7 @@ function drawMap() {
 // ---- Roads ----
 
 const road = () => pack.manifest.roads?.[at.road];
-const SIDES = [["trees", "Trees"], ["rock", "Rock: a cutting"], ["drop", "A drop, and a rail"], ["fields", "Fields: open, and only slow"], ["posts", "Posts: open"]];
+const SIDES = [["trees", "Trees"], ["rock", "Rock: a cutting"], ["drop", "A drop, and a rail"], ["fields", "Fields: open, and only slow"], ["posts", "Posts: open"], ["water", "Water: a shore, and a lake or a river"]];
 
 function roadsPanel() {
   const m = pack.manifest;
@@ -768,7 +769,7 @@ function roadsPanel() {
         at.road = id; at.stretch = 0; render();
       } }),
       at.road ? h("button", { text: "Remove this one", onclick: () => {
-        const from = Object.values(m.places).find((p) => p.spots.some((s) => s.do === "road:" + at.road || s.do === "roadrace:" + at.road));
+        const from = Object.values(m.places).find((p) => p.spots.some((s) => s.do === "road:" + at.road || s.do === "roadrace:" + at.road || s.do === "pokerrun:" + at.road));
         if (from) return fail(`${from.title} has a way onto this road. Change that first.`);
         if (!confirm(`Remove ${road().title} from the pack?`)) return;
         for (const mp of Object.values(m.maps ?? {})) for (const b of Object.values(mp.blocks)) if (b.road === at.road) delete b.road;
@@ -798,6 +799,8 @@ function roadsPanel() {
       field("A ticket, dollars (and 2 for every mph over)", r.ticket ?? 40, (n) => { r.ticket = Math.max(0, Math.floor(n ?? 40)); }, { type: "number", min: 0 }),
       field("Other cars on it", r.traffic ?? 6, (n) => { r.traffic = Math.max(0, Math.min(30, Math.floor(n ?? 6))); }, { type: "number", min: 0, max: 30 }),
       field("Police parked beside it", r.cops ?? 1, (n) => { r.cops = Math.max(0, Math.min(8, Math.floor(n ?? 1))); }, { type: "number", min: 0, max: 8 }),
+      field("Trucks towing cars, as a share of the traffic (0 to 1)", r.rigs ?? 0, (n) => { if (n > 0) r.rigs = Math.min(1, n); else delete r.rigs; }, { type: "number", min: 0, max: 1, step: "0.05" }),
+      field("Rivals to beat before it opens from its first end", r.rung ?? 0, (n) => { if (n > 0) r.rung = Math.floor(n); else delete r.rung; }, { type: "number", min: 0 }),
       field("Hours the trip takes", r.hours ?? 2, (n) => { r.hours = Math.max(0, Math.floor(n ?? 2)); }, { type: "number", min: 0, max: 12 }),
       field("Gallons burned a kilometre", r.gas_per_km ?? 0.25, (n) => { r.gas_per_km = Math.max(0, n ?? 0.25); }, { type: "number", step: "0.05", min: 0 }),
       choice("The sky", r.sky ?? "", colours("Blue sky"), (v) => { if (v) r.sky = v; else delete r.sky; }),
@@ -827,7 +830,7 @@ function drawRoad() {
   const r = road(), canvas = $("roadView");
   if (!r) return;
   const g = canvas.getContext("2d"), W = canvas.width, H = canvas.height, PLAN = H - 110;
-  const tint = { trees: "#3f8a45", rock: "#8d8a84", drop: "#5b8fd6", fields: "#c8aa78", posts: "#e8e8ec" };
+  const tint = { trees: "#3f8a45", rock: "#8d8a84", drop: "#5b8fd6", fields: "#c8aa78", posts: "#e8e8ec", water: "#2f5fd0" };
   g.fillStyle = "#1d2a1f"; g.fillRect(0, 0, W, H);
   // Six metres at a time, each piece turned a little from the last: the same sums as the engine does.
   const pts = [];

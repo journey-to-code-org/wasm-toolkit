@@ -21,6 +21,7 @@ pub enum Side {
     Drop,
     Fields,
     Posts,
+    Water,
 }
 
 impl Side {
@@ -30,13 +31,14 @@ impl Side {
             "drop" => Side::Drop,
             "fields" => Side::Fields,
             "posts" => Side::Posts,
+            "water" => Side::Water,
             _ => Side::Trees,
         }
     }
 
     /// Whether leaving the road this side is into something.
     pub fn solid(self) -> bool {
-        matches!(self, Side::Trees | Side::Rock | Side::Drop)
+        matches!(self, Side::Trees | Side::Rock | Side::Drop | Side::Water)
     }
 }
 
@@ -56,6 +58,8 @@ pub struct Other {
     pub lane: f64,
     pub speed: f64,
     pub paint: &'static str,
+    /// A truck with a car on a trailer behind it: longer, and slower.
+    pub rig: bool,
 }
 
 pub struct Cop {
@@ -158,6 +162,12 @@ pub struct Trip {
     pub hold: i32,
     /// Ticks since the off.
     pub clock: u32,
+    /// How much of the traffic is trucks and trailers, how much quicker than a back road it all
+    /// runs, and the cards drawn on a poker run, which is what this is if there are to be any.
+    pub rigs: f64,
+    flow: f64,
+    pub poker: bool,
+    pub cards: Vec<u8>,
     rng: u32,
 }
 
@@ -185,7 +195,7 @@ impl Trip {
             y += p.hill;
         }
         let len = segs.len() as f64 * SEG;
-        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, gearbox: None, rival: None, hold: 0, clock: 0, rng: seed | 1 };
+        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, gearbox: None, rival: None, hold: 0, clock: 0, rigs: road.rigs.clamp(0.0, 1.0), flow: ((road.limit - 55.0) / 2.237).max(0.0), poker: false, cards: Vec::new(), rng: seed | 1 };
         for i in 0..road.traffic {
             let z = 80.0 + (trip.rand() % (len - 80.0).max(1.0) as u32) as f64;
             let other = trip.other(z, i);
@@ -209,7 +219,9 @@ impl Trip {
     fn other(&mut self, z: f64, i: usize) -> Other {
         let k = self.rand();
         let oncoming = (k >> 3) & 1 == 0;
-        Other { z, lane: if oncoming { -0.5 } else { 0.5 }, speed: if oncoming { -(18.0 + (k % 7) as f64) } else { 13.0 + (k % 8) as f64 }, paint: PAINTS[(k as usize >> 8).wrapping_add(i) % 8] }
+        let rig = ((k >> 12) % 100) as f64 / 100.0 < self.rigs;
+        let slow = if rig { 3.0 } else { 0.0 };
+        Other { z, lane: if oncoming { -0.5 } else { 0.5 }, speed: if oncoming { -(18.0 - slow + (k % 7) as f64) } else { 13.0 + self.flow - slow + (k % 8) as f64 }, paint: PAINTS[(k as usize >> 8).wrapping_add(i) % 8], rig }
     }
 
     pub fn len(&self) -> f64 {
@@ -304,7 +316,9 @@ impl Trip {
         for i in 0..self.others.len() {
             self.others[i].z += self.others[i].speed / HZ;
             let (gap, across) = (self.others[i].z - self.z, (self.others[i].lane - self.x).abs());
-            if gap > -1.0 && gap < 4.5 && across < 0.38 {
+            // A trailer is a long way to the back of.
+            let long = if self.others[i].rig { if self.others[i].speed > 0.0 { (-9.0, 4.5) } else { (-1.0, 12.5) } } else { (-1.0, 4.5) };
+            if gap > long.0 && gap < long.1 && across < 0.38 {
                 hit = true;
                 // It carries on; you do not.
                 self.others[i].z += if self.others[i].speed > 0.0 { 14.0 } else { -14.0 };

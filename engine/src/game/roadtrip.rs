@@ -23,6 +23,10 @@ impl Game {
         }
         let here = from_map.map_or(self.state.place.clone(), |m| format!("map:{m}"));
         let backwards = road.ends[1] == here && road.ends[0] != here;
+        if !backwards && self.state.rung < road.rung {
+            let more = road.rung - self.state.rung;
+            return self.no(&format!("Not yet. Beat {more} more here first."));
+        }
         let seed = self.rand();
         let Some(road) = self.pack.manifest.roads.get(id) else { return };
         let mut trip = Trip::new(id, road, backwards, seed);
@@ -92,13 +96,83 @@ impl Game {
             rng
         });
         self.rng = rng;
+        let mut town = town;
+        if let Some((x, z, heading)) = m.gate(road) {
+            // In off the road without stopping: on the street it joins, still rolling.
+            (town.x, town.z, town.heading, town.speed) = (x, z, heading, self.rolling.min(18.0));
+        }
+        self.rolling = 0.0;
         self.town = Some(town);
         self.scene = Scene::Drive;
+    }
+
+    /// A poker run: the road and back to where you started, a card at each of five stops along
+    /// it, and the best hand among everyone riding takes what they all paid in.
+    pub(super) fn start_poker(&mut self, id: &str) {
+        let Some(road) = self.pack.manifest.roads.get(id) else { return };
+        let entry = self.pack.manifest.poker.entry;
+        if self.state.cur.is_none() {
+            return self.no("You have nothing to ride in.");
+        }
+        if let Some(why) = self.wont_run() {
+            return self.no(&why);
+        }
+        if self.state.cash < entry {
+            return self.no(&format!("It is ${entry} to ride. You don't have it."));
+        }
+        let seed = self.rng | 1;
+        let mut trip = Trip::new(id, road, false, seed);
+        trip.pace = self.pace();
+        trip.gearbox = self.gearbox();
+        trip.poker = true;
+        self.rand();
+        self.state.cash -= entry;
+        self.trip = Some(trip);
+        self.trip_from = None;
+        self.scene = Scene::Road;
+        self.say("A card at every stop. Mind the limit.");
+    }
+
+    /// The run is ridden: your hand against everyone else's.
+    fn settle_poker(&mut self, cards: &[u8]) {
+        let (poker, day) = (self.pack.manifest.poker.clone(), self.day() as u32);
+        let mine = cards::rank(cards);
+        // The others' hands come off what is left of the same deck.
+        let mut deck: Vec<u8> = (0..52).filter(|c| !cards.contains(c)).collect();
+        let mut best: Option<(usize, Vec<u8>)> = None;
+        for rider in 0..poker.riders.min(9) {
+            let hand: Vec<u8> = (0..5).map(|k| deck.remove(hash(day * 977 + rider as u32 * 31 + k + self.rng) as usize % deck.len())).collect();
+            if best.as_ref().is_none_or(|b| cards::rank(&hand) > cards::rank(&b.1)) {
+                best = Some((rider, hand));
+            }
+        }
+        let pot = poker.entry * (poker.riders as i32 + 1);
+        let hand = cards::name(&mine);
+        match best.filter(|b| cards::rank(&b.1) > mine) {
+            None => {
+                self.state.cash += pot;
+                tone(990, 400);
+                self.say(&format!("{hand} takes the ${pot} pot."));
+            }
+            Some((rider, theirs)) => {
+                let rivals = &self.pack.manifest.rivals;
+                let who = if rivals.is_empty() { "Someone".to_string() } else { rivals[(rider * 3 + day as usize) % rivals.len()].name.clone() };
+                self.say(&format!("{hand}. {who}: {}.", cards::name(&cards::rank(&theirs)).to_lowercase()).chars().take(38).collect::<String>());
+            }
+        }
+        self.spend(2);
     }
 
     pub(super) fn road_tick(&mut self, keys: u32, hit: u32) {
         let Some(trip) = self.trip.as_mut() else { return };
         let Some(road) = self.pack.manifest.roads.get(&trip.road) else { return };
+        if hit & KEY_B != 0 && trip.poker {
+            // Out of the run: what you paid in stays in the pot.
+            tone(0, 0);
+            self.trip = None;
+            self.scene = Scene::Place;
+            return self.say("You dropped out of the run.");
+        }
         if hit & KEY_B != 0 {
             if trip.rival.is_some() {
                 // Lifting is losing.
@@ -133,6 +207,20 @@ impl Game {
         let (speed, chased, stopped, warned) = (trip.speed, trip.chase.is_some(), trip.crash > 0, trip.radar);
         let (racing, counting) = (trip.rival.is_some(), trip.hold);
         let revs = trip.gearbox.as_ref().map(|b| b.rpm);
+        // A poker run: a card at each sixth of the way, off a deck dealt for the day.
+        let mut dealt = None;
+        if trip.poker && trip.cards.len() < 5 && trip.z >= trip.len() * (trip.cards.len() + 1) as f64 / 6.0 {
+            let mut k = self.rng ^ (trip.cards.len() as u32 + 1).wrapping_mul(2654435761);
+            let card = loop {
+                k = hash(k);
+                if !trip.cards.contains(&((k % 52) as u8)) {
+                    break (k % 52) as u8;
+                }
+            };
+            trip.cards.push(card);
+            dealt = Some((trip.cards.len(), card));
+        }
+        let poker = (h.arrived && trip.poker).then(|| trip.cards.clone());
         let (per_km, hours, end, id) = (road.gas_per_km, road.hours, road.ends[if trip.backwards { 0 } else { 1 }].clone(), trip.road.clone());
         if h.crashed {
             tone(70, 500);
@@ -158,6 +246,10 @@ impl Game {
                 o.cond = (o.cond - 3).max(25);
             }
         }
+        if let Some((n, card)) = dealt {
+            tone(880, 90);
+            self.say(&format!("Card {n}: the {}.", cards::card(card)));
+        }
         if h.siren {
             self.say("Police! Pull over, or run for it.");
         }
@@ -177,8 +269,15 @@ impl Game {
             self.trip = None;
             return self.settle(Some(h.arrived));
         }
+        if let Some(hand) = poker {
+            tone(0, 0);
+            self.trip = None;
+            self.scene = Scene::Place;
+            return self.settle_poker(&hand);
+        }
         if h.arrived {
             tone(520, 60);
+            self.rolling = speed;
             self.trip = None;
             self.trip_from = None;
             match end.strip_prefix("map:") {
@@ -276,7 +375,7 @@ impl Game {
             for (sign, side) in [(-1.0, seg.left), (1.0, seg.right)] {
                 // What the road runs through: nothing at all, where the ground falls away.
                 let ground = match side {
-                    Side::Drop => None,
+                    Side::Drop | Side::Water => None,
                     Side::Fields => Some(ramp("TAN")),
                     Side::Rock => Some(ramp("CONCRETE")),
                     _ => Some(land),
@@ -298,6 +397,14 @@ impl Game {
                             let c = shade(ramp("GREY"), 14);
                             scene.poly_key(&[at(k, sign * 1.2, 0.0), at(k, sign * 1.23, 0.0), at(k, sign * 1.23, 0.8), at(k, sign * 1.2, 0.8)], c, c, key + 4.5);
                         }
+                    }
+                    Side::Water => {
+                        // A shore, and then the lake as far as can be seen, lower than the road and never quite still.
+                        let sand = shade(ramp("TAN"), 17 + band);
+                        scene.poly_key(&[at(k, sign, 0.0), at(k + 1, sign, 0.0), at(k + 1, sign * 1.5, -0.6), at(k, sign * 1.5, -0.6)], sand, sand, key + 9.0);
+                        let wave = ((i as u32 + self.ticks / 6) % 3) as i32;
+                        let blue = shade(ramp("BLUE"), (15 + wave * 2 - dim.min(9)).max(3));
+                        scene.poly_key(&[at(k, sign * 1.5, -0.6), at(k + 1, sign * 1.5, -0.6), at(k + 1, sign * 40.0, -0.6), at(k, sign * 40.0, -0.6)], blue, shade(ramp("BLUE"), (17 + wave * 2 - dim.min(9)).max(3)), key + 9.5);
                     }
                     Side::Posts | Side::Fields => {
                         let every = if side == Side::Posts { 2 } else { 3 };
@@ -370,6 +477,17 @@ impl Game {
                 }
             }
             let paint = ramp(paint);
+            if kind == 2 {
+                // A truck, and behind it a trailer with someone's car on it.
+                let lead = if back { -1.0 } else { 1.0 };
+                let off = |d: f64, up: f64| [p[0] - hd.sin() * d * lead * if back { -1.0 } else { 1.0 }, p[1] + up, p[2] - hd.cos() * d * lead * if back { -1.0 } else { 1.0 }];
+                Self::obox(&mut scene, off(7.2, 0.35), fwd, 3.3, 1.0, 0.45, ramp("GREY"), key + 0.4);
+                Self::obox(&mut scene, off(7.2, 0.8), fwd, 2.1, 0.85, 0.6, paint, key + 0.3);
+                Self::obox(&mut scene, off(7.2, 1.4), fwd, 1.0, 0.7, 0.45, ramp("GLASS"), key + 0.2);
+                Self::obox(&mut scene, off(0.0, 0.3), fwd, 2.5, 1.0, 1.0, ramp("WHITE"), key);
+                Self::obox(&mut scene, off(-0.4, 1.3), fwd, 1.2, 0.95, 0.75, ramp("GLASS"), key - 0.3);
+                return;
+            }
             Self::obox(&mut scene, [p[0], p[1] + 0.25, p[2]], fwd, 2.1, 0.9, 0.65, paint, key);
             Self::obox(&mut scene, [p[0], p[1] + 0.9, p[2]], fwd, 1.0, 0.75, 0.5, ramp(if kind == 1 { "WHITE" } else { "GLASS" }), key - 0.3);
             if dim > 4 {
@@ -389,7 +507,7 @@ impl Game {
             }
         };
         for o in &trip.others {
-            on_road(o.z, o.lane, o.speed < 0.0, o.paint, 0, None);
+            on_road(o.z, o.lane, o.speed < 0.0, o.paint, if o.rig { 2 } else { 0 }, None);
         }
         if let Some(r) = &trip.rival {
             on_road(r.z, r.x, false, &r.paint, 0, self.opponent().and_then(|x| cars.get(&x.0)));
@@ -446,6 +564,10 @@ impl Game {
             s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, words, gold, BLACK);
         }
         self.draw_bottle(s, 36, self.owned().map_or(0.0, |o| o.bottle), trip.spray > 0.0);
+        if trip.poker {
+            let hand: Vec<String> = (0..5).map(|i| trip.cards.get(i).map_or("--".to_string(), |&c| cards::short(c))).collect();
+            s.text_sh(44, 45, &hand.join(" "), gold, BLACK);
+        }
         let blink = self.ticks / 8 % 2 == 0;
         if trip.chase.is_some() {
             // In the mirror: red and blue.
