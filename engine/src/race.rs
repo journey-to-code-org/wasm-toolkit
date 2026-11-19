@@ -136,6 +136,12 @@ impl Race {
     }
 
     pub fn tick(&mut self, c: Controls) {
+        let mut c = c;
+        if self.drive.auto {
+            // An automatic goes when your foot is down a moment after the green, and changes up by itself.
+            c.down = false;
+            c.up = if self.gear == 0 { c.throttle && self.phase == Phase::Tree && self.tree + 1 >= TREE_STEP * 3 + 8 } else { self.phase == Phase::Run && self.shift == 0 && self.rpm > self.drive.redline - 300.0 };
+        }
         if self.phase == Phase::Slip {
             // Past the line: off the throttle and on the brakes.
             self.v = (self.v - 8.0 / HZ).max(0.0);

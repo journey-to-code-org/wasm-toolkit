@@ -72,9 +72,20 @@ All five steps are in the engine. The engine plays a season out of a pack:
   is lit if the cockpit has a night picture.
 - **Nitrous**: a kit is a part and a bottle. The bottle is filled where the pack says, lasts
   seconds, and is more power while the button is held.
-- **The rollers**: the power and torque of the car in the bay as curves, against the car as
-  it left the factory, with what it weighs, what it should run the quarter in, how fast it is on
-  a road, and what it is worth.
+- **The rollers**: somewhere to take the car. Pick the four rings in the floor to strap it
+  down, then hold the gas from fifteen hundred to the redline and let off: the curve is drawn on
+  the wall as it is made. Held on the limiter there, it lets go as it would on the strip. Then
+  the sheet: power and torque against the car as it left the factory, with what it weighs, what
+  it should run the quarter in, how fast it is on a road, and what it is worth.
+- **The laptop**: with a laptop and a cable on the car, the sheet has a laptop to open. Down
+  its left is the log of the last pull, a line for every five hundred revs: boost, air to fuel,
+  timing, and knock, in red where it knocked. Down its right are boost, fuel and timing, each a
+  step at a time. Timing and boost make power and make knock; fuel cools it, and too much or too
+  little costs power. Knock costs power too, because the computer pulls timing, and every pull or
+  race with the engine knocking takes some of its health. The tune stays with the car.
+- **Gearboxes**: a car is a manual or an automatic. An automatic leaves a moment after the
+  green and shifts itself. A manual is shifted by hand, on the strip and now on the road as
+  well: there each gear runs out at the redline, Space or E is the next one and Q the one before.
 - **People**: whoever you are up against can stand by their car, and a place can have a crowd.
 - **The record**: races won and lost are counted, and the calendar says so.
 - **Being shown round**: a new game outlines everything in a place that can be picked and
@@ -268,7 +279,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `paint` | a respray: pick one of the pack's paints |
   | `sleep` | bed: the rest of today is gone and it is morning |
   | `nitrous` | fill the bottle of the nitrous kit on the car in the bay |
-  | `dyno` | the rollers: the power and torque of the car in the bay, drawn and in numbers |
+  | `dyno` | the rollers: strap the car down, make a pull, read the sheet, open the laptop |
 
   A spot with `"button": "Race"` is drawn as a button with that word on it, for a place whose
   picture does not show the thing itself.
@@ -354,6 +365,7 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   Each dial is where its needle turns, the needle's length and what it reads at full sweep;
   `minis` are dials that only sit there. The wheel is a square picture turned about `at`.
   Everything but `picture` may be left out.
+  `"auto": true` in a car's `drive` makes it an automatic.
   `rear` is also how the car looks ahead of you on a road, and `"front": { "picture":
   "front.pic", "width_m": 1.7 }` is how it looks coming the other way. Other cars on a road are
   drawn as whichever of the pack's cars have these pictures, in their own paint, and whoever you
@@ -364,6 +376,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   less than nothing saves weight), `gears` and `final` (a gearbox in place of the car's own) and
   `redline` (a built engine's). `"curve": [[1000, 120], [4000, 300], [7000, 240]]` is a different
   engine altogether: its torque curve, in place of the car's. `"radar": true` makes it a radar detector for the road.
+  `"tuner": true` makes it a laptop and a cable, which opens the tune at the rollers.
+  `"auto": true` or `false` on a gearbox part makes the car an automatic or a manual.
   `"nitrous": { "gain": 35, "seconds": 8, "fill": 20 }` makes it a nitrous kit: while N (or
   Shift, or the N2O button on a phone) is held with the throttle down, the engine makes that
   much more, on the strip in gear above 2,500 rpm and on a road. A full bottle lasts that many

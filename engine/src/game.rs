@@ -62,6 +62,18 @@ pub struct Owned {
     /// Seconds of nitrous left in the bottle, if it has a kit.
     #[serde(default)]
     pub bottle: f64,
+    /// What has been done to its computer.
+    #[serde(default)]
+    pub ecu: Ecu,
+}
+
+/// A car's tune, as steps from how it left the factory: pounds of boost, fuel (more is richer),
+/// and degrees of timing.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Default)]
+pub struct Ecu {
+    pub boost: i32,
+    pub fuel: i32,
+    pub timing: i32,
 }
 
 fn some_gas() -> f64 {
@@ -70,7 +82,7 @@ fn some_gas() -> f64 {
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0 }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default() }
     }
 
     /// Which of a slot's `n` bolts are tight, a bit apiece.
@@ -138,6 +150,8 @@ pub enum Scene {
     Paint,
     /// The rollers: what the car makes.
     Dyno,
+    /// The laptop: the log of the last pull, and the tune.
+    Laptop,
     /// The meet: other people, to race. And picking what a race with one of them is for.
     Online,
     OnlineBets,
@@ -174,6 +188,7 @@ pub struct Game {
     road_race: Option<String>,
     /// What the rollers said, while it is being looked at.
     pub sheet: Option<dyno::Sheet>,
+    pub rollers: dyno::Rollers,
     pub net: Net,
     selling: bool,
     pub carrying: Option<Loose>,
@@ -212,7 +227,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -376,7 +391,9 @@ impl Game {
     pub fn tune(&self, o: &Owned) -> (f64, Option<Boost>) {
         let parts: Vec<&Part> = o.fitted.values().filter_map(|id| self.part(id)).collect();
         let more: i32 = parts.iter().map(|p| p.torque).sum();
-        ((100 + more) as f64 / 100.0 * o.cond as f64 / 100.0, parts.iter().find_map(|p| p.boost.clone()))
+        let turbo = parts.iter().find_map(|p| p.boost.clone());
+        let blown = turbo.is_some() || self.pack.manifest.cars.get(&o.car).is_some_and(|c| c.drive.boost.is_some());
+        ((100 + more) as f64 / 100.0 * o.cond as f64 / 100.0 * dyno::tuned(o.ecu, blown).0, turbo)
     }
 
     /// The car as it is set up: its own running gear with what the parts on it change. Tyres and
@@ -396,6 +413,9 @@ impl Game {
             }
             if let Some(r) = p.redline {
                 d.redline = r;
+            }
+            if let Some(auto) = p.auto {
+                d.auto = auto;
             }
             if !p.curve.is_empty() {
                 d.torque = p.curve.clone();
@@ -663,10 +683,11 @@ impl Game {
                     if let Some(why) = self.wont_run() {
                         return self.no(&why);
                     }
-                    self.sheet = self.dyno();
-                    if self.sheet.is_none() {
+                    if self.owned().is_none() {
                         return self.no("There is no car in the bay.");
                     }
+                    self.sheet = None;
+                    self.rollers = dyno::Rollers::default();
                     self.scene = Scene::Dyno;
                 }
                 "paint" => {
@@ -799,6 +820,7 @@ impl Game {
         let pinks = self.bet == stakes.len() + 1;
         let stake = if self.bet == 0 || pinks { 0 } else { stakes[self.bet - 1] };
         if won { self.state.wins += 1 } else { self.state.losses += 1 }
+        self.ping();
         if won {
             if pinks && r.king {
                 self.scene = Scene::Over(3);
@@ -865,6 +887,7 @@ impl Game {
             match (self.scene == Scene::Race).then(|| self.race.as_ref().map(|r| r.phase)).flatten() {
                 Some(Phase::Tree | Phase::Run) => bare | KEY_X,
                 Some(Phase::Slip) => bare,
+                _ if self.scene == Scene::Road && self.trip.as_ref().is_some_and(|t| t.gearbox.is_some()) => bare | KEY_X,
                 _ => bare | KEY_A,
             }
         };
@@ -879,6 +902,9 @@ impl Game {
         }
         if self.scene == Scene::Drive {
             return self.drive_tick(keys, hit);
+        }
+        if self.scene == Scene::Dyno && self.rollers.phase == 1 {
+            return self.pull_tick(keys, hit);
         }
         if self.scene == Scene::Road {
             if self.net.versus.is_some() {
@@ -1019,12 +1045,8 @@ impl Game {
                     }
                 }
             }
-            Scene::Dyno => {
-                if back || pick {
-                    self.scene = Scene::Place;
-                    self.sheet = None;
-                }
-            }
+            Scene::Dyno => self.dyno_tick(pick, back),
+            Scene::Laptop => self.laptop_tick(pick, back),
             Scene::Paint => {
                 if back {
                     self.scene = Scene::Place;
@@ -1083,7 +1105,7 @@ impl Game {
                 return self.spend(1);
             }
         }
-        let (went, crashed) = town.tick(map, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
+        let (went, crashed) = town.tick(map, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0, ..Pedals::default() });
         let (speed, per_km) = (town.speed, map.gas_per_km);
         if crashed {
             tone(70, 500);
@@ -1502,6 +1524,7 @@ impl Game {
             Scene::Hood => self.draw_hood(s),
             Scene::Yard => self.draw_yard(s),
             Scene::Dyno => self.draw_dyno(s),
+            Scene::Laptop => self.draw_laptop(s),
             Scene::Online | Scene::OnlineBets => self.draw_online(s),
             Scene::Race => return self.draw_race(s),
             Scene::Drive => return self.draw_drive(s),

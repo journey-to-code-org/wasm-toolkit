@@ -886,6 +886,8 @@ fn cruise(g: &mut Game, mph: f64, until: &dyn Fn(&Game) -> bool) {
         let Some(t) = g.trip.as_ref() else { return };
         let mut keys = if t.speed * 2.237 < mph { KEY_UP } else { 0 };
         if t.x > 0.55 { keys |= 4 } else if t.x < 0.45 { keys |= 8 }
+    // Up a gear short of the redline, on every other tick so that each is a fresh press.
+    if t.gearbox.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && t.clock % 2 == 0 { keys |= KEY_X }
         g.tick(keys, 0, 0);
     }
     panic!("never happened: {:?}", g.trip.as_ref().map(|t| (t.z, t.x, t.speed)));
@@ -1196,30 +1198,85 @@ fn a_respray_a_swap_a_title_and_the_dark() {
 }
 
 #[test]
-fn the_rollers_say_what_the_car_makes() {
+fn the_rollers_are_strapped_pulled_and_read() {
     engine::host::store(b"");
-    let mut g = Game::new(Pack::parse(&files(&MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"dyno\""))));
+    let manifest = MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"dyno\"").replace("\"puffer\": {", "\"lap\": { \"name\": \"Laptop\", \"slot\": \"Computer\", \"price\": 1, \"tuner\": true }, \"puffer\": {");
+    let mut g = Game::new(Pack::parse(&files(&manifest)));
     g.seed(7);
     g.tick(KEY_A, 160, 100);
     g.tick(0, 160, 100);
     g.state.cars[0].cond = 100;
+    let mut s = Screen::new();
     click(&mut g, 100, 10);
-    assert_eq!(g.scene, Scene::Dyno);
+    assert_eq!((g.scene, g.rollers.phase), (Scene::Dyno, 0));
+    // Four rings in the floor, a strap at each, and then it can be pulled.
+    for (n, x) in [26, 62, 110, 146].into_iter().enumerate() {
+        g.draw(&mut s);
+        assert_eq!(g.rollers.straps.count_ones() as usize, n);
+        click(&mut g, x, 172);
+    }
+    assert_eq!((g.rollers.phase, g.rollers.rpm), (1, 1500.0));
+    let pull = |g: &mut Game| {
+        for _ in 0..600 {
+            if g.rollers.rpm >= 7200.0 { break; }
+            g.tick(KEY_UP, 0, 0);
+        }
+        g.tick(0, 0, 0);
+    };
+    g.tick(0, 0, 0);
+    assert_eq!(g.rollers.phase, 1, "nothing happens until the gas is down");
+    g.tick(KEY_UP, 0, 0);
+    g.draw(&mut s);
+    pull(&mut g);
+    assert_eq!(g.rollers.phase, 2);
     let stock = g.sheet.clone().unwrap();
     assert!((stock.hp - 298.0).abs() < 2.0 && stock.hp_at == 5800.0 && stock.torque == 314.0 && stock.torque_at == 4400.0, "{:?}", (stock.hp, stock.hp_at, stock.torque));
     assert!(stock.et > 11000 && stock.et < 16000 && stock.mph > 80 && (stock.top - 125.0).abs() < 3.0, "{:?}", (stock.et, stock.mph, stock.top));
-    let mut s = Screen::new();
+    // The log: a line every 250 revs from 1750 to short of the redline, and nothing knocking.
+    let log = g.rollers.log.clone();
+    assert!(log.len() >= 20 && log[0].rpm == 1750.0 && log.iter().all(|l| l.knock == 0) && log.iter().any(|l| (l.hp - 298.0).abs() < 3.0), "{}", log.len());
+    assert!(log[0].afr == 11.6 && log[0].boost == 0.0 && log.last().unwrap().boost > 5.0, "rich, and on boost by the top");
     g.draw(&mut s);
-    click(&mut g, 100, 100);
-    assert_eq!((g.scene, g.sheet.is_none()), (Scene::Place, true));
+
+    // The laptop needs a laptop.
+    click(&mut g, 150, 186);
+    assert_eq!((g.scene, g.note.as_deref()), (Scene::Dyno, Some("That takes a laptop and a cable.")));
+    g.state.cars[0].fitted.insert("Computer".into(), "lap".into());
+    click(&mut g, 150, 186);
+    assert_eq!(g.scene, Scene::Laptop);
+    g.draw(&mut s);
+    click(&mut g, 300, 53);
+    assert_eq!((g.owned().unwrap().ecu.boost, g.note.as_deref()), (1, Some("Changed. Pull it again to see.")));
+    click(&mut g, 222, 53);
+    assert_eq!(g.owned().unwrap().ecu.boost, 0);
+    // Three degrees of timing is three per cent, and safe.
+    for _ in 0..3 { click(&mut g, 300, 129); }
+    assert_eq!(g.owned().unwrap().ecu.timing, 3);
+    g.tick(KEY_B, 0, 0);
+    g.tick(0, 0, 0);
+    click(&mut g, 50, 186);
+    assert_eq!((g.scene, g.rollers.phase, g.rollers.log.len()), (Scene::Dyno, 1, 0), "pull again");
+    pull(&mut g);
+    let sharp = g.sheet.clone().unwrap();
+    assert!((sharp.hp / stock.hp - 1.03).abs() < 0.002 && g.owned().unwrap().cond == 100, "{}", sharp.hp / stock.hp);
+    // Ten degrees and leaned out knocks: less power than it promised, red in the log, and a sorer engine.
+    g.state.cars[0].ecu = engine::game::Ecu { boost: 0, fuel: -3, timing: 10 };
+    click(&mut g, 50, 186);
+    pull(&mut g);
+    let pinging = g.sheet.clone().unwrap();
+    assert!(pinging.hp < sharp.hp && g.rollers.log.iter().any(|l| l.knock > 0) && g.owned().unwrap().cond < 100, "{:?}", (pinging.hp, g.owned().unwrap().cond));
+    assert_eq!(g.note.as_deref(), Some("It was pinging. That hurts it."));
+    // Held on the limiter on the rollers, it lets go, the same as on the strip.
+    click(&mut g, 50, 186);
+    let cond = g.owned().unwrap().cond;
+    for _ in 0..700 { g.tick(KEY_UP, 0, 0); }
+    assert_eq!((g.scene, g.owned().unwrap().cond), (Scene::Place, (cond - 20).max(25)));
     // Ten per cent more torque is ten per cent more of everything, and a quicker slip.
+    g.state.cars[0].ecu = engine::game::Ecu::default();
+    g.state.cars[0].cond = 100;
     g.state.cars[0].fitted.insert("Exhaust".into(), "pipe".into());
     let piped = g.dyno().unwrap();
     assert!((piped.hp / stock.hp - 1.1).abs() < 0.001 && piped.et < stock.et && piped.stock == stock.stock);
-    g.state.cars.clear();
-    g.state.cur = None;
-    click(&mut g, 100, 10);
-    assert_eq!(g.scene, Scene::Place);
 }
 
 #[test]
@@ -1429,4 +1486,45 @@ fn a_car_in_the_paper_can_be_haggled_over() {
     let price = g.offers()[0].as_ref().unwrap().price;
     click(&mut g, 100, 60);
     assert_eq!((g.state.cash, g.state.cars.len()), (1000 - price, 2));
+}
+
+#[test]
+fn an_automatic_shifts_itself_and_a_manual_is_shifted_on_the_road() {
+    // On the strip an automatic wants only a foot: it leaves a moment after the green and changes up.
+    let mut drive = engine::pack::Drive::default();
+    drive.auto = true;
+    let mut r = Race::new(&drive, 1.0, None, 0, 0);
+    r.tick(Controls { stage: true, ..Controls::default() });
+    for _ in 0..3000 {
+        if r.phase == Phase::Slip { break; }
+        r.tick(Controls { throttle: true, ..Controls::default() });
+    }
+    assert!(r.phase == Phase::Slip && !r.red && r.rt > 200 && r.gear >= 4 && r.et > 0 && !r.blown, "{:?}", (r.rt, r.gear, r.et));
+
+    // On the road the test car has a gearbox: first gear is good for about forty, and no more until it is changed.
+    let mut g = road_game();
+    click(&mut g, 100, 10);
+    let b = g.trip.as_ref().unwrap().gearbox.clone().unwrap();
+    assert_eq!((b.gear, b.ratios.len(), b.redline), (0, 5, 7200.0));
+    for _ in 0..400 {
+        let t = g.trip.as_ref().unwrap();
+        g.tick(KEY_UP | if t.x > 0.55 { 4 } else if t.x < 0.45 { 8 } else { 0 }, 0, 0);
+    }
+    let t = g.trip.as_ref().unwrap();
+    assert!((t.speed * 2.237 - 39.0).abs() < 3.0 && t.gearbox.as_ref().unwrap().rpm >= 7200.0, "{}", t.speed * 2.237);
+    // Space is the next gear, and it pulls again.
+    g.tick(KEY_UP | engine::game::KEY_SPACE | KEY_A, 0, 0);
+    assert_eq!(g.trip.as_ref().unwrap().gearbox.as_ref().unwrap().gear, 1);
+    for _ in 0..60 { g.tick(KEY_UP, 0, 0); }
+    assert!(g.trip.as_ref().unwrap().speed * 2.237 > 45.0);
+    // Down a gear is refused when it would send the revs past the redline.
+    g.tick(KEY_UP | 128, 0, 0);
+    assert_eq!(g.trip.as_ref().unwrap().gearbox.as_ref().unwrap().gear, 1);
+    // A part can make it an automatic, and then there is nothing to work.
+    let auto = MANIFEST.replace("\"places\": {", ROADS).replace("\"torque\": 10 }", "\"torque\": 10, \"auto\": true }");
+    let mut g = Game::new(Pack::parse(&files(&auto)));
+    g.tick(KEY_A, 160, 100);
+    assert!(g.gearbox().is_some());
+    g.state.cars[0].fitted.insert("Exhaust".into(), "pipe".into());
+    assert!(g.gearbox().is_none());
 }

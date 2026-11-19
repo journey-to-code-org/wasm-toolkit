@@ -78,6 +78,23 @@ impl Default for Pace {
     }
 }
 
+/// A gearbox worked by hand: each gear's ratio with the final drive in it, where the engine stops
+/// pulling, where it pulls hardest, and the gear it is in and the revs it is at.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Gearbox {
+    pub ratios: Vec<f64>,
+    pub redline: f64,
+    pub peak: f64,
+    pub gear: usize,
+    pub rpm: f64,
+}
+
+impl Gearbox {
+    fn revs(&self, gear: usize, speed: f64) -> f64 {
+        (speed / 0.3 * self.ratios[gear] * 60.0 / std::f64::consts::TAU).max(900.0)
+    }
+}
+
 /// Someone to race down the road: where they are, across and along, and what their car can do.
 pub struct Rival {
     pub z: f64,
@@ -134,6 +151,8 @@ pub struct Trip {
     pub pace: Pace,
     /// Nitrous going in: how much more the car makes just now, as a fraction.
     pub spray: f64,
+    /// The gearbox, if the car has one to work. Without, it changes gear itself.
+    pub gearbox: Option<Gearbox>,
     /// A race: who against, and how many ticks until the off.
     pub rival: Option<Rival>,
     pub hold: i32,
@@ -166,7 +185,7 @@ impl Trip {
             y += p.hill;
         }
         let len = segs.len() as f64 * SEG;
-        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, rival: None, hold: 0, clock: 0, rng: seed | 1 };
+        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, gearbox: None, rival: None, hold: 0, clock: 0, rng: seed | 1 };
         for i in 0..road.traffic {
             let z = 80.0 + (trip.rand() % (len - 80.0).max(1.0) as u32) as f64;
             let other = trip.other(z, i);
@@ -240,8 +259,21 @@ impl Trip {
             self.crash -= 1;
             return out;
         }
+        // A gearbox: how hard it pulls is the gear it is in and where the revs are, and at the redline it stops pulling.
+        let mut pull = 1.0;
+        if let Some(b) = self.gearbox.as_mut() {
+            if p.up && b.gear + 1 < b.ratios.len() {
+                b.gear += 1;
+            }
+            if p.down && b.gear > 0 && b.revs(b.gear - 1, self.speed) < b.redline + 300.0 {
+                b.gear -= 1;
+            }
+            b.rpm = b.revs(b.gear, self.speed);
+            let last = b.ratios[b.ratios.len() - 1];
+            pull = if b.rpm >= b.redline { 0.0 } else { 0.75 * (b.ratios[b.gear] / last).sqrt() * (b.rpm / b.peak).clamp(0.4, 1.0) };
+        }
         if p.go {
-            self.speed += self.pace.accel * (1.0 + self.spray) / HZ * (1.0 - self.speed / (self.pace.top * (1.0 + self.spray * 0.3)));
+            self.speed += pull * self.pace.accel * (1.0 + self.spray) / HZ * (1.0 - self.speed / (self.pace.top * (1.0 + self.spray * 0.3)));
         } else {
             self.speed -= 1.0 / HZ;
         }

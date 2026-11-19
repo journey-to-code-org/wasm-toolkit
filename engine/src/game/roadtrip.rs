@@ -27,6 +27,7 @@ impl Game {
         let Some(road) = self.pack.manifest.roads.get(id) else { return };
         let mut trip = Trip::new(id, road, backwards, seed);
         trip.pace = self.pace();
+        trip.gearbox = self.gearbox();
         self.trip = Some(trip);
         self.trip_from = from_map.map(str::to_string);
         self.town = None;
@@ -45,6 +46,17 @@ impl Game {
         Pace { accel: (5.0 * (hp / d.weight_lb / 0.0975).powf(0.7)).clamp(2.0, 9.0), top: (56.0 * (hp / 298.0).cbrt()).clamp(28.0, 76.0), slide: (12.0 / d.grip.max(1.0)).clamp(0.6, 1.6) * wet }
     }
 
+    /// The gearbox of the car in the bay, for a road, if it is one worked by hand.
+    pub fn gearbox(&self) -> Option<crate::road::Gearbox> {
+        let (o, car) = self.owned().zip(self.car())?;
+        let d = self.tuned_drive(o, car);
+        if d.auto || d.gears.is_empty() {
+            return None;
+        }
+        let peak = d.torque.iter().filter(|p| p[0] <= d.redline).fold((0.0, 0.0), |m, p| if p[0] * p[1] > m.1 { (p[0], p[0] * p[1]) } else { m }).0;
+        Some(crate::road::Gearbox { ratios: d.gears.iter().map(|g| g * d.final_drive).collect(), redline: d.redline, peak: peak.max(1000.0), gear: 0, rpm: 900.0 })
+    }
+
     /// Down a road against whoever has pulled in, for what was bet: no police, and first to the end.
     pub(super) fn start_road_race(&mut self, id: &str) {
         let Some(r) = self.rival().cloned() else { return };
@@ -55,6 +67,7 @@ impl Game {
         let seed = self.rand();
         let mut trip = Trip::new(id, &road, backwards, seed);
         trip.pace = self.pace();
+        trip.gearbox = self.gearbox();
         let mut them = crate::road::Rival::new(r.et, r.paint.as_deref().unwrap_or("RED"));
         if self.raining() {
             // They are no braver in the wet than you can be.
@@ -116,9 +129,10 @@ impl Game {
                 o.bottle = (o.bottle - 1.0 / 30.0).max(0.0);
             }
         }
-        let h = trip.tick(road, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
+        let h = trip.tick(road, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0 });
         let (speed, chased, stopped, warned) = (trip.speed, trip.chase.is_some(), trip.crash > 0, trip.radar);
         let (racing, counting) = (trip.rival.is_some(), trip.hold);
+        let revs = trip.gearbox.as_ref().map(|b| b.rpm);
         let (per_km, hours, end, id) = (road.gas_per_km, road.hours, road.ends[if trip.backwards { 0 } else { 1 }].clone(), trip.road.clone());
         if h.crashed {
             tone(70, 500);
@@ -135,7 +149,7 @@ impl Game {
             tone(1500, 50);
         } else if !stopped {
             let v = (speed * 10.0) as i32;
-            tone(if speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 }, 60);
+            tone(match revs { Some(r) => (r / 40.0) as i32, None if speed > 0.0 || keys & KEY_UP != 0 => 60 + v % 110 + v / 110 * 12, None => 45 }, 60);
         }
         self.burn(h.went / 1000.0 * per_km);
         if h.crashed {
@@ -387,8 +401,12 @@ impl Game {
         let v = (trip.speed * 10.0) as i32;
         let mph = trip.speed * MPH;
         if let Some(seat) = seat {
-            let rpm = if trip.speed > 0.0 { 1500.0 + (v % 110) as f64 * 50.0 } else { 900.0 };
-            self.draw_cockpit(s, seat, self.dark() == 2, rpm, mph, if trip.speed > 8.0 { 6.0 } else { 0.0 }, if trip.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, trip.steer * 90.0, false);
+            // A gearbox shows the gear it is in and the revs it is at; an automatic, something like them.
+            let (rpm, gear, light) = match &trip.gearbox {
+                Some(b) => (b.rpm, b.gear + 1, b.rpm > b.redline - 700.0),
+                None => (if trip.speed > 0.0 { 1500.0 + (v % 110) as f64 * 50.0 } else { 900.0 }, if trip.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, false),
+            };
+            self.draw_cockpit(s, seat, self.dark() == 2, rpm, mph, if trip.speed > 8.0 { 6.0 } else { 0.0 }, gear, trip.steer * 90.0, light);
         } else {
             self.panel(s, &road.title, &format!("{} mph", mph as i32), "Arrows drive. Escape turns back.");
         }
@@ -414,11 +432,14 @@ impl Game {
         }
         let gas = self.owned().map_or(0.0, |o| o.gas);
         s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { red } else { white }, BLACK);
+        if let Some(b) = &trip.gearbox {
+            s.text_sh(280, 27, &format!("G{}", b.gear + 1), if b.rpm > b.redline - 700.0 { red } else { white }, BLACK);
+        }
         s.text_sh(216, 27, &format!("MPH {:3}", mph as i32), if trip.rival.is_none() && mph > road.limit + 10.0 { red } else { white }, BLACK);
         if seat.is_some() && trip.z < 50.0 && trip.hold == 0 && self.note.is_none() && trip.crash == 0 {
             // Setting out: what the keys are.
             let kit = self.owned().is_some_and(|o| self.kit(o).is_some());
-            let words = if trip.rival.is_some() { "FIRST TO THE END. ESCAPE GIVES IT UP." } else if kit { "ARROWS DRIVE. N SPRAYS. ESC: BACK." } else { "ARROWS DRIVE. ESCAPE TURNS BACK." };
+            let words = if trip.rival.is_some() { "FIRST TO THE END. ESCAPE GIVES IT UP." } else if trip.gearbox.is_some() { "ARROWS DRIVE. SPACE IS THE NEXT GEAR." } else if kit { "ARROWS DRIVE. N SPRAYS. ESC: BACK." } else { "ARROWS DRIVE. ESCAPE TURNS BACK." };
             s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, words, gold, BLACK);
         }
         self.draw_bottle(s, 36, self.owned().map_or(0.0, |o| o.bottle), trip.spray > 0.0);

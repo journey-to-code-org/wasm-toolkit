@@ -332,6 +332,7 @@ impl Game {
         r.cops = 0;
         let mut trip = crate::road::Trip::new(road, &r, false, seed);
         trip.pace = self.pace();
+        trip.gearbox = self.gearbox();
         if self.raining() {
             // It may not be raining where they are: at the meet the road is always dry.
             trip.pace.slide /= 1.35;
@@ -373,7 +374,7 @@ impl Game {
         if !vs.sent_slip {
             let counting = trip.hold;
             trip.spray = 0.0;
-            let h = trip.tick(road, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
+            let h = trip.tick(road, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0 });
             (crashed, went) = (h.crashed, h.went);
             if h.crashed {
                 tone(70, 500);
