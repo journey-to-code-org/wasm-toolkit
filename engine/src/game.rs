@@ -160,6 +160,9 @@ pub struct State {
     pub wins: u32,
     #[serde(default)]
     pub losses: u32,
+    /// Cars bought and on a trailer: the day each gets here, the car, and where it is from.
+    #[serde(default)]
+    pub coming: Vec<(i32, Owned, String)>,
 }
 
 /// A car in today's paper.
@@ -302,7 +305,7 @@ impl Game {
         let s: State = serde_json::from_slice(&crate::host::fetch()).ok()?;
         let fits = s.pack == m.name
             && m.places.contains_key(&s.place)
-            && s.cars.iter().all(|c| m.cars.contains_key(&c.car) && c.fitted.values().all(|p| m.parts.contains_key(base(p))))
+            && s.cars.iter().chain(s.coming.iter().map(|c| &c.1)).all(|c| m.cars.contains_key(&c.car) && c.fitted.values().all(|p| m.parts.contains_key(base(p))))
             && s.spares.iter().all(|p| m.parts.contains_key(base(p)))
             && s.cur.is_none_or(|i| i < s.cars.len())
             && s.rung <= m.rivals.len();
@@ -851,9 +854,10 @@ impl Game {
     // ---- Time and endings ----
 
     /// Everything takes time. When the days run out, or there is no way to get a car, it is over.
-    fn spend(&mut self, hours: i32) {
+    pub fn spend(&mut self, hours: i32) {
         let before = self.day();
         self.state.hours += hours;
+        self.unload();
         // A car that sits loses a little from its battery every day it is not the one driven.
         let days = self.day() - before;
         for car in 0..self.state.cars.len() {
@@ -865,11 +869,28 @@ impl Game {
         self.save();
     }
 
-    fn check_over(&mut self) {
+    /// Trailers that have got here: their cars go in the yard, or in the bay if it is empty.
+    fn unload(&mut self) {
+        let day = self.day();
+        while let Some(k) = self.state.coming.iter().position(|c| c.0 <= day) {
+            if self.state.cars.len() >= MOST_CARS {
+                return;
+            }
+            let (_, car, from) = self.state.coming.remove(k);
+            self.state.cars.push(car);
+            if self.state.cur.is_none() {
+                self.state.cur = Some(self.state.cars.len() - 1);
+            }
+            self.say(&format!("The car from {from} is here.").chars().take(38).collect::<String>());
+            tone(880, 80);
+        }
+    }
+
+    pub fn check_over(&mut self) {
         let m = &self.pack.manifest;
         if self.day() > m.season.days {
             self.scene = Scene::Over(1);
-        } else if self.state.cars.is_empty() {
+        } else if self.state.cars.is_empty() && self.state.coming.is_empty() {
             let cheapest = m.cars.keys().filter(|id| m.cars[*id].price.is_some()).map(|id| self.list_price(id, 55)).min();
             let spare: i32 = self.state.spares.iter().map(|p| self.spare_offer(p)).sum();
             // What working could still bring in before the season is out.
@@ -2562,7 +2583,16 @@ impl Game {
             s.text_sh(216, y, &format!("{:.1}", o.gas), WHITE, BLACK);
             s.text_sh(264, y, "SELL", if over == Some(i) && self.px >= 264 { shade(ramp("RED"), 28) } else { shade(ramp("CREAM"), 22) }, BLACK);
         }
-        if self.state.cars.is_empty() {
+        // What is on a trailer, under the cars that are here.
+        let road = shade(ramp("CREAM"), 14);
+        for (k, (when, o, _)) in self.state.coming.iter().enumerate().take(MOST_CARS.saturating_sub(self.state.cars.len())) {
+            let y = 34 + (self.state.cars.len() + k) as i32 * 10;
+            let car = &self.pack.manifest.cars[&o.car];
+            s.text_sh(28, y, &car.name.to_uppercase().chars().take(14).collect::<String>(), road, BLACK);
+            s.text_sh(148, y, "ON TRAILER", road, BLACK);
+            s.text_sh(240, y, &format!("DAY {when}"), road, BLACK);
+        }
+        if self.state.cars.is_empty() && self.state.coming.is_empty() {
             s.text_sh(8, 34, "YOU HAVE NO CAR. TRY THE PAPER.", WHITE, BLACK);
         }
         if let Some(o) = self.parting.and_then(|i| self.state.cars.get(i)) {

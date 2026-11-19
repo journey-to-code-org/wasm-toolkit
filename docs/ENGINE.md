@@ -476,7 +476,9 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 - `"faults": [ { "says": "Jumped timing. Needs a belt.", "breaks": ["Timing belt"], "hidden":
   ["Valves"] } ]` is what can be wrong with a car sold as it stands: what the ad says, the slots
   whose parts are done for, and the ones done for that it does not mention. `"sellers": [ {
-  "from": "Ohio", "ship": 120 } ]` is where they are and what bringing one home costs.
+  "from": "Ohio", "ship": 120, "days": 3 } ]` is where they are, what bringing one home costs,
+  and how many days the trailer takes (left out, it is there the same day). A car on a trailer
+  shows in the yard with the day it gets there, and counts against the room in the yard.
 - `"shootout": { "entry": 50, "purse": 400, "rounds": 3, "every": 7 }` holds one every
   seventh day. Left out, there is none.
 - `"title": "title.pic"` is a picture for the title screen, 320 by 240. `"respray": { "cost": 60,

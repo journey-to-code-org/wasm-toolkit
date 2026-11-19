@@ -10,6 +10,8 @@ pub struct Project {
     /// Where it is, and what it costs to have it brought.
     pub from: String,
     pub ship: i32,
+    /// How many days it takes to get here.
+    pub days: i32,
     /// What the seller says about it.
     pub says: Vec<String>,
 }
@@ -101,16 +103,19 @@ impl Game {
                 }
             }
             let off = if self.state.knocked.0 == day { self.state.knocked.1.iter().find(|k| k.0 == 10 + i).map_or(0, |k| k.1) } else { 0 };
-            let (from, ship) = if m.sellers.is_empty() { ("out of town".to_string(), 60) } else { let s = &m.sellers[next(m.sellers.len())]; (s.from.clone(), s.ship) };
-            Some(Project { owned: o, price: asked * (100 - off) / 100, from, ship, says })
+            let (from, ship, days) = if m.sellers.is_empty() { ("out of town".to_string(), 60, 0) } else { let s = &m.sellers[next(m.sellers.len())]; (s.from.clone(), s.ship, s.days) };
+            Some(Project { owned: o, price: asked * (100 - off) / 100, from, ship, days, says })
         }).collect()
     }
 
     /// Bought as it stands, and brought home: it goes in the yard, or in the bay if the bay is empty.
-    pub(super) fn buy_project(&mut self, i: usize) {
+    pub fn buy_project(&mut self, i: usize) {
         let Some(Some(p)) = self.projects().into_iter().nth(i) else { return };
         if self.state.cash < p.price + p.ship {
             return self.no(&format!("${} and ${} to bring it. Not yet.", p.price, p.ship));
+        }
+        if self.state.cars.len() + self.state.coming.len() >= MOST_CARS {
+            return self.no("No room in the yard for another.");
         }
         let day = self.day();
         self.state.cash -= p.price + p.ship;
@@ -118,12 +123,19 @@ impl Game {
             self.state.sold = (day, Vec::new());
         }
         self.state.sold.1.push(10 + i);
+        tone(880, 80);
+        if p.days > 0 {
+            // On a trailer: it gets here when it gets here.
+            let when = day + p.days;
+            self.state.coming.push((when, p.owned, p.from));
+            self.say(&format!("Yours. On a trailer, here day {when}."));
+            return self.save();
+        }
         self.state.cars.push(p.owned);
         if self.state.cur.is_none() {
             self.state.cur = Some(self.state.cars.len() - 1);
         }
         self.say(&format!("Yours. ${} to bring it from {}.", p.ship, p.from).chars().take(38).collect::<String>());
-        tone(880, 80);
         self.save();
     }
 
@@ -170,6 +182,9 @@ impl Game {
             s.text(180, y + 14, &format!("IN {}", p.from.to_uppercase()).chars().take(16).collect::<String>(), grey);
             s.text(180, y + 24, &format!("${} + ${}", p.price, p.ship), shade(ramp("FOREST"), 12));
             let on = over == Some(i) && self.px >= 248 && (self.py - 54) % 62 >= 30 && (self.py - 54) % 62 < 42;
+            if p.days > 0 {
+                s.text(180, y + 34, &format!("{} DAY{}", p.days, if p.days == 1 { "" } else { "S" }), grey);
+            }
             s.text(256, y + 34, "HAGGLE", if on { shade(ramp("RED"), 20) } else { grey });
             // What the seller has to say for it, as much as there is room for.
             for (n, line) in p.says.iter().take(2).enumerate() {

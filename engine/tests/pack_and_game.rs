@@ -2130,3 +2130,33 @@ fn a_car_in_the_yard_goes_to_the_dealer_as_a_shell_or_for_scrap() {
     click(&mut g, 60, 110);
     assert_eq!((g.state.cash - cash, g.state.cur), (worth, None));
 }
+
+#[test]
+fn a_parts_car_from_far_off_comes_on_a_trailer() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    g.state.cars.clear();
+    g.state.cur = None;
+    g.state.cash = 100_000;
+    // Find a day with one in the paper from somewhere it takes days to bring.
+    while !g.projects().iter().flatten().any(|p| p.days > 1) {
+        g.state.hours += g.pack.manifest.season.hours_per_day;
+    }
+    let i = g.projects().iter().position(|p| p.as_ref().is_some_and(|p| p.days > 1)).unwrap();
+    let p = g.projects().into_iter().nth(i).flatten().unwrap();
+    let (day, cash) = (g.day(), g.state.cash);
+    g.buy_project(i);
+    assert_eq!((g.state.cars.len(), g.state.coming.len(), cash - g.state.cash), (0, 1, p.price + p.ship));
+    assert_eq!(g.note, Some(format!("Yours. On a trailer, here day {}.", day + p.days)));
+    // With no car here and one coming, the game is not over.
+    g.check_over();
+    assert!(!matches!(g.scene, Scene::Over(_)));
+    // A day short, it is still on the road; on the day, it is in the yard, and in the bay.
+    g.spend((p.days - 1) * g.pack.manifest.season.hours_per_day);
+    assert_eq!(g.state.coming.len(), 1);
+    g.spend(g.pack.manifest.season.hours_per_day);
+    assert_eq!((g.state.cars.len(), g.state.coming.len(), g.state.cur), (1, 0, Some(0)));
+    assert_eq!(g.state.cars[0], p.owned);
+    assert_eq!(g.note, Some(format!("The car from {} is here.", p.from)));
+}
