@@ -1053,8 +1053,8 @@ function gamePanel() {
       };
       return box;
     })(),
-    field("Where such cars are, and what bringing one home costs: Ohio = 120, Maryland = 60", (m.sellers ?? []).map((x) => `${x.from} = ${x.ship}`).join(", "), (v) => {
-      const sellers = v.split(",").map((x) => x.split("=").map((y) => y.trim())).filter((x) => x.length === 2 && x[0] && +x[1] >= 0).map((x) => ({ from: x[0], ship: Math.floor(+x[1]) }));
+    field("Where such cars are, what bringing one home costs, and the days it takes: Ohio = 120 / 3, Maryland = 60 / 1", (m.sellers ?? []).map((x) => `${x.from} = ${x.ship}${x.days ? ` / ${x.days}` : ""}`).join(", "), (v) => {
+      const sellers = v.split(",").map((x) => x.split("=").map((y) => y.trim())).filter((x) => x.length === 2 && x[0] && parseFloat(x[1]) >= 0).map((x) => { const [ship, days] = x[1].split("/").map((y) => Math.floor(+y.trim())); return days > 0 ? { from: x[0], ship, days } : { from: x[0], ship }; });
       if (sellers.length) m.sellers = sellers; else delete m.sellers;
     }),
     h("p", { class: "hint", text: "They are in the paper under AS IS when the pack has faults and a car with a build sheet." }),

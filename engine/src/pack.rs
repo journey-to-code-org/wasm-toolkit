@@ -106,6 +106,9 @@ pub struct Fault {
 pub struct Seller {
     pub from: String,
     pub ship: i32,
+    /// How many days the trailer takes to bring one home. Nothing: the same day.
+    #[serde(default)]
+    pub days: i32,
 }
 
 #[derive(Deserialize, Clone, Debug)]

@@ -2352,23 +2352,28 @@
   "sellers": [
     {
       "from": "two towns over",
-      "ship": 30
+      "ship": 30,
+      "days": 0
     },
     {
       "from": "Maryland",
-      "ship": 60
+      "ship": 60,
+      "days": 1
     },
     {
       "from": "Virginia",
-      "ship": 70
+      "ship": 70,
+      "days": 2
     },
     {
       "from": "Pennsylvania",
-      "ship": 90
+      "ship": 90,
+      "days": 2
     },
     {
       "from": "Ohio",
-      "ship": 120
+      "ship": 120,
+      "days": 3
     }
   ]
 }
