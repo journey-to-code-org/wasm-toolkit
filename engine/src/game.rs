@@ -464,17 +464,32 @@ impl Game {
     /// What the engine makes at its best, in pound-feet: what the driveline has to take.
     pub fn peak_torque(&self) -> f64 {
         let Some((o, car)) = self.owned().zip(self.car()) else { return 0.0 };
-        let (d, (gain, _)) = (self.tuned_drive(o, car), self.tune(o));
+        let (d, (gain, _)) = (self.tuned_drive(o, car), self.tune_engine(o));
         d.torque.iter().filter(|p| p[0] <= d.redline).map(|p| p[1]).fold(0.0, f64::max) * gain * self.blown(o, car)
     }
 
     /// A launch with more torque than a part of the driveline will take: sooner or later it lets
     /// go, the weakest first. What broke, if anything did.
     pub fn strain_driveline(&mut self) -> Option<String> {
-        let torque = self.peak_torque();
+        let made = self.peak_torque();
         let cur = self.state.cur?;
+        // The clutch first: over what it holds it slips, and slipping burns it. What it lets
+        // through is all the rest of the driveline ever sees.
+        let holds = self.clutch(&self.state.cars[cur]);
+        if let Some(holds) = holds.filter(|&h| made > h) {
+            let burn = (((made / holds - 1.0) * 40.0) as i32).clamp(2, 30);
+            let found = self.state.cars[cur].fitted.iter().find(|(_, id)| cond_of(id) > 0 && self.part(id).is_some_and(|p| p.slips)).map(|(s, id)| (s.clone(), id.clone()));
+            if let Some((slot, id)) = found {
+                let left = (cond_of(&id) - burn).max(0);
+                self.state.cars[cur].fitted.insert(slot, worn(&id, left));
+                if left == 0 {
+                    return Some(self.part(&id).map(|p| p.name.clone()).unwrap_or_default());
+                }
+            }
+        }
+        let torque = made * self.slip(&self.state.cars[cur]);
         let (slot, id, holds) = self.state.cars[cur].fitted.iter().filter(|(_, id)| cond_of(id) > 0)
-            .filter_map(|(slot, id)| Some((slot.clone(), id.clone(), self.part(id)?.holds?))).filter(|&(_, _, h)| torque > h)
+            .filter_map(|(slot, id)| Some((slot.clone(), id.clone(), self.part(id).filter(|p| !p.slips)?.holds?))).filter(|&(_, _, h)| torque > h)
             .min_by(|a, b| a.2.total_cmp(&b.2))?;
         let chance = ((torque / holds - 1.0) * 150.0).clamp(4.0, 80.0) as u32;
         if self.rand() % 100 >= chance {
@@ -490,6 +505,34 @@ impl Game {
 
     /// What the parts on a car do: torque as a fraction of stock, and the turbo fitted, if one is.
     pub fn tune(&self, o: &Owned) -> (f64, Option<Boost>) {
+        let (gain, turbo) = self.tune_engine(o);
+        (gain * self.slip(o), turbo)
+    }
+
+    /// What the clutch will take just now, if the car has one that slips: what it holds new, and
+    /// down to three fifths of that as it wears. And what the engine makes at its best.
+    fn clutch(&self, o: &Owned) -> Option<f64> {
+        o.fitted.values().filter(|id| cond_of(id) > 0).filter_map(|id| Some((id, self.part(id)?))).filter(|(_, p)| p.slips)
+            .filter_map(|(id, p)| Some(p.holds? * (0.6 + 0.4 * cond_of(id) as f64 / 100.0))).reduce(f64::min)
+    }
+
+    fn engine_torque(&self, o: &Owned) -> f64 {
+        let Some(car) = self.pack.manifest.cars.get(&o.car) else { return 0.0 };
+        let d = self.tuned_drive(o, car);
+        d.torque.iter().filter(|p| p[0] <= d.redline).map(|p| p[1]).fold(0.0, f64::max) * self.tune_engine(o).0 * self.blown(o, car)
+    }
+
+    /// How much of what the engine makes gets through the clutch: all of it, until the engine
+    /// makes more than the clutch holds.
+    pub fn slip(&self, o: &Owned) -> f64 {
+        match (self.clutch(o), self.engine_torque(o)) {
+            (Some(holds), made) if made > holds => (holds / made).max(0.4),
+            _ => 1.0,
+        }
+    }
+
+    /// What the engine itself makes of its parts, its health and its tune, before the clutch.
+    pub fn tune_engine(&self, o: &Owned) -> (f64, Option<Boost>) {
         let parts: Vec<&Part> = o.fitted.values().filter_map(|id| self.part(id)).collect();
         let more: i32 = parts.iter().map(|p| p.torque).sum();
         let turbo = parts.iter().find_map(|p| p.boost.clone());
