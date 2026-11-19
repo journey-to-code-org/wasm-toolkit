@@ -73,6 +73,23 @@ fn fill() -> i32 {
     20
 }
 
+/// The event the season is named for: what it costs to enter, what the winner takes, how many
+/// rounds there are, and how often it is held, in days.
+#[derive(Deserialize, Clone, Debug)]
+#[serde(default)]
+pub struct Shootout {
+    pub entry: i32,
+    pub purse: i32,
+    pub rounds: usize,
+    pub every: i32,
+}
+
+impl Default for Shootout {
+    fn default() -> Shootout {
+        Shootout { entry: 50, purse: 400, rounds: 3, every: 7 }
+    }
+}
+
 /// What a respray costs, and how many hours it takes.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
@@ -663,6 +680,9 @@ pub struct Manifest {
     pub rebuild: Rebuild,
     #[serde(default)]
     pub respray: Respray,
+    /// The shootout: a knockout on the strip every so many days. Left out, there is none.
+    #[serde(default)]
+    pub shootout: Option<Shootout>,
     /// A picture for the title screen, 320 by 240. Without one the pack's name is written up.
     #[serde(default)]
     pub title: Option<String>,
@@ -691,7 +711,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 17] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep"];
+pub const ACTIONS: [&str; 18] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 14;
 
@@ -742,6 +762,11 @@ impl Pack {
         let need = |what: &str, name: &str| -> Result<(), String> {
             if self.pictures.contains_key(name) { Ok(()) } else { Err(format!("{what} names the picture {name}, which is not in the pack")) }
         };
+        if let Some(sh) = &m.shootout {
+            if m.rivals.is_empty() || sh.rounds < 1 || sh.rounds > 6 || sh.every < 1 || sh.entry < 0 || sh.purse < 0 {
+                return Err("the shootout needs rivals in the pack, one to six rounds, and to be held every day or less often".into());
+            }
+        }
         if let Some(name) = &m.title {
             need("the title screen", name)?;
         }

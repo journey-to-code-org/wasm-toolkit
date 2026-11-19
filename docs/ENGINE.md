@@ -41,6 +41,10 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **The yard**: up to sixteen cars; bring one into the bay or sell it to the dealer.
 - **Rivals**: they pull in one at a time, in the pack's order. Race for kicks, for money up to
   what each will take, or for cars. Beating one for money or better brings out the next.
+- **The shootout**: every so many days there is a knockout on the strip. It costs to enter,
+  once a day; each round is someone a rung quicker than the last, starting a rung under where
+  you stand; lose a round and you are out, win them all and the purse is yours. It does not move
+  you up the ladder.
 - **The strip**: the quarter mile from the seat, for a car with a cockpit in the pack: the
   cabin is the pack's painting, with live needles, the gear in the gate and the wheel, and the
   road is drawn in depth beyond the glass. A car with no cockpit is raced from the side. The
@@ -49,7 +53,7 @@ All five steps are in the engine. The engine plays a season out of a pack:
   them, with mountains along the horizon and trees on the open ground. Buildings are what the map
   says they are; other cars are about. A map in the corner shows the blocks, where there is to
   go in gold, and you; every place to go has a sign on a pole on its roof and its name written
-  over it in the windscreen. When it rains the wipers go.
+  over it in the windscreen. When it rains the wipers go. A hill slows the car going up it and hurries it going down.
   Pull up beside somewhere, press Enter, and you are in it, an hour later.
 - **Roads**: out of town there are roads between two places: two lanes that bend and climb,
   through trees, cuttings and along drops, with cars coming the other way and police parked
@@ -280,6 +284,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
+  | `shootout` | enter the shootout, on a day it is held |
   | `sleep` | bed: the rest of today is gone and it is morning |
   | `nitrous` | fill the bottle of the nitrous kit on the car in the bay |
   | `dyno` | the rollers: strap the car down, make a pull, read the sheet, open the laptop |
@@ -399,6 +404,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `"figure": "skeeter.pic"` is a picture of them, which stands by their car.
 - `"season": { "days": 90, "hours_per_day": 12, "rain": 15 }`: `rain` is how many days in a
   hundred are wet. The first day never is.
+- `"shootout": { "entry": 50, "purse": 400, "rounds": 3, "every": 7 }` holds one every
+  seventh day. Left out, there is none.
 - `"title": "title.pic"` is a picture for the title screen, 320 by 240. `"respray": { "cost": 60,
   "hours": 3 }` is what the `paint` action charges.
 - **bets** and **paints** may be left out. So may `"rebuild": { "cost": 250, "cond": 85 }`:

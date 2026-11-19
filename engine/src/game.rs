@@ -121,6 +121,9 @@ pub struct State {
     /// Races against someone won and lost, whatever they were for.
     #[serde(default)]
     pub knocked: (i32, Vec<(usize, i32)>),
+    /// The last day a shootout was entered: one go at each.
+    #[serde(default)]
+    pub entered: i32,
     #[serde(default)]
     pub wins: u32,
     #[serde(default)]
@@ -188,6 +191,8 @@ pub struct Game {
     road_race: Option<String>,
     /// What the rollers said, while it is being looked at.
     pub sheet: Option<dyno::Sheet>,
+    /// The round of the shootout being run, counted from nothing, while one is on.
+    pub bracket: Option<usize>,
     pub rollers: dyno::Rollers,
     pub net: Net,
     selling: bool,
@@ -227,7 +232,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -335,9 +340,9 @@ impl Game {
         let t = (self.ticks % 40) as f64 / 40.0;
         let sweep = (if t < 0.5 { t * 2.0 } else { 2.0 - t * 2.0 }) * 1.45 + 0.12;
         for pivot in [96, 216] {
-            let (ex, ey) = (pivot as f64 - sweep.cos() * 92.0, view as f64 - sweep.sin() * 92.0);
-            for d in 0..3 {
-                s.line(pivot + d, view, ex as i32 + d, ey as i32, shade(ramp("RUBBER"), 3));
+            let (ex, ey) = (pivot as f64 - sweep.cos() * 118.0, view as f64 - sweep.sin() * 118.0);
+            for d in -2..4 {
+                s.line(pivot + d, view, ex as i32 + d, ey as i32, shade(ramp("RUBBER"), if d == -2 || d == 3 { 8 } else { 2 }));
             }
         }
     }
@@ -685,6 +690,29 @@ impl Game {
                 }
                 "yard" => self.scene = Scene::Yard,
                 "online" => self.go_online(),
+                "shootout" => {
+                    let Some(sh) = self.pack.manifest.shootout.clone() else { return self.no("Nobody is holding one.") };
+                    let day = self.day();
+                    if day % sh.every != 0 {
+                        return self.say(&format!("The next shootout is on day {}.", (day / sh.every + 1) * sh.every));
+                    }
+                    if self.state.entered == day {
+                        return self.say("You have had your go today.");
+                    }
+                    if self.state.cur.is_none() {
+                        return self.no("You have nothing to enter.");
+                    }
+                    if let Some(why) = self.cannot_race() {
+                        return self.no(&why);
+                    }
+                    if self.state.cash < sh.entry {
+                        return self.no(&format!("It is ${} to enter. You don't have it.", sh.entry));
+                    }
+                    self.state.cash -= sh.entry;
+                    self.state.entered = day;
+                    self.bracket = Some(0);
+                    self.bracket_round();
+                }
                 "sleep" => {
                     // Bed: whatever is left of today is gone, and it is morning.
                     let per = self.pack.manifest.season.hours_per_day.max(1);
@@ -836,9 +864,57 @@ impl Game {
     }
 
     /// The race is run. `won` is None for a pass with nobody in the other lane.
+    /// The next round of the shootout: whoever it throws up, each a rung quicker than the last,
+    /// starting a rung under where you stand on the ladder.
+    fn bracket_round(&mut self) {
+        let (Some(round), last) = (self.bracket, self.pack.manifest.rivals.len().saturating_sub(1)) else { return };
+        self.who = (self.state.rung.saturating_sub(1) + round).min(last);
+        self.bet = 0;
+        self.road_race = None;
+        let et = self.pack.manifest.rivals[self.who].et;
+        self.start_race((et * 1000.0) as i32);
+    }
+
+    /// A round of the shootout is run: through to the next, out, or the purse.
+    fn settle_bracket(&mut self, won: bool, round: usize) {
+        let Some(sh) = self.pack.manifest.shootout.clone() else { return };
+        if won { self.state.wins += 1 } else { self.state.losses += 1 }
+        self.ping();
+        let home = self.state.rung.min(self.pack.manifest.rivals.len().saturating_sub(1));
+        if !won {
+            self.bracket = None;
+            self.who = home;
+            self.say(&format!("Out in round {}. There is always the next.", round + 1));
+            return self.spend(2);
+        }
+        if round + 1 >= sh.rounds {
+            self.bracket = None;
+            self.who = home;
+            self.state.cash += sh.purse;
+            tone(990, 400);
+            self.say(&format!("You won the shootout. ${} is yours.", sh.purse));
+            return self.spend(2);
+        }
+        self.bracket = Some(round + 1);
+        self.spend(2);
+        if self.scene != Scene::Place {
+            // The season ran out between rounds.
+            self.bracket = None;
+        } else if self.cannot_race().is_some() {
+            self.bracket = None;
+            self.who = home;
+            self.say("You could not make the next round.");
+        } else {
+            self.bracket_round();
+        }
+    }
+
     fn settle(&mut self, won: Option<bool>) {
         self.race = None;
         self.scene = Scene::Place;
+        if let (Some(round), Some(won)) = (self.bracket, won) {
+            return self.settle_bracket(won, round);
+        }
         let Some(won) = won else {
             self.say("A pass on your own. Nobody saw it.");
             return self.spend(1);
@@ -1134,6 +1210,12 @@ impl Game {
             }
         }
         let (went, crashed) = town.tick(map, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0, ..Pedals::default() });
+        if map.hills > 0.0 && town.speed > 0.2 {
+            // Up a hill it drags, and down one it runs away.
+            let (hs, hc) = town.heading.to_radians().sin_cos();
+            let slope = (map.height(town.x + hs * 6.0, town.z + hc * 6.0) - map.height(town.x, town.z)) / 6.0;
+            town.speed = (town.speed - 9.8 * slope / 30.0).max(0.0);
+        }
         let (speed, per_km) = (town.speed, map.gas_per_km);
         if crashed {
             tone(70, 500);

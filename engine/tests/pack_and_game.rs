@@ -1552,3 +1552,40 @@ fn a_town_can_have_hills_and_the_default_one_has_a_mountain_road() {
     assert!(up.parts.iter().map(|p| p.hill).sum::<f64>() > 200.0 && up.parts.iter().any(|p| p.curve.abs() == 1.0) && pack.manifest.places.contains_key("summit"));
     assert!(pack.manifest.maps["town"].hills > 0.0);
 }
+
+#[test]
+fn the_shootout_is_a_knockout() {
+    let with = |every: i32| MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"shootout\"").replace("\"hours_per_day\": 4 }", "\"hours_per_day\": 8 }")
+        .replace("\"bets\": [10, 25],", &format!("\"bets\": [10, 25], \"shootout\": {{ \"entry\": 50, \"purse\": 300, \"rounds\": 2, \"every\": {every} }},"));
+    let start = |every: i32| {
+        engine::host::store(b"");
+        let mut g = Game::new(Pack::parse(&files(&with(every))));
+        g.seed(7);
+        g.tick(KEY_A, 160, 100);
+        g.tick(0, 160, 100);
+        g
+    };
+    // Not today, if it is held every seventh day.
+    let mut g = start(7);
+    click(&mut g, 100, 10);
+    assert_eq!((g.scene, g.note.as_deref(), g.state.cash), (Scene::Place, Some("The next shootout is on day 7."), 1000));
+
+    // Fifty dollars in, the slow one first and then the next up, and three hundred for winning both.
+    let mut g = start(1);
+    click(&mut g, 100, 10);
+    assert_eq!((g.scene, g.state.cash, g.bracket, g.who), (Scene::Race, 950, Some(0), 0));
+    drive(&mut g);
+    assert_eq!((g.scene, g.bracket, g.who, g.state.hours), (Scene::Race, Some(1), 1, 2), "straight into the next round");
+    drive(&mut g);
+    assert_eq!((g.scene, g.bracket, g.state.cash, g.state.hours, g.state.wins), (Scene::Place, None, 1250, 4, 2));
+    assert_eq!(g.state.rung, 0, "it is not the ladder");
+    click(&mut g, 100, 10);
+    assert_eq!(g.note.as_deref(), Some("You have had your go today."));
+    // The next day, backing out of the first round is being out of it.
+    g.state.hours = 8;
+    click(&mut g, 100, 10);
+    assert_eq!(g.scene, Scene::Race);
+    g.tick(KEY_B, 0, 0);
+    assert_eq!((g.scene, g.bracket, g.state.cash, g.note.as_deref(), g.state.losses), (Scene::Place, None, 1200, Some("Out in round 1. There is always the next."), 1));
+    assert!(Pack::parse(&files(&with(0))).err().unwrap().contains("shootout"));
+}
