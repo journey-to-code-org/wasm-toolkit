@@ -91,6 +91,10 @@ All five steps are in the engine. The engine plays a season out of a pack:
   Space on the green without the clutch still drops it in from wherever the revs are. An
   automatic sits against its converter at its launch speed, as before. On a phone, Clutch is the
   button where Brake is in town.
+  A race down a road starts the same way: through the countdown the gas revs it, Down held at GO
+  keeps the clutch in until you let it out, and the band, the bog, the wheelspin (pulling to the
+  side) and the wear on the clutch are as on the strip. Driving a road on your own starts as
+  always.
 - **Torque steer**: on the strip a car has to be kept in its lane with the wheel (left and
   right). A front-wheel-drive car pulls hard to one side off the line and in the low gears, an
   all-wheel-drive one less, a rear-driven one only with its tyres spinning; which side is the

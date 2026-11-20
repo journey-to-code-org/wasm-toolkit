@@ -166,6 +166,16 @@ pub struct Trip {
     /// A race: who against, and how many ticks until the off.
     pub rival: Option<Rival>,
     pub hold: i32,
+    /// A start from the line, in a car with a clutch: the engine speed it launches best from (none
+    /// for an automatic), whether the clutch is still in after GO, how the launch went, how long
+    /// the tyres still spin or the engine still bogs, and how many revs over the band it was let
+    /// out at.
+    pub best_launch: f64,
+    pub held: bool,
+    pub start: crate::race::Launch,
+    smoke: f64,
+    bog: f64,
+    pub abuse: f64,
     /// Ticks since the off.
     pub clock: u32,
     /// How much of the traffic is trucks and trailers, how much quicker than a back road it all
@@ -201,7 +211,7 @@ impl Trip {
             y += p.hill;
         }
         let len = segs.len() as f64 * SEG;
-        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, gearbox: None, rival: None, hold: 0, clock: 0, rigs: road.rigs.clamp(0.0, 1.0), flow: ((road.limit - 55.0) / 2.237).max(0.0), poker: false, cards: Vec::new(), rng: seed | 1 };
+        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, gearbox: None, rival: None, hold: 0, best_launch: 0.0, held: false, start: crate::race::Launch::None, smoke: 0.0, bog: 0.0, abuse: 0.0, clock: 0, rigs: road.rigs.clamp(0.0, 1.0), flow: ((road.limit - 55.0) / 2.237).max(0.0), poker: false, cards: Vec::new(), rng: seed | 1 };
         for i in 0..road.traffic {
             let z = 80.0 + (trip.rand() % (len - 80.0).max(1.0) as u32) as f64;
             let other = trip.other(z, i);
@@ -249,11 +259,50 @@ impl Trip {
         self.segs[i].y + (next - self.segs[i].y) * ((z / SEG) - i as f64).clamp(0.0, 1.0)
     }
 
+    /// On the line in a car with a clutch: the gas revs it freely, up to the limiter.
+    fn rev_free(&mut self, gas: bool) {
+        if let Some(b) = self.gearbox.as_mut() {
+            b.rpm = if gas { (b.rpm + 5200.0 / HZ).min(b.redline - 250.0) } else { (b.rpm - 3600.0 / HZ).max(900.0) };
+        }
+    }
+
+    /// Away from the line at whatever the revs are: within the band of its best launch speed it is
+    /// a good start; well under, it bogs for a moment; over, the tyres spin for a while.
+    fn away(&mut self) {
+        let Some(b) = self.gearbox.as_mut().filter(|_| self.best_launch > 0.0) else { return };
+        let (band, best) = (crate::race::BAND, self.best_launch);
+        let over = b.rpm - (best + band);
+        self.start = if b.rpm < best - band * 2.0 { crate::race::Launch::Bogged } else if over > 0.0 { crate::race::Launch::Spun } else { crate::race::Launch::Good };
+        match self.start {
+            crate::race::Launch::Bogged => self.bog = 1.2,
+            crate::race::Launch::Spun => (self.smoke, self.abuse) = ((over / 1400.0).min(2.0), over),
+            _ => {}
+        }
+        b.gear = 0;
+    }
+
     pub fn tick(&mut self, road: &Road, p: Pedals) -> Happened {
         let mut out = Happened::default();
+        let clutch = self.best_launch > 0.0 && self.gearbox.is_some();
         if self.hold > 0 {
             self.hold -= 1;
+            if clutch {
+                self.rev_free(p.go);
+                // GO with the clutch in: it waits on the line until it is let out.
+                if self.hold == 0 {
+                    if p.stop { self.held = true } else { self.away() }
+                }
+            }
             return out;
+        }
+        if self.held {
+            if p.stop {
+                self.rev_free(p.go);
+                self.clock += 1;
+                return out;
+            }
+            self.held = false;
+            self.away();
         }
         self.clock += 1;
         if let Some(r) = self.rival.as_mut().filter(|r| r.remote) {
@@ -290,7 +339,22 @@ impl Trip {
             let last = b.ratios[b.ratios.len() - 1];
             pull = if b.rpm >= b.redline { 0.0 } else { 0.75 * (b.ratios[b.gear] / last).sqrt() * (b.rpm / b.peak).clamp(0.4, 1.0) };
         }
+        // A launch let out too high spins the tyres a while; too low, it bogs.
+        let bite = if self.smoke > 0.0 {
+            self.smoke -= 1.0 / HZ;
+            0.6
+        } else if self.bog > 0.0 {
+            self.bog -= 1.0 / HZ;
+            0.45
+        } else {
+            1.0
+        };
         if p.go {
+            let pull = pull * bite;
+            if bite < 1.0 && self.smoke > 0.0 {
+                // Spinning, it squirms toward the side it pulls to.
+                self.x += self.pace.pull * 1.5 * (self.speed / 8.0).min(1.0) / HZ;
+            }
             // On the power the driven wheels drag it to one side: hardest low in the gears, going.
             let low = match self.gearbox.as_ref() { Some(b) => 1.0 / ((b.gear + 1) as f64).powf(1.5), None => (1.0 - self.speed / self.pace.top).max(0.0).powi(2) };
             self.x += self.pace.pull * pull.min(1.0) * low * (self.speed / 12.0).min(1.0) / HZ;

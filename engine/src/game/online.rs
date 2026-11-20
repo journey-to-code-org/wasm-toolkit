@@ -354,6 +354,7 @@ impl Game {
         let mut trip = crate::road::Trip::new(road, &r, false, seed);
         trip.pace = self.pace();
         trip.gearbox = self.gearbox();
+        trip.best_launch = self.launch_speed();
         if self.raining() {
             // It may not be raining where they are: at the meet the road is always dry.
             trip.pace.slide /= 1.35;
@@ -490,6 +491,9 @@ impl Game {
     /// The race is over: the money moves, two hours are gone, and you are back among the others.
     fn finish_versus(&mut self, outcome: Outcome, why: &str) {
         let Some(vs) = self.net.versus.take() else { return };
+        // A start from the line on a road, let out over the band: the clutch pays for it.
+        let abuse = self.trip.as_ref().map_or(0.0, |t| t.abuse);
+        self.ride_clutch(abuse);
         self.race = None;
         self.trip = None;
         self.scene = Scene::Online;

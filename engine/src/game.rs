@@ -668,6 +668,13 @@ impl Game {
         self.save();
     }
 
+    /// The engine speed the car in the bay launches best from, if it has a clutch to launch with.
+    pub fn launch_speed(&self) -> f64 {
+        let Some((o, car)) = self.owned().zip(self.car()) else { return 0.0 };
+        let d = self.tuned_drive(o, car);
+        if d.auto { 0.0 } else { d.launch }
+    }
+
     /// A clutch let out with the revs over the band: it slips, and burns, a point for every
     /// hundred and fifty revs over.
     pub fn ride_clutch(&mut self, over: f64) {
