@@ -2393,3 +2393,34 @@ fn nobody_pays_twice_in_a_day_and_rivals_run_a_little_different_every_time() {
     assert!(runs.iter().all(|&r| (r as f64 - et).abs() <= et * 0.02 + 1.0));
     assert!(runs.iter().any(|&r| r as f64 > et + 100.0) && runs.iter().any(|&r| (r as f64) < et - 50.0));
 }
+
+#[test]
+fn a_change_up_drops_the_revs_by_the_next_ratio_not_to_idle() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra-base", None, 90);
+    g.outfit(&mut o);
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    // Foot down from a stop to a hundred miles an hour, a metre a second at a time: watch every change.
+    let (mut gear, mut was, mut changes) = (0, 0.0, Vec::new());
+    for v in 0..45 {
+        g.shift_auto(v as f64, true);
+        if g.auto.0 != gear {
+            changes.push((was, g.auto.1));
+            gear = g.auto.0;
+        }
+        was = g.auto.1;
+        assert!(g.auto.1 <= 6800.0 && g.auto.1 >= 1800.0, "{:?} at {v}", g.auto);
+    }
+    assert!(changes.len() >= 3, "{changes:?}");
+    for (before, after) in &changes {
+        // Near the redline before, and about three fifths of that after: never back to two thousand.
+        assert!(*before > 5500.0 && *after > 3200.0 && after / before > 0.5, "{changes:?}");
+    }
+    // Cruising, it changes up early and runs low.
+    g.auto = (0, 900.0);
+    g.shift_auto(25.0, false);
+    assert!(g.auto.0 >= 3 && g.auto.1 < 2800.0, "{:?}", g.auto);
+}
