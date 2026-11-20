@@ -616,6 +616,17 @@
           "label": "The shootout: three rounds, every seventh day",
           "do": "say:It is in Ohio. Take the road south.",
           "button": "Shootout"
+        },
+        {
+          "rect": [
+            232,
+            4,
+            84,
+            16
+          ],
+          "label": "Other people's cars: drive through them, or hit them",
+          "do": "ghosts",
+          "button": "Ghosts"
         }
       ],
       "outdoors": true

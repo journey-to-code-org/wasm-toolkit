@@ -205,9 +205,9 @@ fn two_people_meet_dare_race_and_settle() {
     assert_eq!((a.scene, b.scene, a.note.as_deref()), (Scene::Online, Scene::Online, Some("They are gone. That is a win.")));
     assert_eq!((a.state.cash, b.state.cash), (1010, 990));
 
-    // Leaving the meet shuts the line.
+    // Leaving the meet leaves the line up: the world is shared, whether you are at the meet or not.
     press(&mut a, KEY_B);
-    assert_eq!((a.scene, a.net.want), (Scene::Place, false));
+    assert_eq!((a.scene, a.net.want), (Scene::Place, true));
 }
 
 #[test]
@@ -354,4 +354,84 @@ fn two_people_race_down_a_road() {
     assert_eq!(b.scene, Scene::Road);
     press(&mut b, KEY_B);
     assert_eq!((b.scene, b.state.cash), (Scene::Online, 980));
+}
+
+
+/// Two games of the default pack, each with a car, both in town on the same map.
+fn out_in_town() -> Option<(Game, Game, Room)> {
+    let bytes = std::fs::read("../web/default.pack").ok()?;
+    let mut games: Vec<Game> = (0..2).map(|i| {
+        engine::host::store(b"");
+        let mut g = Game::new(Pack::parse(&bytes));
+        g.seed(11 + i);
+        g.tick(KEY_A, 160, 100);
+        g.tick(0, 160, 100);
+        let mut o = engine::game::Owned::new("umbra", Some(if i == 0 { "RED".into() } else { "BLUE".into() }), 90);
+        g.outfit(&mut o);
+        g.state.cars = vec![o];
+        g.state.cur = Some(0);
+        g
+    }).collect();
+    let (mut b, mut a) = (games.pop()?, games.pop()?);
+    // Each wants the line as soon as it is out of the title.
+    assert!(a.net.want && b.net.want, "the line is wanted without going to the meet");
+    let mut room = Room { names: vec!["Ay", "Bee"] };
+    room.join(&mut [&mut a, &mut b]);
+    Some((a, b, room))
+}
+
+#[test]
+fn the_world_is_shared_and_a_dare_can_be_made_from_the_street() {
+    let Some((mut a, mut b, mut room)) = out_in_town() else { return };
+    // Both out of the garage door into town.
+    for g in [&mut a, &mut b] {
+        g.state.place = "garage".into();
+        g.scene = Scene::Place;
+        g.tick(0, 270, 60);
+        g.tick(KEY_A, 270, 60);
+        g.tick(0, 270, 60);
+        assert_eq!(g.scene, Scene::Drive);
+    }
+    // A pulls up a little ahead of B; each says where it is, and each sees the other.
+    let (bx, bz) = { let t = b.town.as_ref().unwrap(); (t.x, t.z) };
+    { let t = a.town.as_mut().unwrap(); (t.x, t.z, t.speed) = (bx + 6.0, bz, 0.0); }
+    for _ in 0..8 {
+        a.tick(0, 0, 0);
+        b.tick(0, 0, 0);
+        room.pump(&mut [&mut a, &mut b]);
+    }
+    let map = format!("map:{}", b.town.as_ref().unwrap().map);
+    let seen = b.others_at(&map);
+    assert_eq!(seen.len(), 1);
+    assert_eq!(seen[0].0.name, "Ay");
+    assert!((seen[0].1.x - (bx + 6.0)).abs() < 0.5, "{:?}", seen[0].1);
+    assert_eq!(b.near_player().map(|p| p.name), Some("Ay".into()));
+
+    // Ghosts by default: B can sit right on A.
+    { let t = b.town.as_mut().unwrap(); (t.x, t.z) = (bx + 6.0, bz); }
+    b.tick(0, 0, 0);
+    assert_eq!(b.town.as_ref().unwrap().crash, 0);
+    // Solid, it is a knock.
+    b.state.solid = true;
+    b.tick(0, 0, 0);
+    assert!(b.town.as_ref().unwrap().crash > 0 && b.owned().unwrap().body > 0);
+    b.state.solid = false;
+
+    // Enter beside A dares them: kicks, the strip. A, still driving, is asked, and takes it.
+    b.town.as_mut().unwrap().crash = 0;
+    b.tick(KEY_A, 0, 0);
+    b.tick(0, 0, 0);
+    assert_eq!(b.scene, Scene::OnlineBets);
+    b.tick(0, 20, 186);
+    b.tick(KEY_A, 20, 186);
+    b.tick(0, 20, 186);
+    assert_eq!(b.scene, Scene::Drive, "back on the street, waiting on them");
+    assert!(b.net.dare_out.is_some());
+    room.pump(&mut [&mut a, &mut b]);
+    assert_eq!((a.scene, a.net.dare_in.map(|d| d.1)), (Scene::Drive, Some(0)));
+    let mut s = engine::gfx::Screen::new();
+    a.draw(&mut s);
+    a.tick(KEY_A, 0, 0);
+    room.pump(&mut [&mut a, &mut b]);
+    assert_eq!((a.scene, b.scene), (Scene::Race, Scene::Race));
 }
