@@ -526,6 +526,14 @@ impl Game {
         for c in &trip.cops {
             on_road(c.z, 1.3, false, "RUBBER", 1, None);
         }
+        // Other people on this road, going either way.
+        let people = self.others_at(&format!("road:{}", trip.road));
+        let paints: Vec<String> = people.iter().map(|(p, _)| p.paint.clone().unwrap_or_else(|| "GREY".into())).collect();
+        for ((who, at), paint) in people.iter().zip(&paints) {
+            if let Some((z, x, back)) = self.on_my_road(at) {
+                on_road(z, x, back, paint, 0, who.car.as_ref().and_then(|c| cars.get(c)));
+            }
+        }
         scene.end_with(s, |s, id, (x, y, w, h)| s.picture_sized(looks[id].0, x, y, w, h, Some(&looks[id].1)));
         self.draw_rain(s, 320, view);
         s.clip_off();
@@ -545,6 +553,17 @@ impl Game {
         s.text_sh(44, 18, &road.title.to_uppercase().chars().take(20).collect::<String>(), white, BLACK);
         let left = (trip.len() - trip.z).max(0.0);
         s.text_sh(44, 27, &if left >= 1000.0 { format!("{:.1} KM TO GO", left / 1000.0) } else { format!("{} M TO GO", left as i32 / 10 * 10) }, white, BLACK);
+        if trip.rival.is_none() {
+            // Who else is on this road, and how far.
+            let mut y = 36;
+            for (who, at) in self.others_at(&format!("road:{}", trip.road)).into_iter().take(3) {
+                let Some((z, _, back)) = self.on_my_road(&at) else { continue };
+                let gap = (z - trip.z) as i32;
+                let words = format!("{} {} M {}", who.name.to_uppercase(), gap.abs(), if back { "COMING" } else if gap >= 0 { "AHEAD" } else { "BEHIND" });
+                s.text_sh(44, y, &words.chars().take(24).collect::<String>(), shade(ramp("LIME"), 28), BLACK);
+                y += 9;
+            }
+        }
         if let Some(r) = &trip.rival {
             // No law out tonight: only who is in front, and by how much.
             let (gap, name) = ((r.z - trip.z) as i32, self.opponent().map_or("THEM".to_string(), |x| x.2.to_uppercase().chars().take(12).collect()));

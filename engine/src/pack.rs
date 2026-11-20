@@ -902,7 +902,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 22] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tyres", "charge", "tuneup"];
+pub const ACTIONS: [&str; 23] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tyres", "charge", "tuneup", "ghosts"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 120;
 

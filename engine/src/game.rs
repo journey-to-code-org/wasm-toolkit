@@ -20,6 +20,7 @@ pub mod dyno;
 pub mod cards;
 pub mod projects;
 pub mod sound;
+pub mod world;
 mod balance;
 use online::Net;
 
@@ -172,6 +173,9 @@ pub struct State {
     pub wins: u32,
     #[serde(default)]
     pub losses: u32,
+    /// Other people's cars in the shared world can be hit: off, they are ghosts.
+    #[serde(default)]
+    pub solid: bool,
     /// Cars bought and on a trailer: the day each gets here, the car, and where it is from.
     #[serde(default)]
     pub coming: Vec<(i32, Owned, String)>,
@@ -1233,6 +1237,13 @@ impl Game {
                     }
                     self.scene = Scene::Paint;
                 }
+                "ghosts" => {
+                    // Other people's cars: something to drive through, or something to hit.
+                    self.state.solid = !self.state.solid;
+                    self.say(if self.state.solid { "Other people's cars are solid now." } else { "Other people's cars are ghosts now." });
+                    tone(if self.state.solid { 520 } else { 400 }, 60);
+                    self.save();
+                }
                 "tuneup" => {
                     // The shop's tune: back to the factory map, made to suit the parts on it.
                     let (cost, hours) = (self.pack.manifest.tuneup.cost, self.pack.manifest.tuneup.hours);
@@ -1544,6 +1555,15 @@ impl Game {
         self.ticks += 1;
         if self.problem.is_some() {
             return;
+        }
+        self.world_tick();
+        if self.street(hit) {
+            return;
+        }
+        if matches!(self.scene, Scene::Drive | Scene::Road) && self.bump_others() {
+            self.dent();
+            tone(70, 400);
+            self.say("You hit them. Ghosts? See the garage.");
         }
         if self.scene == Scene::Race {
             return if self.net.versus.is_some() { self.versus_tick(keys, hit) } else { self.race_tick(keys, hit) };
@@ -2374,9 +2394,18 @@ impl Game {
             Scene::Laptop => self.draw_laptop(s),
             Scene::Online | Scene::OnlineBets => self.draw_online(s),
             Scene::Race => return self.draw_race(s),
-            Scene::Drive => return self.draw_drive(s),
-            Scene::Road => return self.draw_road(s),
+            Scene::Drive => return { self.draw_drive(s); self.draw_street(s) },
+            Scene::Road => return { self.draw_road(s); self.draw_street(s) },
             Scene::Over(kind) => return self.draw_over(s, kind),
+        }
+        if self.scene == Scene::Place {
+            // Who else is here, and anything on the street for you.
+            let here = self.here_too();
+            if !here.is_empty() {
+                let line: String = format!("HERE TOO: {}", here.join(", ").to_uppercase()).chars().take(38).collect();
+                s.text_sh(316 - line.len() as i32 * 8, 4, &line, shade(ramp("CYAN"), 28), BLACK);
+            }
+            self.draw_street(s);
         }
         if self.scene != Scene::Title {
             s.pointer(self.px, self.py);
@@ -3290,6 +3319,24 @@ impl Game {
                 }
             }
         }
+        // Other people out driving here: their cars, and their names over them.
+        for (who, at) in self.others_at(&format!("map:{}", town.map)) {
+            if (at.x - town.x).abs() + (at.z - town.z).abs() > SEE as f64 * p {
+                continue;
+            }
+            let (hs, hc) = at.h.to_radians().sin_cos();
+            let (hl, hw) = if hs.abs() > hc.abs() { (2.1, 0.9) } else { (0.9, 2.1) };
+            let (ox, oz) = (at.x, at.z);
+            let oy = g(ox, oz);
+            Self::box3(&mut scene, ox - hl, oz - hw, ox + hl, oz + hw, oy + 0.25, oy + 0.9, ramp(who.paint.as_deref().unwrap_or("GREY")), 0.0);
+            Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, oy + 0.9, oy + 1.4, ramp("GLASS"), 0.5);
+            if let Some((x, y, depth)) = scene.point([ox, oy + 1.9, oz]) {
+                if depth > 2.0 && depth < p * 4.0 && (0..320).contains(&x) {
+                    // People before places: a name over a car keeps its spot, below the mirror.
+                    names.insert(0, (x, (y - 10).clamp(32, view - 30), who.name.to_uppercase().chars().take(12).collect(), true));
+                }
+            }
+        }
         scene.end(s);
         // One that would be written over another goes on the line above it.
         let mut put: Vec<(i32, i32, i32)> = Vec::new();
@@ -3332,6 +3379,10 @@ impl Game {
                 s.rect(mx0 + (cx / p * cell as f64) as i32, my0 + depth * cell - (cz / p * cell as f64) as i32, 2, 2, shade(ramp("CYAN"), 28));
             }
         }
+        // Other people here, as dots.
+        for (_, at) in self.others_at(&format!("map:{}", town.map)) {
+            s.rect(mx0 + (at.x / p * cell as f64) as i32, my0 + depth * cell - (at.z / p * cell as f64) as i32, 2, 2, shade(ramp("LIME"), 28));
+        }
         let (ux, uy) = (mx0 + (town.x / p * cell as f64) as i32, my0 + depth * cell - (town.z / p * cell as f64) as i32);
         s.line(ux, uy, ux + (hs * 4.0) as i32, uy - (hc * 4.0) as i32, WHITE);
         s.disc(ux, uy, 1, shade(ramp("RED"), 28));
@@ -3351,7 +3402,9 @@ impl Game {
             let words = "ARROWS DRIVE. PULL UP AND PRESS ENTER.";
             s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, words, shade(ramp("GOLD"), 28), BLACK);
         }
-        if let Some(b) = town.beside(map) {
+        // Someone to dare beside you: Enter is for them, and says so below.
+        let someone = self.near_player().is_some() || self.net.dare_in.is_some() || self.net.dare_out.is_some();
+        if let Some(b) = town.beside(map).filter(|_| !someone) {
             let name = b.name.clone().or_else(|| b.to.as_ref().and_then(|to| self.pack.manifest.places.get(to)).map(|pl| pl.title.clone())).unwrap_or_default();
             let words = format!("ENTER: {}", name.to_uppercase());
             s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, &words, shade(ramp("GOLD"), 28), BLACK);

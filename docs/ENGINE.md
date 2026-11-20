@@ -67,6 +67,15 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Under the hood on the build sheet**: on a car with a build sheet, what it came with under
   the hood (airbox, manifold, turbo, intercooler) are real parts: they come off onto the shelf,
   have a condition, and sell. A turbo sells best with its manifold and O2 housing.
+- **A shared world**: whenever the game is open and the page can reach the meet, you are in the
+  world with everyone else playing (sixteen at a time). Each game says a few times a second where
+  its car is, and draws the others: their cars and names on the streets of a town, on the roads
+  (with how far ahead or behind, or coming the other way), dots on the town map, and who else is
+  in a place. Pull up beside someone (slowly, in town or on a road) and Enter dares them: down the
+  road you are both on, or the strip. A dare can come to you anywhere you are not already racing:
+  Enter takes it, Escape turns it down. Other people's cars are ghosts unless you make them solid
+  with the `ghosts` action (the default pack has it at the lot); then hitting one is a knock like
+  any other. If the meet cannot be reached the game plays alone and tries again every half minute.
 - **Sound**: the page makes the car's sound itself from what the engine says each tick: an
   engine note at the firing rate of its cylinders that opens up under load, intake roar, turbo
   whistle as it spools and the blow-off valve when the throttle shuts on boost, tyres squealing
@@ -353,6 +362,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
+  | `ghosts` | other players' cars in the shared world: switch between driving through them and hitting them |
   | `tuneup` | the shop tunes the car in the bay on its factory map, for the pack's `tuneup` cost and hours |
   | `shootout` | enter the shootout, on a day it is held |
   | `charge` | put the battery of the car in the bay on the charger: 5 dollars, two hours |

@@ -30,6 +30,8 @@ pub struct Person {
     pub name: String,
     pub car: Option<String>,
     pub paint: Option<String>,
+    /// Where they last said they were.
+    pub seen: Option<super::world::Seen>,
 }
 
 /// The other lane's timeslip.
@@ -79,14 +81,22 @@ pub struct Net {
     pub dare_out: Option<(u32, i32)>,
     pub dare_in: Option<(u32, i32)>,
     pub versus: Option<Versus>,
-    picked: Option<u32>,
+    pub(super) picked: Option<u32>,
     /// Where a dare is for: 0 the strip, or one of the pack's roads, counted from 1.
     pub course: usize,
     /// The road of the dare made, of the dare made to you, and of the race about to start, each
     /// with the number the other cars on it are dealt from, so both see the same ones.
     road_out: Option<(String, u32)>,
-    road_in: Option<(String, u32)>,
-    road_now: Option<(String, u32)>,
+    pub(super) road_in: Option<(String, u32)>,
+    pub(super) road_now: Option<(String, u32)>,
+    /// Ticks since the line dropped, to know when to try again; what this game last told the
+    /// others about where it is, and when; and the screen a dare from the street goes back to.
+    pub retry: u32,
+    pub told: (String, u32),
+    pub told_at: (f64, f64),
+    /// The car and paint last said, so a new one is said.
+    pub told_car: Option<(String, Option<String>)>,
+    pub back_to: Option<Scene>,
 }
 
 /// Who wins, from the two timeslips. Leaving before the green loses; both doing it is no race.
@@ -110,7 +120,7 @@ fn whole(v: &Value, key: &str) -> Option<i64> {
 }
 
 impl Game {
-    fn send(&mut self, message: Value) {
+    pub(super) fn send(&mut self, message: Value) {
         self.net.outbox.push(message.to_string());
     }
 
@@ -118,7 +128,7 @@ impl Game {
         self.net.people.iter().find(|p| p.id == id)
     }
 
-    fn name_of(&self, id: u32) -> String {
+    pub(super) fn name_of(&self, id: u32) -> String {
         self.person(id).map(|p| p.name.clone()).unwrap_or_else(|| "Someone".into())
     }
 
@@ -138,23 +148,29 @@ impl Game {
         if let Some(why) = self.cannot_race() {
             return self.no(&why);
         }
-        self.net = Net { want: true, state: CONNECTING, ..Net::default() };
+        // The line is always up when it can be: the meet is a list of who is on it.
+        if !self.net.want {
+            self.net = Net { want: true, state: CONNECTING, ..Net::default() };
+        }
         self.note = None;
         self.scene = Scene::Online;
     }
 
     fn leave_online(&mut self) {
-        self.net = Net::default();
+        self.net.dare_in = None;
+        self.net.dare_out = None;
         self.race = None;
         self.note = None;
         self.scene = Scene::Place;
     }
 
     /// Tell them what you are in: everyone, or the one who has just come.
-    fn say_here(&mut self, to: Option<u32>) {
+    pub(super) fn say_here(&mut self, to: Option<u32>) {
         let Some(o) = self.owned() else { return };
         let paint = o.paint.clone().or_else(|| self.car().and_then(|c| c.paint.clone()));
-        let mut message = json!({ "t": "here", "car": o.car, "paint": paint });
+        let car = o.car.clone();
+        self.net.told_car = Some((car.clone(), paint.clone()));
+        let mut message = json!({ "t": "here", "car": car, "paint": paint });
         if let Some(to) = to {
             message["to"] = json!(to);
         }
@@ -175,6 +191,7 @@ impl Game {
             self.net.dare_out = None;
             self.net.state = LOST;
             self.net.want = false;
+            self.net.retry = 0;
             if racing {
                 self.race = None;
                 self.scene = Scene::Online;
@@ -194,7 +211,7 @@ impl Game {
         let Ok(v) = serde_json::from_str::<Value>(text) else { return };
         let Some(kind) = v.get("t").and_then(|t| t.as_str()) else { return };
         let id = |key: &str| whole(&v, key).and_then(|n| u32::try_from(n).ok());
-        let person = |v: &Value| Some(Person { id: whole(v, "id").and_then(|n| u32::try_from(n).ok())?, name: words(v, "name", 16).filter(|n| !n.is_empty()).unwrap_or_else(|| "Someone".into()), car: None, paint: None });
+        let person = |v: &Value| Some(Person { id: whole(v, "id").and_then(|n| u32::try_from(n).ok())?, name: words(v, "name", 16).filter(|n| !n.is_empty()).unwrap_or_else(|| "Someone".into()), car: None, paint: None, seen: None });
         match kind {
             // From the room itself.
             "you" => {
@@ -249,7 +266,7 @@ impl Game {
             "dare" => {
                 let stake = whole(v, "stake").and_then(|s| i32::try_from(s).ok()).unwrap_or(-1);
                 let fair = stake == 0 || self.stakes().contains(&stake);
-                let free = self.scene == Scene::Online && self.net.versus.is_none() && self.net.dare_in.is_none() && self.net.dare_out.is_none();
+                let free = self.free_for_a_dare();
                 // Down a road, if it is one this pack has too.
                 let road = words(v, "road", 40);
                 let fair = fair && road.as_ref().is_none_or(|r| self.pack.manifest.roads.contains_key(r));
@@ -280,6 +297,7 @@ impl Game {
                     self.net.dare_in = None;
                 }
             }
+            "at" => self.heard_at(from, v),
             "staged" if racing => self.net.versus.as_mut().unwrap().him_staged = true,
             "pos" if racing => {
                 let (p, speed) = (v.get("p").and_then(|p| p.as_f64()).unwrap_or(0.0), v.get("v").and_then(|p| p.as_f64()).unwrap_or(0.0));
@@ -306,7 +324,7 @@ impl Game {
         }
     }
 
-    fn start_versus(&mut self, id: u32, stake: i32) {
+    pub(super) fn start_versus(&mut self, id: u32, stake: i32) {
         if let Some((road, seed)) = self.net.road_now.take() {
             return self.start_versus_road(id, stake, &road, seed);
         }
@@ -528,11 +546,11 @@ impl Game {
     pub(super) fn online_bets_tick(&mut self, pick: bool, back: bool) {
         let stakes = self.stakes();
         let Some(to) = self.net.picked.filter(|id| self.person(*id).is_some()) else {
-            self.scene = Scene::Online;
+            self.scene = self.net.back_to.take().unwrap_or(Scene::Online);
             return;
         };
         if back {
-            self.scene = Scene::Online;
+            self.scene = self.net.back_to.take().unwrap_or(Scene::Online);
         } else if pick && (150..166).contains(&self.py) && !self.pack.manifest.roads.is_empty() {
             // Where: the strip, or one of the roads, round and round.
             self.net.course = (self.net.course + 1) % (self.pack.manifest.roads.len() + 1);
@@ -540,7 +558,7 @@ impl Game {
         } else if pick {
             if let Some(b) = self.button(stakes.len() + 1) {
                 let stake = if b == 0 { 0 } else { stakes[b - 1] };
-                self.scene = Scene::Online;
+                self.scene = self.net.back_to.take().unwrap_or(Scene::Online);
                 if self.state.cash < stake {
                     return self.no("You don't have that kind of dough.");
                 }
