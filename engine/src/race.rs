@@ -41,6 +41,24 @@ pub struct Controls {
     /// The wheel, to keep it in its lane.
     pub left: bool,
     pub right: bool,
+    /// The clutch pedal, in a car with a gearbox worked by hand: held in, first can be put in
+    /// without going anywhere, and letting it out is the launch.
+    pub clutch: bool,
+}
+
+/// Either side of a car's best launch speed, how far the revs can be and still make a good start.
+pub const BAND: f64 = 600.0;
+
+/// How a launch went.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Launch {
+    /// Not yet.
+    None,
+    /// Too few revs: it fell on its face.
+    Bogged,
+    Good,
+    /// Too many: the tyres went up in smoke.
+    Spun,
 }
 
 /// How far either way of the middle of its lane a car can wander before it is over a line: the
@@ -101,6 +119,13 @@ pub struct Race {
     pub out: i8,
     /// The tyres are spinning this tick.
     pub spin: bool,
+    /// How the launch went, how much wheelspin is still to come from it (in seconds), and how
+    /// many revs over the band it was let out at: what it took out of the clutch.
+    pub start: Launch,
+    smoke: f64,
+    pub abuse: f64,
+    /// In first with the clutch in, on the line, waiting to let it out.
+    pub held: bool,
 }
 
 impl Race {
@@ -113,8 +138,18 @@ impl Race {
             drive: drive.clone(), gain,
             phase: Phase::Stage, gear: 0, rpm: IDLE, boost: 0.0, pos: 0.0, v: 0.0, launch: 0.0, shift: 0, clock: 0, tree: 0,
             red: false, rt: 0, sixty: 0, et: 0, mph: 0, rival_et, rival_rt, rival_pos: 0.0, won: false, strain: 0.0, blown: false, net: false,
-            lean: 0.0, drift: 0.0, sideways: 0.0, wheel: 0.0, out: 0, spin: false,
+            lean: 0.0, drift: 0.0, sideways: 0.0, wheel: 0.0, out: 0, spin: false, start: Launch::None, smoke: 0.0, abuse: 0.0, held: false,
         }
+    }
+
+    /// The engine speed it launches best from.
+    pub fn best_launch(&self) -> f64 {
+        self.drive.launch
+    }
+
+    /// A gearbox worked by hand, with a clutch pedal.
+    pub fn manual(&self) -> bool {
+        !self.drive.auto
     }
 
     pub fn redline(&self) -> f64 {
@@ -158,6 +193,28 @@ impl Race {
 
     fn ratio(&self) -> f64 {
         self.drive.gears[self.gear - 1] * self.drive.final_drive
+    }
+
+    /// Away: the launch, at whatever the revs are now. Within the band of its best launch speed it
+    /// is a good one; well under, it bogs; well over, the tyres go up in smoke for a while and the
+    /// clutch pays for it.
+    fn go(&mut self, green: bool, since_green: f64) {
+        self.launch = self.rpm;
+        self.red = !green;
+        self.rt = if green { since_green as i32 } else { 0 };
+        self.phase = Phase::Run;
+        if self.red {
+            self.clock = 0;
+        }
+        let best = self.drive.launch;
+        let over = self.rpm - (best + BAND);
+        // The clutch bites, and the revs fall as the car takes up the drive.
+        self.rpm *= 0.8;
+        self.start = if self.rpm < best - BAND * 2.0 { Launch::Bogged } else if over > 0.0 { Launch::Spun } else { Launch::Good };
+        if over > 0.0 {
+            self.smoke = (over / 1400.0).min(2.0);
+            self.abuse = over;
+        }
     }
 
     /// Torque steer: on the power the driven wheels drag the car to one side, hardest in first
@@ -226,17 +283,20 @@ impl Race {
         if self.phase == Phase::Run || green {
             self.clock += 1;
         }
-        if c.up {
+        let manual = !self.drive.auto;
+        if c.up && self.gear == 0 && self.phase != Phase::Stage && manual && c.clutch {
+            // Clutch in, into first: it sits on the line in gear, waiting for the clutch to come out.
+            self.gear = 1;
+            self.held = true;
+        } else if self.held && !c.clutch {
+            // The clutch let out: that is the launch, and before the green it is a red light.
+            self.held = false;
+            self.go(green, since_green);
+        } else if c.up && !self.held {
             if self.gear == 0 && self.phase != Phase::Stage {
-                // Into first: that is the launch, and before the green it is a red light.
+                // Into first without the clutch: dropped in from wherever the revs are.
                 self.gear = 1;
-                self.launch = self.rpm;
-                self.red = !green;
-                self.rt = if green { since_green as i32 } else { 0 };
-                self.phase = Phase::Run;
-                if self.red {
-                    self.clock = 0;
-                }
+                self.go(green, since_green);
             } else if self.gear > 0 && self.gear < self.drive.gears.len() {
                 self.gear += 1;
                 self.shift = 5;
@@ -246,8 +306,19 @@ impl Race {
             self.gear -= 1;
             self.shift = 5;
         }
-        if self.gear == 0 {
-            // In neutral the revs go where your foot puts them, up to the launch limiter.
+        if (self.gear == 0 || self.held) && manual {
+            // Out of gear, or the clutch in: the revs go where your foot puts them, up to the
+            // limiter. Holding them in the band is feathering the throttle.
+            if c.throttle {
+                self.rpm += 5200.0 / HZ;
+                if self.rpm >= self.drive.redline {
+                    self.rpm = self.drive.redline - 250.0;
+                }
+            } else {
+                self.rpm = (self.rpm - 3600.0 / HZ).max(IDLE);
+            }
+        } else if self.gear == 0 {
+            // An automatic sits on the brake against the converter: its revs go to its launch speed.
             let want = if c.throttle { self.drive.launch } else { IDLE };
             self.rpm += (want - self.rpm) / 4.0;
         } else {
@@ -261,7 +332,7 @@ impl Race {
             let want = if c.throttle { ((self.rpm - b.from) * b.psi / 2200.0).clamp(0.0, b.psi) } else { 0.0 };
             self.boost += (want - self.boost) / b.lag.max(1.0);
         }
-        if self.gear == 0 {
+        if self.gear == 0 || self.held {
             return;
         }
         let mut push;
@@ -296,6 +367,12 @@ impl Race {
             let want = force / (self.drive.weight_lb * KG) * self.gain * part * more;
             asked = (want / self.drive.grip.max(1.0)).min(1.3);
             push = want.min(self.drive.grip);
+            // Let out too high, the tyres are still spinning: smoke, not speed, and it squirms.
+            if self.smoke > 0.0 {
+                self.smoke -= 1.0 / HZ;
+                push = push.min(self.drive.grip * 0.62);
+                asked = asked.max(1.25);
+            }
         } else {
             push = -1.0;
         }

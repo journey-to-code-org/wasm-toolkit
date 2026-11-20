@@ -255,6 +255,17 @@ impl Game {
             let mut keys;
             match r.phase {
                 Phase::Stage => keys = if last & KEY_A == 0 { KEY_A } else { 0 },
+                Phase::Tree | Phase::Run if r.manual() && (r.gear == 0 || r.held) => {
+                    // Clutch in, first, the revs fed to its best launch speed; let out a reaction after the green.
+                    let go = r.tree >= crate::race::TREE_STEP * 3 + react;
+                    keys = if r.rpm < r.best_launch() { KEY_UP } else { 0 };
+                    if !go {
+                        keys |= KEY_DOWN;
+                    }
+                    if r.gear == 0 && last & KEY_X == 0 {
+                        keys |= KEY_X | KEY_DOWN;
+                    }
+                }
                 Phase::Tree | Phase::Run => {
                     keys = KEY_UP;
                     let launch = r.gear == 0 && r.tree >= crate::race::TREE_STEP * 3 + react;
