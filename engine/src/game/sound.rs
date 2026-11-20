@@ -76,7 +76,7 @@ impl Game {
                 }
             }),
             Scene::Drive => self.town.as_ref().map_or(Sound::default(), |t| {
-                let rpm = geared(t.speed);
+                let rpm = t.gearbox.as_ref().map_or_else(|| geared(t.speed), |b| b.rpm.max(800.0));
                 Sound {
                     rpm: rpm as f32,
                     load: if gas { 1.0 } else { 0.15 },
@@ -110,6 +110,7 @@ impl Game {
             s.spray = match self.scene {
                 Scene::Race => self.race.as_ref().is_some_and(|r| r.spraying),
                 Scene::Road => self.trip.as_ref().is_some_and(|t| t.spray > 0.0),
+                Scene::Drive => self.town.as_ref().is_some_and(|t| t.spray > 0.0),
                 _ => false,
             } as i32 as f32;
         }

@@ -100,7 +100,7 @@ pub struct Gearbox {
 }
 
 impl Gearbox {
-    fn revs(&self, gear: usize, speed: f64) -> f64 {
+    pub fn revs(&self, gear: usize, speed: f64) -> f64 {
         (speed / 0.3 * self.ratios[gear] * 60.0 / std::f64::consts::TAU).max(900.0)
     }
 }
