@@ -309,6 +309,9 @@ pub struct Part {
     /// with this is the car's suspension, and handles worse as it wears.
     #[serde(default)]
     pub handling: Option<i32>,
+    /// Suspension that can be set up: from the garage, stiff for the strip or soft for the road.
+    #[serde(default)]
+    pub adjustable: bool,
     /// Swapping it, on or off, leaves the engine needing a tune: until it has one it runs down.
     #[serde(default)]
     pub retune: bool,
@@ -902,7 +905,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 23] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tyres", "charge", "tuneup", "ghosts"];
+pub const ACTIONS: [&str; 24] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tyres", "charge", "tuneup", "ghosts", "setup"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 120;
 

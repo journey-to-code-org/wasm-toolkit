@@ -332,7 +332,7 @@ impl Game {
         }
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let (gain, boost) = self.tune(o);
-        let drive = self.tuned_drive(o, car);
+        let drive = self.strip_drive(o, car);
         self.burn(0.5);
         let mut race = Race::new(&drive, gain, boost, 0, 0);
         race.net = true;
