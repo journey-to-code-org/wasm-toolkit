@@ -1648,8 +1648,8 @@
       "says": "She smokes a little. So what.",
       "car": "umbra-base",
       "paint": "BROWN",
-      "et": 17.8,
-      "limit": 50,
+      "et": 17.6,
+      "limit": 100,
       "pinks": false
     },
     {
@@ -1657,8 +1657,8 @@
       "says": "I got work in the morning.",
       "car": "umbra-base",
       "paint": "TEAL",
-      "et": 17.4,
-      "limit": 50,
+      "et": 17.0,
+      "limit": 100,
       "pinks": false
     },
     {
@@ -1666,8 +1666,8 @@
       "says": "Ten bucks says you miss a shift.",
       "car": "umbra-base",
       "paint": "RED",
-      "et": 17.0,
-      "limit": 50,
+      "et": 16.4,
+      "limit": 100,
       "pinks": false
     },
     {
@@ -1675,8 +1675,8 @@
       "says": "I built this one between oil changes.",
       "car": "umbra",
       "paint": "ORANGE",
-      "et": 16.4,
-      "limit": 50,
+      "et": 15.8,
+      "limit": 100,
       "pinks": false
     },
     {
@@ -1684,8 +1684,8 @@
       "says": "My ex paid for the turbo.",
       "car": "umbra",
       "paint": "PINK",
-      "et": 15.8,
-      "limit": 50,
+      "et": 15.3,
+      "limit": 100,
       "pinks": false
     },
     {
@@ -1693,7 +1693,7 @@
       "says": "Don't lean on the paint.",
       "car": "umbra",
       "paint": "NAVY",
-      "et": 15.2,
+      "et": 14.9,
       "limit": 100,
       "pinks": true
     },
@@ -1702,7 +1702,7 @@
       "says": "We take turns driving.",
       "car": "umbra",
       "paint": "LIME",
-      "et": 14.7,
+      "et": 14.6,
       "limit": 100,
       "pinks": true
     },
@@ -1711,7 +1711,7 @@
       "says": "Slicks are in the trunk.",
       "car": "umbra",
       "paint": "MAGENTA",
-      "et": 14.3,
+      "et": 13.3,
       "limit": 100,
       "pinks": true
     },
@@ -1720,7 +1720,7 @@
       "says": "Run it back if you don't like it.",
       "car": "umbra",
       "paint": "GREY",
-      "et": 13.9,
+      "et": 12.7,
       "limit": 100,
       "pinks": true
     },
@@ -1729,8 +1729,8 @@
       "says": "I'll fix what you break. For a fee.",
       "car": "umbra",
       "paint": "CREAM",
-      "et": 13.4,
-      "limit": 100,
+      "et": 12.3,
+      "limit": 250,
       "pinks": true
     },
     {
@@ -1738,8 +1738,8 @@
       "says": "Cash. No checks.",
       "car": "umbra",
       "paint": "FOREST",
-      "et": 13.15,
-      "limit": 100,
+      "et": 12.0,
+      "limit": 250,
       "pinks": true
     },
     {
@@ -1747,8 +1747,8 @@
       "says": "Pride goeth before the tree.",
       "car": "umbra",
       "paint": "WHITE",
-      "et": 12.95,
-      "limit": 100,
+      "et": 11.75,
+      "limit": 250,
       "pinks": true
     },
     {
@@ -1756,8 +1756,8 @@
       "says": "I don't lift.",
       "car": "umbra",
       "paint": "CYAN",
-      "et": 12.75,
-      "limit": 100,
+      "et": 11.55,
+      "limit": 250,
       "pinks": true
     },
     {
@@ -1765,8 +1765,8 @@
       "says": "Court is in session.",
       "car": "umbra",
       "paint": "MAROON",
-      "et": 12.6,
-      "limit": 100,
+      "et": 11.4,
+      "limit": 250,
       "pinks": true
     },
     {
@@ -1774,8 +1774,8 @@
       "says": "Nice car. Be a shame.",
       "car": "umbra",
       "paint": "YELLOW",
-      "et": 12.45,
-      "limit": 100,
+      "et": 11.25,
+      "limit": 250,
       "pinks": true
     },
     {
@@ -1783,8 +1783,8 @@
       "says": "Smell that? That's you losing.",
       "car": "umbra",
       "paint": "INDIGO",
-      "et": 12.3,
-      "limit": 100,
+      "et": 11.1,
+      "limit": 250,
       "pinks": true
     },
     {
@@ -1792,8 +1792,8 @@
       "says": "Say your prayers, son.",
       "car": "umbra",
       "paint": "RUBBER",
-      "et": 12.15,
-      "limit": 100,
+      "et": 10.9,
+      "limit": 250,
       "pinks": true
     },
     {
@@ -1801,8 +1801,8 @@
       "says": "Pink slips. Nothing else.",
       "car": "umbra",
       "paint": "GOLD",
-      "et": 11.9,
-      "limit": 100,
+      "et": 10.7,
+      "limit": 250,
       "pinks": true,
       "king": true
     }
@@ -2465,5 +2465,12 @@
   "tuneup": {
     "cost": 80,
     "hours": 3
-  }
+  },
+  "bets": [
+    10,
+    25,
+    50,
+    100,
+    250
+  ]
 }

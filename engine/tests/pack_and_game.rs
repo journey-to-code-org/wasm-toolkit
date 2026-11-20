@@ -547,7 +547,9 @@ fn pass(m: &Manifest, car: &str, gain: f64, boost: Option<Boost>) -> i32 {
             break;
         }
         let up = (r.gear == 0 && r.tree >= 51) || (r.gear > 0 && r.rpm > drive.redline - 250.0);
-        r.tick(Controls { throttle: true, up, ..Controls::default() });
+        // Fed to its launch speed on the line, as anyone would, and flat out after.
+        let throttle = r.gear > 0 || r.rpm < drive.launch;
+        r.tick(Controls { throttle, up, ..Controls::default() });
     }
     r.et
 }
@@ -562,13 +564,32 @@ fn the_default_pack_is_a_ladder_that_can_be_climbed() {
     assert!(m.cars["umbra-base"].price.unwrap() * 80 / 70 + 40 <= m.start.cash && m.cars["umbra"].price.unwrap() * 55 / 70 > m.start.cash);
     let base = pass(&m, "umbra-base", 0.70, None);
     assert!(base < rival(0) && base > rival(7), "{base}");
-    // A stock turbo car in fair shape is mid-field; the King takes a strong one with everything on it.
+    // A tired stock turbo car is past the base car's best but not yet among the turbos; the King
+    // takes a strong one with everything on it.
     let big = m.parts["big-turbo"].boost.clone();
     let all = 1.0 + m.parts.values().map(|p| p.torque).sum::<i32>() as f64 / 100.0;
     let stock = pass(&m, "umbra", 0.70, None);
-    assert!(stock < rival(12) && stock > rival(15), "{stock}");
+    assert!(stock < rival(10) && stock > rival(11), "{stock}");
     assert!(pass(&m, "umbra", 0.80, None) > rival(21) + 540, "a stock one cannot beat the King however he leaves");
-    assert!(pass(&m, "umbra", 0.80 * all, big) < rival(21), "a built one can");
+    // A rebuilt engine is 0.55 + 0.45 of 85 per cent of its power.
+    // Bolt-ons and the big turbo alone get near the top, not to it.
+    let bolted = pass(&m, "umbra", 0.93 * all, big);
+    assert!(bolted < rival(19) && bolted > rival(21), "{bolted}");
+    // With the engine, tyres, rims and gearbox too, on the rollers, it beats him.
+    if let Some(bytes) = default_pack() {
+        engine::host::store(b"");
+        let mut g = Game::new(Pack::parse(&bytes));
+        let mut o = Owned::new("umbra", None, 85);
+        g.outfit(&mut o);
+        for id in ["stroker", "cone-filter", "wires-8mm", "gears-adj", "sticky-tyres", "rims-alloy", "exhaust-3in", "clutch-twin", "front-mount", "header", "o2-big", "pump-255", "big-turbo", "springs-dual", "cams-272", "mani-sheet"] {
+            o.fitted.insert(g.pack.manifest.parts[id].slot.clone(), id.into());
+        }
+        g.state.cars = vec![o];
+        g.state.cur = Some(0);
+        assert_eq!(g.wont_run(), None);
+        let et = g.dyno().unwrap().et;
+        assert!(et < rival(21), "a built one can: {et}");
+    }
     // A red light, and a missed race.
     let mut r = Race::new(&m.cars["umbra"].drive, 1.0, None, 12000, 300);
     r.tick(Controls { stage: true, ..Controls::default() });
@@ -2375,17 +2396,18 @@ fn nobody_pays_twice_in_a_day_and_rivals_run_a_little_different_every_time() {
     g.who = 4;
     g.state.paid_up = (day, vec![4]);
     g.scene = Scene::Bets;
-    click(&mut g, 100, 186);
+    // Seven buttons: kicks, five stakes, pinks. The second is ten dollars.
+    click(&mut g, 70, 186);
     assert_eq!(g.note.as_deref(), Some("You had my money today. Tomorrow."));
     // Two paid up, and word is out: the rest will not bet, but the next one up the ladder still will.
     g.state.paid_up = (day, vec![1, 2]);
     g.who = 3;
     g.scene = Scene::Bets;
-    click(&mut g, 100, 186);
+    click(&mut g, 70, 186);
     assert_eq!(g.note.as_deref(), Some("Word is out on you. Not today."));
     g.who = 5;
     g.scene = Scene::Bets;
-    click(&mut g, 100, 186);
+    click(&mut g, 70, 186);
     assert_eq!(g.scene, Scene::Race);
     // What he runs is never quite his number, and usually near it.
     let et = g.pack.manifest.rivals[5].et * 1000.0;

@@ -735,7 +735,21 @@ What it found, and what changed, in November 2026:
   $250 was the best deal in the game. Now health costs power gently (half health is about 78 per
   cent of the power), and a rebuild costs the pack's price plus a quarter of the car's.
 
-With these, the bot beats the King around day 45 of 90 in every season, earning more from racing
+Later the same night, the shape of the climb:
+
+- `balance::build_curve` measures what each dollar of upgrades takes off each car's time. A
+  stock Turbo with a rebuilt engine ran 12.34, which beat ten rivals at once, and a built one
+  10.26, far past the King's 11.9. The rivals now sit along these curves: the base car's best
+  (about 14.6) is the last of its rivals, few rivals sit in the gap between the cars, and each
+  Turbo rival from 13.3 down takes another upgrade. The King runs 10.7: the big turbo and the
+  rest.
+- The middle of the ladder bets up to $100 and the top up to $250 (a new stake), so saving for
+  the Turbo, and for the big turbo, does not take the whole season.
+
+With these, the bot beats the King around day 72 to 77, the climb spread over the season (the
+base car's rivals by day 26, the Turbo around day 35, then a rung every few days). A person,
+who loses now and then, should get there near the end of the season. Earlier in the night it was
+day 45, earning more from racing
 than from jobs; it wears out spark plugs, belts and brakes a few times a season, and a
 front-wheel-drive car held by eye stays in its lane.
 

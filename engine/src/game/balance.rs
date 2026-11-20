@@ -527,3 +527,32 @@ fn torque_steer_by_hand() {
     }
 }
 
+
+#[test]
+#[ignore]
+fn build_curve() {
+    // A Turbo with a rebuilt engine, upgraded the bot's way with all the money in the world: what
+    // each step costs and what it runs, driven well. The ladder's rivals should sit along this.
+    for car in ["umbra-base", "umbra"] {
+        let mut g = default_game(5);
+        let mut o = Owned::new(car, None, 85);
+        g.outfit(&mut o);
+        g.state.cars = vec![o];
+        g.state.cur = Some(0);
+        g.state.cash = 1_000_000;
+        let mut spent = 0;
+        let mut s = Season::default();
+        println!("{car}: stock {:.2}", g.bot_et_with(None) as f64 / 1000.0);
+        for _ in 0..40 {
+            let Some((id, et, cost)) = g.bot_best_upgrade() else { break };
+            for x in g.bot_bundle(&id).unwrap_or_default().iter().rev() {
+                g.bot_buy_fit(x, &mut s, true);
+            }
+            g.state.cars[0].untuned = false;
+            spent += cost;
+            println!("  ${spent:5}  {:.2}  {id}", et as f64 / 1000.0);
+        }
+    }
+    let rivals = default_game(1).pack.manifest.rivals.clone();
+    println!("rivals: {:?}", rivals.iter().map(|r| r.et).collect::<Vec<_>>());
+}
