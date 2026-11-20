@@ -2305,3 +2305,50 @@ fn front_drive_pulls_to_a_side_and_the_wheel_holds_it() {
     assert!(lean != 0.0 && lean == g.lean() && (0.8..=1.2).contains(&lean.abs()));
     assert!(g.pace().pull.abs() > 0.0 && g.pace().pull.signum() == lean.signum());
 }
+
+#[test]
+fn the_car_is_heard_as_it_goes() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    // On the title screen there is nothing to hear.
+    let quiet = g.listen();
+    assert!(quiet.rpm == 0.0 && quiet.load == 0.0 && quiet.wind == 0.0 && quiet.siren == 0.0, "{quiet:?}");
+    let mut o = Owned::new("umbra", None, 90);
+    g.outfit(&mut o);
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    // On the strip, foot down: the engine turning, flat out, a four.
+    g.state.place = "overlook".into();
+    g.scene = Scene::Place;
+    click(&mut g, 40, 186);
+    click(&mut g, 20, 186);
+    assert_eq!(g.scene, Scene::Race);
+    g.tick(KEY_A, 0, 0);
+    for _ in 0..40 { g.tick(KEY_UP, 0, 0); }
+    let s = g.listen();
+    assert!(s.rpm > 3000.0 && s.load == 1.0 && s.cylinders == 4.0 && s.siren == 0.0, "{s:?}");
+    // Launched, the tyres spin and the turbo comes in; lift with it on boost and the valve lets go, once.
+    let mut most = 0.0f32;
+    for _ in 0..120 {
+        let r = g.race.as_ref().unwrap();
+        let shift = (r.gear == 0 && r.tree >= 45) || (r.gear > 0 && r.rpm > r.redline() - 300.0);
+        g.tick(if shift { KEY_UP | KEY_X } else { KEY_UP }, 0, 0);
+        most = most.max(g.listen().boost);
+    }
+    assert!(most > 0.5, "{most}");
+    let before = g.listen().blowoffs;
+    g.tick(0, 0, 0);
+    assert_eq!(g.listen().blowoffs, before + 1.0);
+    g.tick(0, 0, 0);
+    assert_eq!(g.listen().blowoffs, before + 1.0, "once per lift");
+
+    // In town with the law behind you: a siren.
+    let mut t = town_game();
+    click(&mut t, 100, 10);
+    assert_eq!(t.scene, Scene::Drive);
+    t.tick(KEY_UP, 0, 0);
+    assert!(t.listen().rpm > 0.0 && t.listen().siren == 0.0);
+    t.town.as_mut().unwrap().chase = Some((1, 10.0));
+    assert_eq!(t.listen().siren, 1.0);
+}

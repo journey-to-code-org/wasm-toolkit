@@ -238,12 +238,12 @@ impl Game {
                 tone(880, 250);
             }
         } else if chased {
-            tone(if self.ticks / 9 % 2 == 0 { 760 } else { 570 }, 60);
+            self.hum(if self.ticks / 9 % 2 == 0 { 760 } else { 570 });
         } else if warned && self.radar() && self.ticks % 12 == 0 {
             tone(1500, 50);
         } else if !stopped {
             let v = (speed * 10.0) as i32;
-            tone(match revs { Some(r) => (r / 40.0) as i32, None if speed > 0.0 || keys & KEY_UP != 0 => 60 + v % 110 + v / 110 * 12, None => 45 }, 60);
+            self.hum(match revs { Some(r) => (r / 40.0) as i32, None if speed > 0.0 || keys & KEY_UP != 0 => 60 + v % 110 + v / 110 * 12, None => 45 });
         }
         self.burn(h.went / 1000.0 * per_km);
         self.scrub(h.went / 1000.0 * 0.4);

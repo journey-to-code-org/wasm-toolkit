@@ -99,6 +99,8 @@ pub struct Race {
     pub wheel: f64,
     /// Over a line: 1 across the centre line, -1 into the wall. Either is the race lost.
     pub out: i8,
+    /// The tyres are spinning this tick.
+    pub spin: bool,
 }
 
 impl Race {
@@ -111,12 +113,17 @@ impl Race {
             drive: drive.clone(), gain,
             phase: Phase::Stage, gear: 0, rpm: IDLE, boost: 0.0, pos: 0.0, v: 0.0, launch: 0.0, shift: 0, clock: 0, tree: 0,
             red: false, rt: 0, sixty: 0, et: 0, mph: 0, rival_et, rival_rt, rival_pos: 0.0, won: false, strain: 0.0, blown: false, net: false,
-            lean: 0.0, drift: 0.0, sideways: 0.0, wheel: 0.0, out: 0,
+            lean: 0.0, drift: 0.0, sideways: 0.0, wheel: 0.0, out: 0, spin: false,
         }
     }
 
     pub fn redline(&self) -> f64 {
         self.drive.redline
+    }
+
+    /// How much of its boost the turbo is making, 0 to 1.
+    pub fn boost_share(&self) -> f64 {
+        self.boost_kind.as_ref().map_or(0.0, |b| (self.boost / b.psi.max(1.0)).clamp(0.0, 1.0))
     }
 
     pub fn turbo(&self) -> bool {
@@ -185,6 +192,7 @@ impl Race {
             c.down = false;
             c.up = if self.gear == 0 { c.throttle && self.phase == Phase::Tree && self.tree + 1 >= TREE_STEP * 3 + 8 } else { self.phase == Phase::Run && self.shift == 0 && self.rpm > self.drive.redline - 300.0 };
         }
+        self.spin = false;
         if self.phase == Phase::Slip {
             // Past the line: off the throttle and on the brakes.
             self.v = (self.v - 8.0 / HZ).max(0.0);
@@ -300,6 +308,7 @@ impl Race {
             self.phase = Phase::Slip;
             return;
         }
+        self.spin = asked >= 1.0;
         self.wander(c, asked);
         if self.out != 0 {
             self.et = 0;

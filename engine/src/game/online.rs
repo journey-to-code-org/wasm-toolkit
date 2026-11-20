@@ -387,7 +387,10 @@ impl Game {
                 }
             } else if trip.crash == 0 && counting == 0 {
                 let v = (trip.speed * 10.0) as i32;
-                tone(if trip.speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 }, 60);
+                let hz = if trip.speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 };
+                if !self.voiced {
+                tone(hz, 60);
+            }
             }
             if counting == 0 && self.ticks % 5 == 0 {
                 out.push(json!({ "t": "pos", "to": to, "p": (trip.z * 10.0).round() / 10.0, "v": (trip.speed * 10.0).round() / 10.0, "x": (trip.x * 100.0).round() / 100.0 }));
@@ -608,7 +611,10 @@ impl Game {
         } else if was == Phase::Stage && race.phase == Phase::Tree {
             tone(660, 60);
         } else if race.phase != Phase::Slip || race.v > 0.0 {
-            tone((race.rpm / 40.0) as i32, 60);
+            let hz = (race.rpm / 40.0) as i32;
+            if !self.voiced {
+                tone(hz, 60);
+            }
         }
         let done = (race.phase == Phase::Slip && hit & KEY_A != 0).then_some(vs.result).flatten();
         let stake = vs.stake;

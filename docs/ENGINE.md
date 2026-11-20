@@ -67,6 +67,11 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Under the hood on the build sheet**: on a car with a build sheet, what it came with under
   the hood (airbox, manifold, turbo, intercooler) are real parts: they come off onto the shelf,
   have a condition, and sell. A turbo sells best with its manifold and O2 housing.
+- **Sound**: the page makes the car's sound itself from what the engine says each tick: an
+  engine note at the firing rate of its cylinders that opens up under load, intake roar, turbo
+  whistle as it spools and the blow-off valve when the throttle shuts on boost, tyres squealing
+  at their limit or under hard braking, the wind, and a siren behind you. M mutes it all. A page
+  without this (or an older one) still gets the beeps.
 - **Torque steer**: on the strip a car has to be kept in its lane with the wheel (left and
   right). A front-wheel-drive car pulls hard to one side off the line and in the low gears, an
   all-wheel-drive one less, a rear-driven one only with its tyres spinning; which side is the
@@ -431,7 +436,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   Each dial is where its needle turns, the needle's length and what it reads at full sweep;
   `minis` are dials that only sit there. The wheel is a square picture turned about `at`.
   Everything but `picture` may be left out.
-  `"auto": true` in a car's `drive` makes it an automatic. `"driven": "front"` (or `"all"`, or
+  `"auto": true` in a car's `drive` makes it an automatic. `"cylinders": 8` is how its engine
+  sounds (four if left out). `"driven": "front"` (or `"all"`, or
   the default `"rear"`) is which wheels it drives: on a hard launch the front ones drag the car
   to one side (torque steer), all four do it less, and the back ones only when they spin.
   `"stock": { "Valves": "s-valves", "Rear diff": "s-diff" }` is its build sheet: for each

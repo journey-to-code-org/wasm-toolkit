@@ -166,7 +166,10 @@ impl Game {
             if r.rpm >= d.redline {
                 r.strain += 1.0;
             }
-            tone((r.rpm / 40.0) as i32, 60);
+            let hz = (r.rpm / 40.0) as i32;
+            if !self.voiced {
+                tone(hz, 60);
+            }
             if r.strain > crate::race::BLOWS_AT {
                 self.scene = Scene::Place;
                 self.blew();

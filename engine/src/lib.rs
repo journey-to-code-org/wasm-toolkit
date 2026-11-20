@@ -32,6 +32,7 @@ struct Engine {
 static mut ENGINE: Option<Engine> = None;
 static mut PACK_BUFFER: Vec<u8> = Vec::new();
 static mut NET_BUFFER: Vec<u8> = Vec::new();
+static mut SOUND: [f32; 8] = [0.0; 8];
 
 #[allow(static_mut_refs)]
 fn engine() -> &'static mut Engine {
@@ -88,6 +89,8 @@ pub extern "C" fn wtk_input(keys: u32, mx: i32, my: i32) {
 pub extern "C" fn wtk_step() {
     let e = engine();
     e.game.tick(e.keys, e.mouse.0, e.mouse.1);
+    let heard = e.game.listen().as_array();
+    unsafe { SOUND = heard };
     e.game.draw(&mut e.screen);
     talk(e);
 }
@@ -159,6 +162,20 @@ pub extern "C" fn wtk_flags() -> i32 {
 #[no_mangle]
 pub extern "C" fn wtk_screen() -> *const u16 {
     engine().screen.fb.as_ptr()
+}
+
+/// What is to be heard after the last step: engine speed, load, boost, cylinders, tyre squeal,
+/// the blow-off count, the siren and the wind, as eight floats. See `game::sound`.
+#[no_mangle]
+#[allow(static_mut_refs)]
+pub extern "C" fn wtk_sound() -> *const f32 {
+    unsafe { SOUND.as_ptr() }
+}
+
+/// The page makes the engine's sound from `wtk_sound`, so the engine stops beeping it.
+#[no_mangle]
+pub extern "C" fn wtk_voice() {
+    engine().game.voiced = true;
 }
 
 #[no_mangle]
