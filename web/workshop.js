@@ -728,6 +728,7 @@ function mapsPanel() {
       field("Speed limit, mph", mp.limit ?? 35, (n) => { mp.limit = Math.max(10, n ?? 35); }, { type: "number", min: 10, max: 100 }),
       field("A ticket, dollars (and 2 for every mph over)", mp.ticket ?? 30, (n) => { mp.ticket = Math.max(0, Math.floor(n ?? 30)); }, { type: "number", min: 0 }),
       field("How high its hills are, metres (0: flat)", mp.hills ?? 0, (n) => { if (n > 0) mp.hills = Math.min(30, n); else delete mp.hills; }, { type: "number", min: 0, max: 30 }),
+      tick("Open world: its roads run on from its last streets, driven there with no change of view", !!mp.open, (v) => { if (v) mp.open = true; else delete mp.open; }),
       field("Gallons burned a kilometre", mp.gas_per_km ?? 0.4, (n) => { mp.gas_per_km = Math.max(0, n ?? 0.4); }, { type: "number", step: "0.1", min: 0 })),
     h("p", { class: "hint", text: "There is a street between every two blocks and one round the outside. The top of the map is north." })));
   const places = [["", "Nowhere: it is only a building"], ...Object.entries(m.places).map(([id, p]) => [id, p.title])];

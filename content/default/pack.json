@@ -1831,6 +1831,7 @@
   "maps": {
     "town": {
       "title": "Town",
+      "open": true,
       "traffic": 8,
       "rows": [
         "BOTRCB",

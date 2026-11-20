@@ -356,7 +356,7 @@ impl Game {
     }
 
     /// A box standing on the road, pointing the way `f` points: only the sides that can be seen.
-    fn obox(scene: &mut Scene3, at: V3, f: (f64, f64), hl: f64, hw: f64, tall: f64, ramp: usize, key: f64) {
+    pub(super) fn obox(scene: &mut Scene3, at: V3, f: (f64, f64), hl: f64, hw: f64, tall: f64, ramp: usize, key: f64) {
         let r = (f.1, -f.0);
         let c = |a: f64, b: f64, y: f64| [at[0] + f.0 * a * hl + r.0 * b * hw, at[1] + y, at[2] + f.1 * a * hl + r.1 * b * hw];
         let eye = scene.cam.pos;

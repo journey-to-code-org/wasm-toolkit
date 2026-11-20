@@ -15,6 +15,7 @@ pub mod pack;
 pub mod race;
 pub mod road;
 pub mod town;
+pub mod land;
 
 use game::Game;
 use gfx::Screen;
