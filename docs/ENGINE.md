@@ -85,7 +85,7 @@ All five steps are in the engine. The engine plays a season out of a pack:
   Your own laptop at the rollers does it; or the shop does, on the factory map, for a fee.
 - **Getting rid of a car**: one with a build sheet can go three ways from the yard. The dealer
   takes it whole if it runs; a shell good enough to sell (body no worse than 70) goes for the
-  shell, with every part stripped onto the shelf first, in four hours; or the scrapyard takes it
+  shell, with every part stripped onto the shelf first, in a day's work (eight hours); or the scrapyard takes it
   as it stands, for $50 and a little for each part still on it. Any car can also just sit.
 - **Wear**: parts a pack says wear do, with every pass and every kilometre. A tired one costs
   power, a note says when one will not last, and one that wears out stops the car. A battery
@@ -512,7 +512,9 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   "hours": 3 }` is what the `paint` action charges, and `"tuneup": { "cost": 80, "hours": 3 }`
   what the `tuneup` action does.
 - **bets** and **paints** may be left out. So may `"rebuild": { "cost": 250, "cond": 85 }`:
-  what an engine rebuild costs and how healthy it comes back.
+  what an engine rebuild costs (plus a quarter of the car's price in the paper) and how healthy
+  it comes back. An engine's health costs it power gently: at 50 per cent it makes about 78 per
+  cent of its power.
 - **cars** may have `"tank": 17`, in gallons. A small dial in the cockpit with `"reads": "gas"`
   shows what is in it.
 
@@ -674,6 +676,43 @@ up to four minutes at the far end for the other.
 `WPK1`, a u32 count, then for each file: u16 name length, the name, u32 length, the bytes. All
 little-endian. A `.pic` is u16 width, u16 height, then (count, colour) pairs; colour `0xFFFF` is
 clear.
+
+## Balance
+
+`engine/src/game/balance.rs` is a player made of code. It plays whole seasons of the default pack
+the way a sensible person would: keeps its car running, races the next one up the ladder for what
+it can afford to lose, races people it has beaten for money when that pays better than a job,
+buys whatever takes most off its time for the money (with whatever that part needs), rebuilds a
+tired engine, and changes to a quicker car when its own has gone as far as it can. It launches a
+fifth of a second after the green, shifts near the redline and holds its lane by eye.
+
+    cd engine && cargo test --lib balance -- --nocapture --ignored --test-threads 1
+
+It prints each season (how it ended, the day each rung fell, where the hours and the money went,
+what wore out and what let go), a year of parts cars (cost home against parting out, scrap and
+whole), and how often holding the lane by hand goes wrong. It plays better than most people: it
+never races anyone it cannot beat, so a person should take longer than it does.
+
+What it found, and what changed, in November 2026:
+
+- Racing anyone you had beaten paid every time, as often as you liked: rivals ran the same time
+  every pass. Now a rival's time varies run to run (mostly within a tenth or two, now and then
+  well off it), someone who has paid you will not bet again that day, two paid up in a day and
+  word is out (the next one up the ladder still races you), and someone you have beaten bets
+  half what he would.
+- A parts car parted out never lost money, and made about $2,000: used factory parts sold back
+  at 70 to 89 per cent of new. Now they fetch 15 to 24 per cent (anything else 55 to 74), sellers
+  ask 70 to 124 per cent of what the car is worth, and stripping one is a day. Parting out now
+  makes about $130 on average, and one in eight loses money.
+- The stroker engine fitted any car, which made the cheap car as quick as the turbo one. It now
+  fits the turbo car only.
+- An engine's health cost it power one for one, so a worn-out car bought cheap and rebuilt for
+  $250 was the best deal in the game. Now health costs power gently (half health is about 78 per
+  cent of the power), and a rebuild costs the pack's price plus a quarter of the car's.
+
+With these, the bot beats the King around day 45 of 90 in every season, earning more from racing
+than from jobs; it wears out spark plugs, belts and brakes a few times a season, and a
+front-wheel-drive car held by eye stays in its lane.
 
 ## What comes next
 

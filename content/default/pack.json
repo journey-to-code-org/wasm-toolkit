@@ -1111,7 +1111,10 @@
           180
         ]
       ],
-      "retune": true
+      "retune": true,
+      "fits": [
+        "umbra"
+      ]
     },
     "bottle": {
       "name": "Nitrous kit",
