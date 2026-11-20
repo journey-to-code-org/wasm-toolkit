@@ -3,6 +3,15 @@
 // stage, race, and come back. The room here does what the parlor's does: it says who is in it,
 // puts who a message is from on it, and passes it on.
 import { readFileSync } from "node:fs";
+// The screen as 320 by 240 places, whatever dots it is drawn in: the top left dot of each.
+const places = (x) => {
+  const pw = x.wtk_width?.() ?? 320, s = pw / 320, dots = new Uint16Array(x.memory.buffer, x.wtk_screen(), pw * (x.wtk_height?.() ?? 240));
+  if (s === 1) return dots;
+  const out = new Uint16Array(320 * 240);
+  for (let y = 0; y < 240; y++) for (let i = 0; i < 320; i++) out[y * 320 + i] = dots[y * s * pw + i * s];
+  return out;
+};
+
 
 const [wasm, packPath] = process.argv.slice(2);
 const W = 320, H = 240, UP = 1, A = 16, B = 32, E = 64;
@@ -39,8 +48,8 @@ async function player(name) {
   x.wtk_init(players.length + 1);
   Object.assign(me, {
     x,
-    screen: () => new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H).slice(),
-    at: (px, py) => new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H)[py * W + px],
+    screen: () => places(x).slice(),
+    at: (px, py) => places(x)[py * W + px],
     step: (keys, mx = 300, my = 150) => { x.wtk_input(keys, mx, my); x.wtk_step(); },
   });
   players.push(me);

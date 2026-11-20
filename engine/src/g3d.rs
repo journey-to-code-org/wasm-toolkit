@@ -3,7 +3,7 @@
 //!
 //! x is to the right, y is up, z is ahead; lengths are metres and angles are radians.
 
-use crate::gfx::{shade, Screen, H, W};
+use crate::gfx::{shade, Screen, PH, PW, S, W};
 
 pub type V3 = [f64; 3];
 const NEAR: f64 = 0.25;
@@ -59,10 +59,21 @@ impl Scene3 {
         [rx, ry * tc + rz * ts, rz * tc - ry * ts]
     }
 
+    /// Where a point in the camera's space is on the screen, in places and parts of places.
+    fn place(&self, c: V3) -> (f64, f64) {
+        ((self.cam.cx as f64 + c[0] * self.cam.focal / c[2]).clamp(-FAR_OFF, FAR_OFF), (self.cam.cy as f64 - c[1] * self.cam.focal / c[2]).clamp(-FAR_OFF, FAR_OFF))
+    }
+
+    /// The place it is in.
     fn flat(&self, c: V3) -> (i32, i32) {
-        let x = self.cam.cx as f64 + c[0] * self.cam.focal / c[2];
-        let y = self.cam.cy as f64 - c[1] * self.cam.focal / c[2];
-        (x.clamp(-FAR_OFF, FAR_OFF) as i32, y.clamp(-FAR_OFF, FAR_OFF) as i32)
+        let (x, y) = self.place(c);
+        (x as i32, y as i32)
+    }
+
+    /// The dot it is on: shapes are drawn as finely as the screen has dots.
+    fn fine(&self, c: V3) -> (i32, i32) {
+        let (x, y) = self.place(c);
+        ((x * S as f64) as i32, (y * S as f64) as i32)
     }
 
     /// Where a point is on the screen, and how far ahead of the camera. None if it is behind.
@@ -104,8 +115,8 @@ impl Scene3 {
         if out.len() < 3 {
             return;
         }
-        let flat: Vec<(i32, i32)> = out.iter().map(|&c| self.flat(c)).collect();
-        if flat.iter().all(|p| p.0 < 0) || flat.iter().all(|p| p.0 >= W) || flat.iter().all(|p| p.1 < 0) || flat.iter().all(|p| p.1 >= H) {
+        let flat: Vec<(i32, i32)> = out.iter().map(|&c| self.fine(c)).collect();
+        if flat.iter().all(|p| p.0 < 0) || flat.iter().all(|p| p.0 >= PW) || flat.iter().all(|p| p.1 < 0) || flat.iter().all(|p| p.1 >= PH) {
             return;
         }
         let (mut a, mut b) = (a, b);
@@ -175,7 +186,7 @@ impl Scene3 {
                 draw(s, self.sprites[next].id, self.sprites[next].at);
                 next += 1;
             }
-            s.poly(&p.pts, p.a, p.b);
+            s.poly_fine(&p.pts, p.a, p.b);
         }
         for sp in &self.sprites[next..] {
             draw(s, sp.id, sp.at);

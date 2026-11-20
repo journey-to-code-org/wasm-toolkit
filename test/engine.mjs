@@ -3,6 +3,15 @@
 // to the lot, put ten dollars on a race and run it. Twice, and the two must match.
 // Pass --shots <dir> to write each screen as a .ppm.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+// The screen as 320 by 240 places, whatever dots it is drawn in: the top left dot of each.
+const places = (x) => {
+  const pw = x.wtk_width?.() ?? 320, s = pw / 320, dots = new Uint16Array(x.memory.buffer, x.wtk_screen(), pw * (x.wtk_height?.() ?? 240));
+  if (s === 1) return dots;
+  const out = new Uint16Array(320 * 240);
+  for (let y = 0; y < 240; y++) for (let i = 0; i < 320; i++) out[y * 320 + i] = dots[y * s * pw + i * s];
+  return out;
+};
+
 
 const [wasm, packPath, flag, dir] = process.argv.slice(2);
 const W = 320, H = 240, UP = 1, A = 16, B = 32, E = 64;
@@ -20,7 +29,7 @@ async function play(shots, packBytes) {
   const at = x.pack_alloc(packBytes.length);
   new Uint8Array(x.memory.buffer, at, packBytes.length).set(packBytes);
   const ok = x.pack_load();
-  const live = () => new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H);
+  const live = () => places(x);
   const screen = () => live().slice();
   const shot = (name) => {
     if (!shots) return;

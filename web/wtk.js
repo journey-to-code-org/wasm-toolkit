@@ -1,9 +1,10 @@
-// The host for a wtk game: it loads the .wasm, shows its 320x240 screen scaled up in whole pixels,
+// The host for a wtk game: it loads the .wasm, shows its screen (320x240, or what the engine says
+// it is: wtk_width and wtk_height) scaled up in whole pixels,
 // feeds it the keyboard and the pointer thirty times a second, and is its PC speaker. For an engine
 // that says what its car is doing (wtk_sound), it also makes the car's sound; M mutes it all.
 import { voice } from "./voice.js";
 
-const W = 320, H = 240, HZ = 30;
+const HZ = 30;
 const KEYS = {
   ArrowUp: 1, KeyW: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 4, KeyA: 4, ArrowRight: 8, KeyD: 8,
   Enter: 16, Space: 16 | 1024, Escape: 32, Backspace: 32, KeyE: 64, KeyQ: 128, KeyN: 256, ShiftLeft: 256, ShiftRight: 256, KeyH: 512, Slash: 512,
@@ -95,10 +96,13 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
   const env = { wtk_tone: speaker, wtk_store: store, wtk_fetch: fetchSave, wtk_net_open: netOpen, wtk_net_close: netClose, wtk_net_send: netSend };
   const { instance } = await WebAssembly.instantiate(await bytesOf(url), { env });
   x = instance.exports;
-  canvas.width = W;
-  canvas.height = H;
+  // Where things are is told in 320 by 240 places however many dots there are to them.
+  const W = 320, H = 240;
+  const PW = x.wtk_width?.() ?? W, PH = x.wtk_height?.() ?? H;
+  canvas.width = PW;
+  canvas.height = PH;
   const ctx = canvas.getContext("2d");
-  const image = ctx.createImageData(W, H);
+  const image = ctx.createImageData(PW, PH);
   const out = new Uint32Array(image.data.buffer);
 
   // `latch` holds anything pressed since the last tick, so a tap shorter than a tick is not lost.
@@ -126,9 +130,9 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
 
   const show = () => {
     const mem = x.memory.buffer;
-    const screen = new Uint16Array(mem, x.wtk_screen(), W * H);
+    const screen = new Uint16Array(mem, x.wtk_screen(), PW * PH);
     const pal = new Uint32Array(mem, x.wtk_palette(), 1024);
-    for (let i = 0; i < W * H; i++) out[i] = pal[screen[i]];
+    for (let i = 0; i < PW * PH; i++) out[i] = pal[screen[i]];
     ctx.putImageData(image, 0, 0);
   };
 

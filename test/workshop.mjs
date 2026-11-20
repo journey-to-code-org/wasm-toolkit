@@ -48,7 +48,7 @@ pack.manifest.cars.slab = { name: "Slab", side: "slab.pic", ground: 20, paint: "
 pack.manifest.start.car = "slab";
 const [cx, cy] = pack.manifest.places.garage.car_at;
 const withSlab = await viewer.view(buildPack(pack));
-const at = (x, y) => { const i = (y * 320 + x) * 4; return [withSlab.rgba[i], withSlab.rgba[i + 1], withSlab.rgba[i + 2]]; };
+const at = (x, y) => { const k = withSlab.w / 320, i = (y * k * withSlab.w + x * k) * 4; return [withSlab.rgba[i], withSlab.rgba[i + 1], withSlab.rgba[i + 2]]; };
 const body = at(cx + 30, cy - 20 + 6), wheel = at(cx + 11, cy - 3);
 check(withSlab.ok, "the engine plays the pack with the new car");
 check(body[1] > body[0] && body[1] > body[2], "the orange car stands in the garage in green");

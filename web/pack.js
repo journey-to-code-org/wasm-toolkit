@@ -52,16 +52,18 @@ export function buildPack({ manifest, files }) {
 }
 
 // A .pic: width, height, then runs of (count, colour), all 16-bit.
+// A picture: `w` by `h` dots in `ix`. One painted fine (`s` is 2) has two dots to each place on
+// the screen each way, so it stands `pw` by `ph` places; an ordinary one, a dot to a place.
 export function picDecode(bytes) {
   const words = new Uint16Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + (bytes.byteLength & ~1)));
-  const w = words[0], h = words[1], ix = new Uint16Array(w * h);
+  const s = words[0] & 0x8000 ? 2 : 1, w = words[0] & 0x7fff, h = words[1], ix = new Uint16Array(w * h);
   let at = 0;
   for (let i = 2; i + 1 < words.length; i += 2) { ix.fill(words[i + 1], at, at + words[i]); at += words[i]; }
-  return { w, h, ix };
+  return { w, h, ix, s, pw: w / s, ph: h / s };
 }
 
-export function picEncode(w, h, ix) {
-  const words = [w, h];
+export function picEncode(w, h, ix, fine = false) {
+  const words = [fine ? w | 0x8000 : w, h];
   for (let i = 0; i < ix.length;) {
     let j = i;
     while (j < ix.length && ix[j] === ix[i] && j - i < 65535) j++;
@@ -179,7 +181,7 @@ export function slug(words) {
 }
 
 // The engine, for looking at a pack without playing it: load it, press Enter past the title, and
-// hand back the screen as RGBA. `lamps` picks the first spot that works the headlamps, if any.
+// hand back the screen as RGBA, `w` by `h` dots (an engine that does not say is 320 by 240). `lamps` picks the first spot that works the headlamps, if any.
 export async function makeViewer(wasmBytes) {
   const module = await WebAssembly.compile(wasmBytes);
   const start = async () => (await WebAssembly.instantiate(module, { env: { wtk_tone: () => {}, wtk_store: () => {}, wtk_fetch: () => 0, wtk_net_open: () => {}, wtk_net_close: () => {}, wtk_net_send: () => {} } })).exports;
@@ -204,10 +206,11 @@ export async function makeViewer(wasmBytes) {
         // A little way down the road, foot down, so it is seen moving.
         for (let i = 0; i < roll; i++) step(1, 319, 199);
       }
-      const screen = new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H);
-      const out = new Uint8ClampedArray(W * H * 4);
+      const w = x.wtk_width?.() ?? W, h = x.wtk_height?.() ?? H;
+      const screen = new Uint16Array(x.memory.buffer, x.wtk_screen(), w * h);
+      const out = new Uint8ClampedArray(w * h * 4);
       new Uint32Array(out.buffer).set(Array.from(screen, (c) => palette[c]));
-      return { ok, rgba: out };
+      return { ok, rgba: out, w, h };
     },
   };
 }

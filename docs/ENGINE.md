@@ -290,6 +290,14 @@ The workshop has no tests of its own in CI; `web/pack.js`, which reads and write
 run-length as `<name>.pic`, and puts everything in one file. PNGs may be any size up to 320x240;
 transparent pixels stay clear.
 
+The screen is 640 by 480 dots, laid out as 320 by 240 places of two dots each way. Every position
+in a pack (spots, dials, where a car stands, picture sizes) is in places, so a pack made for the
+320 by 240 screen plays the same. What the engine draws from shapes (roads, buildings, scenery,
+lines, needles and letters) is drawn in dots, and so is finer. A picture is a dot to a place
+unless it is painted fine: name it `<name>@2x.png`, twice the size each way (up to 640x480, even
+each way), and it goes in as `<name>.pic` standing the same size with every dot shown. The
+workshop keeps a dropped picture fine on its own when the file has the dots for it.
+
 ## Photos
 
 `tools/pixelate.py` turns a photo, or any picture, into a PNG that the engine draws exactly as

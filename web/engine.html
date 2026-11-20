@@ -7,7 +7,7 @@
 <style>
   html, body { margin: 0; height: 100%; background: #000; color: #fff; font: 15px ui-monospace, Menlo, Consolas, monospace; overflow: hidden; }
   body { display: grid; place-items: center; }
-  /* 320x240 on a 4:3 screen: square pixels, scaled up without smoothing. */
+  /* 4:3 screen (320x240 places, 640x480 dots): square pixels, scaled up without smoothing. */
   #stage { position: relative; width: min(100vw, 133.33vh); aspect-ratio: 4 / 3; }
   canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; image-rendering: crisp-edges; cursor: none; touch-action: none; }
   /* Buttons for a screen with no keyboard, laid over the picture. They press the same keys, and

@@ -160,6 +160,17 @@ pub extern "C" fn wtk_flags() -> i32 {
     g.owned().is_some_and(|o| g.kit(o).is_some()) as i32 | if g.scene == game::Scene::Road && g.trip.as_ref().is_some_and(|t| t.gearbox.is_some()) || g.scene == game::Scene::Drive && g.town.as_ref().is_some_and(|t| t.gearbox.is_some()) { 2 } else { 0 }
 }
 
+/// How many dots the screen is across and down. A page that is not told shows 320 by 240.
+#[no_mangle]
+pub extern "C" fn wtk_width() -> i32 {
+    gfx::PW
+}
+
+#[no_mangle]
+pub extern "C" fn wtk_height() -> i32 {
+    gfx::PH
+}
+
 #[no_mangle]
 pub extern "C" fn wtk_screen() -> *const u16 {
     engine().screen.fb.as_ptr()
