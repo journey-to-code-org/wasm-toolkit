@@ -477,7 +477,11 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   `rear` is also how the car looks ahead of you on a road, and `"front": { "picture":
   "front.pic", "width_m": 1.7 }` is how it looks coming the other way. Other cars on a road are
   drawn as whichever of the pack's cars have these pictures, in their own paint, and whoever you
-  race down a road is drawn as their car. With no picture a car is a plain shape.
+  race down a road is drawn as their car. With no picture a car is a plain shape. In town the
+  same goes: the back of a car going your way, the front of one coming at you, and its side
+  picture (mirrored for the other way) when it crosses; town traffic uses cars that have both a
+  back and a front. The default pack's are made-up stand-ins: drop your own over them in the
+  workshop.
 - **parts**: one part to a `slot`; the slots are whatever the parts name. `torque` is a
   percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
   Beyond torque a part can have `grip` (per cent more, for tyres), `weight_lb` (what it adds;
