@@ -946,6 +946,10 @@ function partsPanel() {
         field("Rare from the factory: per cent of cars that came with it in place of the stock one (never sold new)", p.rare ?? "", (v) => { if (v > 0) p.rare = Math.min(100, Math.floor(v)); else delete p.rare; }, { type: "number", min: 0, max: 100 }),
         field("It wears: per cent of itself a pass takes (blank: it does not)", p.wears ?? "", (v) => { if (v > 0) p.wears = v; else delete p.wears; }, { type: "number", min: 0, step: "0.1" }),
         field("Worn out in use, it takes the parts in these slots with it (Valves), with commas between", (p.takes ?? []).join(", "), (v) => { const n = v.split(",").map((x) => x.trim()).filter(Boolean); if (n.length) p.takes = n; else delete p.takes; })),
+      tick("It changes how the car sounds", !!p.sound, (v) => { if (v) p.sound = {}; else delete p.sound; }),
+      p.sound ? h("div", { class: "three" },
+        ...[["loud", "Exhaust louder, per cent"], ["deep", "Deeper, per cent"], ["rasp", "Raspier, per cent"], ["intake", "Intake roar, per cent"], ["whistle", "Turbo whistle and blow-off, per cent"]].map(([k, label]) =>
+          field(label, p.sound[k] ?? "", (v) => { if (v) p.sound[k] = Math.floor(v); else delete p.sound[k]; }, { type: "number", min: -90, max: 400 }))) : null,
       tick("Swapping it means the engine needs a tune again (cams, a turbo, injectors)", !!p.retune, (v) => { if (v) p.retune = true; else delete p.retune; }),
       tick("It is a battery: run down it is flat, and a charge brings it back", !!p.charges, (v) => { if (v) p.charges = true; else delete p.charges; }),
       tick("It is a clutch: over what it holds it slips and wears, and does not snap", !!p.slips, (v) => { if (v) p.slips = true; else delete p.slips; }),

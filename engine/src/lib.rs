@@ -32,7 +32,7 @@ struct Engine {
 static mut ENGINE: Option<Engine> = None;
 static mut PACK_BUFFER: Vec<u8> = Vec::new();
 static mut NET_BUFFER: Vec<u8> = Vec::new();
-static mut SOUND: [f32; 8] = [0.0; 8];
+static mut SOUND: [f32; game::sound::SOUND_LEN] = [0.0; game::sound::SOUND_LEN];
 
 #[allow(static_mut_refs)]
 fn engine() -> &'static mut Engine {
@@ -165,7 +165,8 @@ pub extern "C" fn wtk_screen() -> *const u16 {
 }
 
 /// What is to be heard after the last step: engine speed, load, boost, cylinders, tyre squeal,
-/// the blow-off count, the siren and the wind, as eight floats. See `game::sound`.
+/// the blow-off count, the siren, the wind, what the parts make of the exhaust (loud, deep, rasp),
+/// the intake and the turbo's whistle, and nitrous spraying: fourteen floats. See `game::sound`.
 #[no_mangle]
 #[allow(static_mut_refs)]
 pub extern "C" fn wtk_sound() -> *const f32 {

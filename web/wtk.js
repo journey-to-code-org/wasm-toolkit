@@ -147,7 +147,7 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
     last = now;
     let stepped = false;
     for (; owed >= 1; owed--) { x.wtk_input(keys | latch, mx, my); latch = 0; x.wtk_step(); stepped = true; }
-    if (stepped && car) car(new Float32Array(x.memory.buffer, x.wtk_sound(), 8));
+    if (stepped && car) car(new Float32Array(x.memory.buffer, x.wtk_sound(), 14));
     if (stepped) show();
     requestAnimationFrame(frame);
   };
