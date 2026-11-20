@@ -2523,3 +2523,41 @@ fn the_clutch_is_let_out_in_the_band_or_it_bogs_or_spins() {
     g.ride_clutch(spun.2);
     assert!(g.state.cars[0].fitted["Clutch"].starts_with("s-clutch@"), "{:?}", g.state.cars[0].fitted["Clutch"]);
 }
+
+#[test]
+fn a_road_race_starts_on_the_clutch_too() {
+    use engine::race::Launch;
+    use engine::road::{Gearbox, Trip};
+    let Some(bytes) = default_pack() else { return };
+    let pack = Pack::parse(&bytes).unwrap();
+    let road = pack.manifest.roads.values().next().unwrap().clone();
+    // From a three-second countdown: the revs fed to `at`, the clutch in at GO if `wait` and let out a second later.
+    let start = |at: f64, wait: bool| {
+        let mut t = Trip::new("r", &road, false, 3);
+        t.gearbox = Some(Gearbox { ratios: vec![12.0, 7.5, 5.2, 4.0, 3.2], redline: 7200.0, peak: 5500.0, gear: 0, rpm: 900.0 });
+        t.best_launch = 5000.0;
+        t.hold = 90;
+        let mut still = true;
+        for k in 0..240 {
+            let rpm = t.gearbox.as_ref().unwrap().rpm;
+            let waiting = t.hold > 0 || t.held;
+            let gas = if waiting { rpm < at } else { true };
+            let clutch = wait && k < 120;
+            t.tick(&road, Pedals { go: gas, stop: clutch, ..Pedals::default() });
+            if k < 118 && wait { still &= t.speed == 0.0; }
+        }
+        (t.start, t.z, t.abuse, still)
+    };
+    let (good, bog, spun) = (start(5000.0, false), start(1200.0, false), start(7100.0, false));
+    assert_eq!((good.0, bog.0, spun.0), (Launch::Good, Launch::Bogged, Launch::Spun));
+    assert!(good.1 > bog.1 && good.1 > spun.1, "{good:?} {bog:?} {spun:?}");
+    assert!(good.2 == 0.0 && spun.2 > 500.0);
+    // The clutch held at GO: it sits there, revs and all, until it is let out.
+    let held = start(5000.0, true);
+    assert!(held.3 && held.0 == Launch::Good && held.1 > 0.0, "{held:?}");
+    // An automatic is as it was: no clutch, no band.
+    let mut t = Trip::new("r", &road, false, 3);
+    t.hold = 30;
+    for _ in 0..60 { t.tick(&road, Pedals { go: true, ..Pedals::default() }); }
+    assert_eq!(t.start, Launch::None);
+}

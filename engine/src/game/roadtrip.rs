@@ -77,6 +77,7 @@ impl Game {
         let mut trip = Trip::new(id, &road, backwards, seed);
         trip.pace = self.pace();
         trip.gearbox = self.gearbox();
+        trip.best_launch = self.launch_speed();
         let mut them = crate::road::Rival::new(r.et, r.paint.as_deref().unwrap_or("RED"));
         if self.raining() {
             // They are no braver in the wet than you can be.
@@ -277,6 +278,8 @@ impl Game {
         }
         if racing && (h.arrived || h.beaten) {
             tone(if h.arrived { 990 } else { 160 }, 300);
+            let abuse = self.trip.as_ref().map_or(0.0, |t| t.abuse);
+            self.ride_clutch(abuse);
             self.trip = None;
             return self.settle(Some(h.arrived));
         }
@@ -316,6 +319,35 @@ impl Game {
             self.say("Out of gas. You walked home.");
             self.spend(2);
         }
+    }
+
+    /// The clutch's own words for a road start: the revs and the band on the line, what to do,
+    /// and how it went.
+    fn draw_road_launch(&self, s: &mut Screen, trip: &Trip) {
+        let Some(b) = trip.gearbox.as_ref().filter(|_| trip.best_launch > 0.0) else { return };
+        let gold = shade(ramp("GOLD"), 28);
+        let waiting = trip.hold > 0 || trip.held;
+        if waiting {
+            let (x0, w, y) = (120, 80, 70);
+            let at = |rpm: f64| x0 + ((rpm / b.redline).clamp(0.0, 1.0) * w as f64) as i32;
+            let band = crate::race::BAND;
+            s.rect(x0, y + 3, w, 1, shade(ramp("CHROME"), 9));
+            s.rect(at(trip.best_launch - band), y + 1, at(trip.best_launch + band) - at(trip.best_launch - band), 5, shade(ramp("FOREST"), 16));
+            let good = (b.rpm - trip.best_launch).abs() <= band;
+            s.rect(at(b.rpm) - 1, y, 3, 7, if good { shade(ramp("LIME"), 28) } else { shade(ramp("ORANGE"), 28) });
+        }
+        let words = if trip.held {
+            "LET THE CLUTCH OUT!"
+        } else if trip.hold > 0 && trip.hold <= 90 {
+            "DOWN: CLUTCH. REVS IN THE GREEN."
+        } else if trip.z < 40.0 && trip.start == crate::race::Launch::Bogged {
+            "BOGGED IT"
+        } else if trip.z < 40.0 && trip.start == crate::race::Launch::Spun {
+            "TOO MANY REVS: WHEELSPIN"
+        } else {
+            return;
+        };
+        s.text_sh(160 - words.len() as i32 * 4, 82, words, gold, BLACK);
     }
 
     /// A radar detector, if there is one in the car.
@@ -572,6 +604,7 @@ impl Game {
             if let Some(words) = self.versus_road_says() {
                 s.text_sh(160 - words.len() as i32 * 4, 60, words, gold, BLACK);
             }
+            self.draw_road_launch(s, trip);
             if trip.hold > 0 && trip.hold <= 90 {
                 let n = format!("{}", (trip.hold - 1) / 30 + 1);
                 s.text_big(150, 50, &n, BLACK, 4);
