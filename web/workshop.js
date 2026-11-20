@@ -115,15 +115,19 @@ async function wholePicture(file, most) {
 // A picture made exactly `w` by `h`: scaled to cover that, and what hangs over the sides or the
 // top and bottom cut away evenly. With `shorter`, a picture too wide for its height is left
 // shorter than `h` and not cut at the sides.
+// A picture with dots enough for two to a place each way is kept fine: the screen has the dots.
+const fineFor = (bitmap, w, h) => bitmap.width >= w * 2 && bitmap.height >= h * 2;
+
 async function sizedPicture(file, w, h, shorter = false) {
   const bitmap = await createImageBitmap(file);
   if (shorter) h = Math.min(h, Math.round(bitmap.height * w / bitmap.width));
-  const scale = Math.max(w / bitmap.width, h / bitmap.height), dw = bitmap.width * scale, dh = bitmap.height * scale;
-  const c = new OffscreenCanvas(w, h), g = c.getContext("2d", { willReadFrequently: true });
+  const k = fineFor(bitmap, w, h) ? 2 : 1, [dw0, dh0] = [w * k, h * k];
+  const scale = Math.max(dw0 / bitmap.width, dh0 / bitmap.height), dw = bitmap.width * scale, dh = bitmap.height * scale;
+  const c = new OffscreenCanvas(dw0, dh0), g = c.getContext("2d", { willReadFrequently: true });
   g.imageSmoothingEnabled = scale < 0.67;
   g.imageSmoothingQuality = "high";
-  g.drawImage(bitmap, (w - dw) / 2, (h - dh) / 2, dw, dh);
-  return picEncode(w, h, toIndices(g.getImageData(0, 0, w, h).data, w, h, pal, { dither: 5 }).ix);
+  g.drawImage(bitmap, (dw0 - dw) / 2, (dh0 - dh) / 2, dw, dh);
+  return picEncode(dw0, dh0, toIndices(g.getImageData(0, 0, dw0, dh0).data, dw0, dh0, pal, { dither: 5 }).ix, k === 2);
 }
 
 // A small picture, such as a steering wheel or a car from behind: brought down to `most` wide if
@@ -131,11 +135,12 @@ async function sizedPicture(file, w, h, shorter = false) {
 async function smallPicture(file, most, square) {
   const bitmap = await createImageBitmap(file);
   const w = Math.min(most, bitmap.width), hh = square ? w : Math.max(1, Math.round(bitmap.height * w / bitmap.width));
-  const c = new OffscreenCanvas(w, hh), g = c.getContext("2d", { willReadFrequently: true });
-  g.imageSmoothingEnabled = bitmap.width > w * 1.5;
+  const k = fineFor(bitmap, w, hh) ? 2 : 1, [dw, dh] = [w * k, hh * k];
+  const c = new OffscreenCanvas(dw, dh), g = c.getContext("2d", { willReadFrequently: true });
+  g.imageSmoothingEnabled = bitmap.width > dw * 1.5;
   g.imageSmoothingQuality = "high";
-  g.drawImage(bitmap, 0, 0, w, hh);
-  return picEncode(w, hh, toIndices(g.getImageData(0, 0, w, hh).data, w, hh, pal, { dither: 6 }).ix);
+  g.drawImage(bitmap, 0, 0, dw, dh);
+  return picEncode(dw, dh, toIndices(g.getImageData(0, 0, dw, dh).data, dw, dh, pal, { dither: 6 }).ix, k === 2);
 }
 
 function dropZone(label, onFile) {
@@ -225,11 +230,12 @@ function cutter(onFile) {
 async function tallPicture(file, tall) {
   const bitmap = await createImageBitmap(file);
   const hh = Math.max(4, Math.min(120, tall)), w = Math.max(1, Math.min(160, Math.round(bitmap.width * hh / bitmap.height)));
-  const c = new OffscreenCanvas(w, hh), g = c.getContext("2d", { willReadFrequently: true });
-  g.imageSmoothingEnabled = bitmap.height > hh * 1.5;
+  const k = fineFor(bitmap, w, hh) ? 2 : 1, [dw, dh] = [w * k, hh * k];
+  const c = new OffscreenCanvas(dw, dh), g = c.getContext("2d", { willReadFrequently: true });
+  g.imageSmoothingEnabled = bitmap.height > dh * 1.5;
   g.imageSmoothingQuality = "high";
-  g.drawImage(bitmap, 0, 0, w, hh);
-  return picEncode(w, hh, toIndices(g.getImageData(0, 0, w, hh).data, w, hh, pal, { dither: 4 }).ix);
+  g.drawImage(bitmap, 0, 0, dw, dh);
+  return picEncode(dw, dh, toIndices(g.getImageData(0, 0, dw, dh).data, dw, dh, pal, { dither: 4 }).ix, k === 2);
 }
 const newName = (kind) => { let n = 1; while (pack.files.has(`${kind}-${n}.pic`)) n++; return `${kind}-${n}.pic`; };
 
@@ -584,7 +590,7 @@ function drawSide() {
 function drawHood() {
   const c = car(), pic = picDecode(pack.files.get(c.hood.picture)), canvas = $("hood"), over = $("hoodOver");
   canvas.width = pic.w; canvas.height = pic.h; canvas.style.width = "100%";
-  over.width = pic.w * 2; over.height = pic.h * 2;
+  over.width = pic.pw * 2; over.height = pic.ph * 2;
   const g = canvas.getContext("2d"), image = g.createImageData(pic.w, pic.h), out = new Uint32Array(image.data.buffer);
   pic.ix.forEach((v, i) => { out[i] = v === CLEAR ? 0xff000000 : pal[v]; });
   g.putImageData(image, 0, 0);
@@ -976,7 +982,7 @@ function partsPanel() {
         const fit = Object.entries(m.cars).find(([cid]) => !p.fits || p.fits.includes(cid))?.[1], own = fit && pack.files.get(fit.side) && picDecode(pack.files.get(fit.side));
         if (!own) return fail("There is no car with a picture for this part to go on yet.");
         const name = p.side ?? newName("kit");
-        try { pack.files.set(name, await sizedPicture(f, own.w, own.h)); } catch { return fail("That file is not a picture the browser can read."); }
+        try { pack.files.set(name, await sizedPicture(f, own.pw, own.ph)); } catch { return fail("That file is not a picture the browser can read."); }
         p.side = name; render();
       }),
       p.side ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "It does not show from the side", onclick: () => { delete p.side; tidy(); render(); } })) : null,
@@ -1133,6 +1139,13 @@ function render() {
   preview();
 }
 
+// The engine's screen in the preview, at as many dots as it has.
+function showView(rgba, w, h) {
+  const v = $("view");
+  if (v.width !== w) { v.width = w; v.height = h; }
+  v.getContext("2d").putImageData(new ImageData(rgba, w, h), 0, 0);
+}
+
 async function preview() {
   const m = pack.manifest;
   let shown = m, lamps = null;
@@ -1145,8 +1158,8 @@ async function preview() {
     shown = { ...m, start: { ...m.start, place: from, car }, places: { ...m.places, [from]: room } };
     if (!car) delete shown.start.car;
     lamps = [0, 0, 320, 200];
-    const { ok, rgba } = await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: true, spot: lamps });
-    $("view").getContext("2d").putImageData(new ImageData(rgba, 320, 240), 0, 0);
+    const { ok, rgba, w: vw, h: vh } = await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: true, spot: lamps });
+    showView(rgba, vw, vh);
     if (!ok) fail("The engine will not play this pack as it stands; the screen says why.");
     else if (!car) fail("There is no car in the pack to drive it in.");
     else if ($("problem").textContent.startsWith("The engine will not")) fail("");
@@ -1161,8 +1174,8 @@ async function preview() {
     if (!car) delete shown.start.car;
     // The engine is asked about the pack as it is, too, so that what is wrong with the real road is said.
     const real = await viewer.view(buildPack(pack));
-    const { ok, rgba } = real.ok ? await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: true, spot: [0, 0, 320, 200], roll: 24 }) : real;
-    $("view").getContext("2d").putImageData(new ImageData(rgba, 320, 240), 0, 0);
+    const { ok, rgba, w: vw, h: vh } = real.ok ? await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: true, spot: [0, 0, 320, 200], roll: 24 }) : real;
+    showView(rgba, vw, vh);
     if (!ok) fail("The engine will not play this pack as it stands; the screen says why.");
     else if (!car) fail("There is no car in the pack to drive it in.");
     else if ($("problem").textContent.startsWith("The engine will not")) fail("");
@@ -1176,8 +1189,8 @@ async function preview() {
     shown = { ...m, start: { ...m.start, place: at.place, car: m.start.car ?? Object.keys(m.cars)[0] } };
     if (!shown.start.car) delete shown.start.car;
   }
-  const { ok, rgba } = await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: $("lampsOn").checked && !!lamps, spot: lamps });
-  $("view").getContext("2d").putImageData(new ImageData(rgba, 320, 240), 0, 0);
+  const { ok, rgba, w: vw, h: vh } = await viewer.view(buildPack({ manifest: shown, files: pack.files }), { lamps: $("lampsOn").checked && !!lamps, spot: lamps });
+  showView(rgba, vw, vh);
   if (!ok) fail("The engine will not play this pack as it stands; the screen says why.");
   else if ($("problem").textContent.startsWith("The engine will not")) fail("");
   redraw();

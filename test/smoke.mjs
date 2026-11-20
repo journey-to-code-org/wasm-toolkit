@@ -2,6 +2,15 @@
 // out of the door and round the block. Every step is done twice from the same seed and must
 // come out the same, pixel for pixel. Pass --shots <dir> to write each screen as a .ppm.
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+// The screen as 320 by 240 places, whatever dots it is drawn in: the top left dot of each.
+const places = (x) => {
+  const pw = x.wtk_width?.() ?? 320, s = pw / 320, dots = new Uint16Array(x.memory.buffer, x.wtk_screen(), pw * (x.wtk_height?.() ?? 240));
+  if (s === 1) return dots;
+  const out = new Uint16Array(320 * 240);
+  for (let y = 0; y < 240; y++) for (let i = 0; i < 320; i++) out[y * 320 + i] = dots[y * s * pw + i * s];
+  return out;
+};
+
 
 const [path, flag, dir] = process.argv.slice(2);
 const W = 320, H = 240;
@@ -13,7 +22,7 @@ async function play(shots) {
   const tones = [];
   const { instance } = await WebAssembly.instantiate(readFileSync(path), { env: { wtk_tone: (hz, ms) => tones.push(hz), wtk_store: () => {}, wtk_fetch: () => 0 } });
   const x = instance.exports;
-  const screen = () => new Uint16Array(x.memory.buffer, x.wtk_screen(), W * H).slice();
+  const screen = () => places(x).slice();
   const pal = () => new Uint32Array(x.memory.buffer, x.wtk_palette(), 1024);
   const shot = (name) => {
     if (!shots) return;

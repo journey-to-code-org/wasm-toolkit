@@ -3,8 +3,15 @@
 
 use crate::font::FONT;
 
+/// The screen as everything is placed on it: 320 by 240 places. Each place is `S` dots across
+/// and down, so what is drawn from shapes, not pictures (the view from the seat, lines, needles,
+/// letters) is drawn finer than what it is placed by.
 pub const W: i32 = 320;
 pub const H: i32 = 240;
+pub const S: i32 = 2;
+/// The screen in dots.
+pub const PW: i32 = W * S;
+pub const PH: i32 = H * S;
 pub const CLEAR: u16 = 0xFFFF;
 
 /// The ramps of the default palette, by name, in order. Ramp 0 is the EGA sixteen and sixteen greys.
@@ -38,28 +45,41 @@ pub fn shade(ramp: usize, s: i32) -> u16 {
 /// A picture: palette indices, run-length, with `CLEAR` for what shows through.
 #[derive(Clone, Debug, Default)]
 pub struct Picture {
+    /// How big it is on the screen, in places.
     pub w: i32,
     pub h: i32,
+    /// How many dots of it there are to a place, across and down: 1, or 2 for one painted fine.
+    pub s: i32,
     pub runs: Vec<(u16, u16)>,
     /// The same picture a pixel at a time, for turning and scaling it.
     pub ix: Vec<u16>,
 }
 
 impl Picture {
-    /// From the pack: little-endian words, width, height, then (count, colour) pairs.
+    /// From the pack: little-endian words, width, height, then (count, colour) pairs. A width
+    /// with its top bit set is of a picture painted fine: twice the dots each way for its size.
     pub fn from_bytes(bytes: &[u8]) -> Option<Picture> {
         let words: Vec<u16> = bytes.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
         if words.len() < 2 || (words.len() - 2) % 2 != 0 {
             return None;
         }
         let runs: Vec<(u16, u16)> = words[2..].chunks_exact(2).map(|p| (p[0], p[1])).collect();
-        let (w, h) = (words[0] as i32, words[1] as i32);
+        let fine = words[0] & 0x8000 != 0;
+        let (w, h) = ((words[0] & 0x7FFF) as i32, words[1] as i32);
         let total: i64 = runs.iter().map(|r| r.0 as i64).sum();
-        if total != w as i64 * h as i64 {
+        if total != w as i64 * h as i64 || fine && (w % 2 != 0 || h % 2 != 0) {
             return None;
         }
         let ix = runs.iter().flat_map(|&(n, c)| std::iter::repeat_n(c, n as usize)).collect();
-        Some(Picture { w, h, runs, ix })
+        let s = if fine { 2 } else { 1 };
+        Some(Picture { w: w / s, h: h / s, s, runs, ix })
+    }
+
+    /// The dot of it at a place and a part of a place: `x` and `y` in dots of the screen.
+    #[inline]
+    fn dot(&self, x: i32, y: i32) -> u16 {
+        let (px, py) = (x * self.s / S, y * self.s / S);
+        self.ix[(py * self.w * self.s + px) as usize]
     }
 }
 
@@ -88,9 +108,10 @@ impl Tint {
 }
 
 pub struct Screen {
+    /// Every dot of it: `PW` across and `PH` down.
     pub fb: Vec<u16>,
     pub pal: Vec<u32>,
-    /// Drawing is kept inside this box: left, top, right, bottom.
+    /// Drawing is kept inside this box, in dots: left, top, right, bottom.
     clip: [i32; 4],
 }
 
@@ -121,7 +142,7 @@ impl Screen {
         for (i, c) in EGA.iter().enumerate() {
             pal[i] = rgb(c[0] as i32, c[1] as i32, c[2] as i32);
         }
-        Screen { fb: vec![0; (W * H) as usize], pal, clip: [0, 0, W, H] }
+        Screen { fb: vec![0; (PW * PH) as usize], pal, clip: [0, 0, PW, PH] }
     }
 
     pub fn clear(&mut self, c: u16) {
@@ -130,49 +151,66 @@ impl Screen {
 
     /// Keep drawing inside a box, and let it out again.
     pub fn clip(&mut self, x: i32, y: i32, w: i32, h: i32) {
-        self.clip = [x.max(0), y.max(0), (x + w).min(W), (y + h).min(H)];
+        self.clip = [x.max(0) * S, y.max(0) * S, (x + w).min(W) * S, (y + h).min(H) * S];
     }
 
     pub fn clip_off(&mut self) {
-        self.clip = [0, 0, W, H];
+        self.clip = [0, 0, PW, PH];
     }
 
-    pub fn pset(&mut self, x: i32, y: i32, c: u16) {
+    /// One dot.
+    #[inline]
+    fn dot(&mut self, x: i32, y: i32, c: u16) {
         if x >= self.clip[0] && x < self.clip[2] && y >= self.clip[1] && y < self.clip[3] {
-            self.fb[(y * W + x) as usize] = c;
+            self.fb[(y * PW + x) as usize] = c;
         }
+    }
+
+    /// A box of dots.
+    fn dots(&mut self, x: i32, y: i32, w: i32, h: i32, c: u16) {
+        let (x0, x1) = (x.max(self.clip[0]), (x + w).min(self.clip[2]));
+        if x0 >= x1 {
+            return;
+        }
+        for j in y.max(self.clip[1])..(y + h).min(self.clip[3]) {
+            self.fb[(j * PW + x0) as usize..(j * PW + x1) as usize].fill(c);
+        }
+    }
+
+    /// One place.
+    pub fn pset(&mut self, x: i32, y: i32, c: u16) {
+        self.dots(x * S, y * S, S, S, c);
     }
 
     /// Take a box of the screen down so many shades: the dark coming on.
     pub fn darken(&mut self, x: i32, y: i32, w: i32, h: i32, by: u16) {
-        for py in y..y + h {
-            for px in x..x + w {
-                let c = self.at(px, py);
+        for py in (y * S).max(self.clip[1])..((y + h) * S).min(self.clip[3]) {
+            for px in (x * S).max(self.clip[0])..((x + w) * S).min(self.clip[2]) {
+                let c = self.fb[(py * PW + px) as usize];
                 if c >= 32 {
-                    self.pset(px, py, (c & !31) | (c & 31).saturating_sub(by).max(1));
+                    self.fb[(py * PW + px) as usize] = (c & !31) | (c & 31).saturating_sub(by).max(1);
                 }
             }
         }
     }
 
+    /// What is at a place: its top left dot.
     pub fn at(&self, x: i32, y: i32) -> u16 {
-        self.fb[(y * W + x) as usize]
+        self.fb[(y * S * PW + x * S) as usize]
     }
 
     pub fn rect(&mut self, x: i32, y: i32, w: i32, h: i32, c: u16) {
-        for j in y.max(self.clip[1])..(y + h).min(self.clip[3]) {
-            for i in x.max(self.clip[0])..(x + w).min(self.clip[2]) {
-                self.fb[(j * W + i) as usize] = c;
-            }
-        }
+        self.dots(x * S, y * S, w * S, h * S, c);
     }
 
-    pub fn line(&mut self, mut x0: i32, mut y0: i32, x1: i32, y1: i32, c: u16) {
+    /// A line from the middle of one place to the middle of another, a place thick.
+    pub fn line(&mut self, x0: i32, y0: i32, x1: i32, y1: i32, c: u16) {
+        let (mut x0, mut y0, x1, y1) = (x0 * S, y0 * S, x1 * S, y1 * S);
         let (dx, sx) = ((x1 - x0).abs(), if x0 < x1 { 1 } else { -1 });
         let (dy, sy) = (-(y1 - y0).abs(), if y0 < y1 { 1 } else { -1 });
         let mut err = dx + dy;
-        for _ in 0..4096 {
-            self.pset(x0, y0, c);
+        for _ in 0..8192 {
+            self.dots(x0, y0, S, S, c);
             if x0 == x1 && y0 == y1 {
                 break;
             }
@@ -190,6 +228,12 @@ impl Screen {
 
     /// A filled shape with no dents in it, in two colours chequered (the same twice for a flat one).
     pub fn poly(&mut self, pts: &[(i32, i32)], a: u16, b: u16) {
+        let fine: Vec<(i32, i32)> = pts.iter().map(|p| (p.0 * S, p.1 * S)).collect();
+        self.poly_fine(&fine, a, b);
+    }
+
+    /// The same, with its corners given in dots.
+    pub fn poly_fine(&mut self, pts: &[(i32, i32)], a: u16, b: u16) {
         let top = pts.iter().map(|p| p.1).min().unwrap_or(0).max(self.clip[1]);
         let bottom = pts.iter().map(|p| p.1).max().unwrap_or(-1).min(self.clip[3] - 1);
         if top > bottom {
@@ -222,8 +266,18 @@ impl Screen {
         }
         for (r, (&l, &h)) in lo.iter().zip(&hi).enumerate() {
             let y = top + r as i32;
-            for x in l.max(self.clip[0])..=h.min(self.clip[2] - 1) {
-                self.fb[(y * W + x) as usize] = if (x + y) & 1 == 0 { a } else { b };
+            let (l, h) = (l.max(self.clip[0]), h.min(self.clip[2] - 1));
+            if l > h {
+                continue;
+            }
+            let row = &mut self.fb[(y * PW + l) as usize..=(y * PW + h) as usize];
+            if a == b {
+                row.fill(a);
+            } else {
+                // Chequered by the dot: two shades of a surface, mixed.
+                for (k, d) in row.iter_mut().enumerate() {
+                    *d = if (l + k as i32 + y) & 1 == 0 { a } else { b };
+                }
             }
         }
     }
@@ -231,18 +285,18 @@ impl Screen {
     /// A square picture turned about its middle, which goes at (cx, cy). The angle is in degrees.
     pub fn spin(&mut self, pic: &Picture, cx: i32, cy: i32, degrees: f64) {
         let (s, c) = degrees.to_radians().sin_cos();
-        let half = pic.w / 2;
+        let half = pic.w / 2 * S;
         for dy in -half..half {
             for dx in -half..half {
-                // Where this pixel came from, before the turn.
-                let sx = half + (dx as f64 * c + dy as f64 * s + 0.5).floor() as i32;
-                let sy = half + (dy as f64 * c - dx as f64 * s + 0.5).floor() as i32;
-                if sx < 0 || sy < 0 || sx >= pic.w || sy >= pic.h {
+                // Where this dot came from, before the turn.
+                let sx = half + ((dx as f64 + 0.5) * c + (dy as f64 + 0.5) * s).floor() as i32;
+                let sy = half + ((dy as f64 + 0.5) * c - (dx as f64 + 0.5) * s).floor() as i32;
+                if sx < 0 || sy < 0 || sx >= pic.w * S || sy >= pic.h * S {
                     continue;
                 }
-                let v = pic.ix[(sy * pic.w + sx) as usize];
+                let v = pic.dot(sx, sy);
                 if v != CLEAR {
-                    self.pset(cx + dx, cy + dy, v);
+                    self.dot(cx * S + dx, cy * S + dy, v);
                 }
             }
         }
@@ -250,29 +304,26 @@ impl Screen {
 
     /// The same, mirrored left to right: a car's side seen going the other way.
     pub fn picture_sized_mirror(&mut self, pic: &Picture, x: i32, y: i32, w: i32, h: i32, tint: Option<&Tint>) {
-        if w <= 0 || h <= 0 {
-            return;
-        }
-        for j in 0..h {
-            for i in 0..w {
-                let v = pic.ix[((j * pic.h / h) * pic.w + (w - 1 - i) * pic.w / w) as usize];
-                if v != CLEAR {
-                    self.pset(x + i, y + j, tint.map_or(v, |t| t.apply(v)));
-                }
-            }
-        }
+        self.sized(pic, x, y, w, h, tint, true);
     }
 
     /// A picture drawn `w` by `h`, whatever size it is: for something seen from a distance.
     pub fn picture_sized(&mut self, pic: &Picture, x: i32, y: i32, w: i32, h: i32, tint: Option<&Tint>) {
+        self.sized(pic, x, y, w, h, tint, false);
+    }
+
+    fn sized(&mut self, pic: &Picture, x: i32, y: i32, w: i32, h: i32, tint: Option<&Tint>, mirror: bool) {
         if w <= 0 || h <= 0 {
             return;
         }
-        for j in 0..h {
-            for i in 0..w {
-                let v = pic.ix[((j * pic.h / h) * pic.w + i * pic.w / w) as usize];
+        // Every dot of the box takes the dot of the picture that falls on it.
+        let (w, h, pw, ph) = (w * S, h * S, pic.w * pic.s, pic.h * pic.s);
+        for j in (self.clip[1] - y * S).max(0)..h.min(self.clip[3] - y * S) {
+            let row = (j * ph / h) * pw;
+            for i in (self.clip[0] - x * S).max(0)..w.min(self.clip[2] - x * S) {
+                let v = pic.ix[(row + if mirror { w - 1 - i } else { i } * pw / w) as usize];
                 if v != CLEAR {
-                    self.pset(x + i, y + j, tint.map_or(v, |t| t.apply(v)));
+                    self.fb[((y * S + j) * PW + x * S + i) as usize] = tint.map_or(v, |t| t.apply(v));
                 }
             }
         }
@@ -287,10 +338,13 @@ impl Screen {
 
     /// A filled circle.
     pub fn disc(&mut self, cx: i32, cy: i32, r: i32, c: u16) {
-        for j in -r..=r {
-            for i in -r..=r {
-                if i * i + j * j <= r * r + r / 2 {
-                    self.pset(cx + i, cy + j, c);
+        // Round in dots: about the middle of its middle place.
+        let (mx, my, rr) = (cx * S + S / 2, cy * S + S / 2, r * S + S / 2);
+        for j in -rr..rr {
+            for i in -rr..rr {
+                let (fx, fy) = (2 * i + 1, 2 * j + 1);
+                if fx * fx + fy * fy <= 4 * rr * rr {
+                    self.dot(mx + i, my + j, c);
                 }
             }
         }
@@ -308,16 +362,17 @@ impl Screen {
     /// A box that fades down a ramp from shade `s0` to `s1`, dithered between shades.
     pub fn vgrad(&mut self, x: i32, y: i32, w: i32, h: i32, ramp: usize, s0: i32, s1: i32) {
         const BAYER: [[i32; 4]; 4] = [[0, 8, 2, 10], [12, 4, 14, 6], [3, 11, 1, 9], [15, 7, 13, 5]];
+        let (x, y, w, h) = (x * S, y * S, w * S, h * S);
         for j in 0..h {
             let yy = y + j;
-            if !(0..H).contains(&yy) {
+            if !(0..PH).contains(&yy) {
                 continue;
             }
             let s = s0 * 256 + (s1 - s0) * 256 * j / (h - 1).max(1);
             let (whole, part) = (s >> 8, (s & 255) >> 4);
-            for xx in x.max(0)..(x + w).min(W) {
+            for xx in x.max(0)..(x + w).min(PW) {
                 let up = (part > BAYER[(yy & 3) as usize][(xx & 3) as usize]) as i32;
-                self.fb[(yy * W + xx) as usize] = shade(ramp, whole + up);
+                self.fb[(yy * PW + xx) as usize] = shade(ramp, whole + up);
             }
         }
     }
@@ -327,18 +382,18 @@ impl Screen {
     }
 
     pub fn picture_tint(&mut self, pic: &Picture, x: i32, y: i32, tint: Option<&Tint>) {
-        let mut i: i32 = 0;
+        // A dot of the picture is a place on the screen, or a dot of it if it was painted fine.
+        let (mut i, wide, each) = (0i32, (pic.w * pic.s).max(1), S / pic.s.max(1));
         for &(count, value) in &pic.runs {
             if value != CLEAR {
-                let c = match tint {
-                    Some(t) if value >= 32 => {
-                        let r = (value >> 5) as usize;
-                        shade(t.to[r] as usize, (value & 31) as i32 + t.add[r] as i32)
-                    }
-                    _ => value,
-                };
-                for k in 0..count as i32 {
-                    self.pset(x + (i + k) % pic.w, y + (i + k) / pic.w, c);
+                let c = tint.map_or(value, |t| t.apply(value));
+                let mut k = i;
+                while k < i + count as i32 {
+                    // As much of the run as is on this row, at once.
+                    let (px, py) = (k % wide, k / wide);
+                    let n = (wide - px).min(i + count as i32 - k);
+                    self.dots(x * S + px * each, y * S + py * each, n * each, each, c);
+                    k += n;
                 }
             }
             i += count as i32;
@@ -347,39 +402,35 @@ impl Screen {
 
     /// A picture at half size, for a car seen from further off.
     pub fn picture_half(&mut self, pic: &Picture, x: i32, y: i32, tint: Option<&Tint>) {
-        let mut i: i32 = 0;
-        for &(count, value) in &pic.runs {
-            if value != CLEAR {
-                let c = match tint {
-                    Some(t) if value >= 32 => {
-                        let r = (value >> 5) as usize;
-                        shade(t.to[r] as usize, (value & 31) as i32 + t.add[r] as i32)
-                    }
-                    _ => value,
-                };
-                for k in i..i + count as i32 {
-                    let (px, py) = (k % pic.w, k / pic.w);
-                    if px & 1 == 0 && py & 1 == 0 {
-                        self.pset(x + px / 2, y + py / 2, c);
+        self.sized(pic, x, y, pic.w / 2, pic.h / 2, tint, false);
+    }
+
+    /// One letter of the 8x8 font, each of its places drawn as four dots with the corners of
+    /// its slanting strokes filled or cut, so that they slant and do not step.
+    fn glyph(&mut self, x: i32, y: i32, ch: u8, c: u16, scale: i32) {
+        let ch = if (32..128).contains(&ch) { ch } else { b'?' };
+        let glyph = &FONT[(ch - 32) as usize];
+        let on = |i: i32, j: i32| (0..8).contains(&i) && (0..8).contains(&j) && glyph[j as usize] & (1 << i) != 0;
+        let (half, x, y) = (scale * S / 2, x * S, y * S);
+        for j in 0..8 {
+            for i in 0..8 {
+                let (p, up, down, left, right) = (on(i, j), on(i, j - 1), on(i, j + 1), on(i - 1, j), on(i + 1, j));
+                // Each quarter takes after the two neighbours it lies between, when they agree
+                // with each other and not with the two across from them.
+                let quarter = |a: bool, b: bool, far_a: bool, far_b: bool| if a == b && a != far_a && b != far_b { a } else { p };
+                for (qx, qy, lit) in [(0, 0, quarter(left, up, right, down)), (1, 0, quarter(right, up, left, down)), (0, 1, quarter(left, down, right, up)), (1, 1, quarter(right, down, left, up))] {
+                    if lit {
+                        self.dots(x + (i * 2 + qx) * half, y + (j * 2 + qy) * half, half, half, c);
                     }
                 }
             }
-            i += count as i32;
         }
     }
 
     /// Text in the 8x8 font. Returns the x after the last character.
     pub fn text(&mut self, mut x: i32, y: i32, s: &str, c: u16) -> i32 {
         for ch in s.bytes() {
-            let ch = if (32..128).contains(&ch) { ch } else { b'?' };
-            let glyph = &FONT[(ch - 32) as usize];
-            for (j, row) in glyph.iter().enumerate() {
-                for i in 0..8 {
-                    if row & (1 << i) != 0 {
-                        self.pset(x + i, y + j as i32, c);
-                    }
-                }
-            }
+            self.glyph(x, y, ch, c, 1);
             x += 8;
         }
         x
@@ -392,15 +443,7 @@ impl Screen {
 
     pub fn text_big(&mut self, mut x: i32, y: i32, s: &str, c: u16, scale: i32) -> i32 {
         for ch in s.bytes() {
-            let ch = if (32..128).contains(&ch) { ch } else { b'?' };
-            let glyph = &FONT[(ch - 32) as usize];
-            for (j, row) in glyph.iter().enumerate() {
-                for i in 0..8 {
-                    if row & (1 << i) != 0 {
-                        self.rect(x + i * scale, y + j as i32 * scale, scale, scale, c);
-                    }
-                }
-            }
+            self.glyph(x, y, ch, c, scale);
             x += 8 * scale;
         }
         x
