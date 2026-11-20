@@ -45,6 +45,7 @@ impl Game {
         if matches!(self.scene, Scene::Title | Scene::Over(_)) {
             return;
         }
+        self.ease_others();
         if !self.net.want {
             // Never tried, or dropped: try (again) after a while.
             if self.net.state == OFF || self.net.retry >= AGAIN {
@@ -96,20 +97,48 @@ impl Game {
         }
     }
 
-    /// Everyone else who is where this is (`place:lot`, `map:town`, `road:pike`), and where they
-    /// should be by now, carried on from what they last said by how fast they were going.
+    /// Where someone should be by now: carried on from what they last said by how fast they were
+    /// going, for up to a second.
+    fn by_now(&self, seen: &Seen) -> Seen {
+        let mut s = seen.clone();
+        let dt = (self.ticks.saturating_sub(seen.tick) as f64 / 30.0).min(1.0);
+        if s.w.starts_with("map:") {
+            let (hs, hc) = s.h.to_radians().sin_cos();
+            (s.x, s.z) = (s.x + hs * s.v * dt, s.z + hc * s.v * dt);
+        } else if s.w.starts_with("road:") {
+            s.z += s.v * dt;
+        }
+        s
+    }
+
+    /// Once a tick: each car drawn moves a quarter of the way to where it should be, and turns
+    /// the short way round; one that is somewhere else altogether, or far off, is put there.
+    pub(super) fn ease_others(&mut self) {
+        for i in 0..self.net.people.len() {
+            let Some(seen) = self.net.people[i].seen.clone() else { continue };
+            let want = self.by_now(&seen);
+            let p = &mut self.net.people[i];
+            p.shown = Some(match p.shown.take() {
+                Some(mut s) if s.w == want.w && s.back == want.back && (s.x - want.x).abs() + (s.z - want.z).abs() < 25.0 => {
+                    s.x += (want.x - s.x) * 0.25;
+                    s.z += (want.z - s.z) * 0.25;
+                    let turn = (want.h - s.h + 540.0).rem_euclid(360.0) - 180.0;
+                    s.h = (s.h + turn * 0.25).rem_euclid(360.0);
+                    (s.v, s.tick) = (want.v, want.tick);
+                    s
+                }
+                _ => want,
+            });
+        }
+    }
+
+    /// Everyone else who is where this is (`place:lot`, `map:town`, `road:pike`), where they are
+    /// drawn: heard from in the last twenty seconds.
     pub fn others_at(&self, w: &str) -> Vec<(Person, Seen)> {
         self.net.people.iter().filter_map(|p| {
             let seen = p.seen.as_ref().filter(|s| s.w == w && self.ticks.saturating_sub(s.tick) < 30 * 20)?;
-            let mut s = seen.clone();
-            let dt = (self.ticks.saturating_sub(seen.tick) as f64 / 30.0).min(1.0);
-            if w.starts_with("map:") {
-                let (hs, hc) = s.h.to_radians().sin_cos();
-                (s.x, s.z) = (s.x + hs * s.v * dt, s.z + hc * s.v * dt);
-            } else if w.starts_with("road:") {
-                s.z += s.v * dt;
-            }
-            Some((p.clone(), s))
+            let shown = p.shown.clone().filter(|s| s.w == w).unwrap_or_else(|| self.by_now(seen));
+            Some((p.clone(), shown))
         }).collect()
     }
 

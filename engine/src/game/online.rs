@@ -30,8 +30,10 @@ pub struct Person {
     pub name: String,
     pub car: Option<String>,
     pub paint: Option<String>,
-    /// Where they last said they were.
+    /// Where they last said they were, and where they are drawn: eased toward where they should
+    /// be by now, so a car glides rather than jumps from one report to the next.
     pub seen: Option<super::world::Seen>,
+    pub shown: Option<super::world::Seen>,
 }
 
 /// The other lane's timeslip.
@@ -211,7 +213,7 @@ impl Game {
         let Ok(v) = serde_json::from_str::<Value>(text) else { return };
         let Some(kind) = v.get("t").and_then(|t| t.as_str()) else { return };
         let id = |key: &str| whole(&v, key).and_then(|n| u32::try_from(n).ok());
-        let person = |v: &Value| Some(Person { id: whole(v, "id").and_then(|n| u32::try_from(n).ok())?, name: words(v, "name", 16).filter(|n| !n.is_empty()).unwrap_or_else(|| "Someone".into()), car: None, paint: None, seen: None });
+        let person = |v: &Value| Some(Person { id: whole(v, "id").and_then(|n| u32::try_from(n).ok())?, name: words(v, "name", 16).filter(|n| !n.is_empty()).unwrap_or_else(|| "Someone".into()), car: None, paint: None, seen: None, shown: None });
         match kind {
             // From the room itself.
             "you" => {

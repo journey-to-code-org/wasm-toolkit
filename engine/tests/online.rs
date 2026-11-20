@@ -435,3 +435,33 @@ fn the_world_is_shared_and_a_dare_can_be_made_from_the_street() {
     room.pump(&mut [&mut a, &mut b]);
     assert_eq!((a.scene, b.scene), (Scene::Race, Scene::Race));
 }
+
+
+#[test]
+fn other_cars_glide_between_what_they_say() {
+    let Some((mut a, mut b, mut room)) = out_in_town() else { return };
+    for g in [&mut a, &mut b] {
+        g.state.place = "garage".into();
+        g.scene = Scene::Place;
+        g.tick(0, 270, 60);
+        g.tick(KEY_A, 270, 60);
+        g.tick(0, 270, 60);
+    }
+    for _ in 0..4 { a.tick(0, 0, 0); b.tick(0, 0, 0); room.pump(&mut [&mut a, &mut b]); }
+    let map = format!("map:{}", b.town.as_ref().unwrap().map);
+    let x0 = b.others_at(&map)[0].1.x;
+    // A says it is ten metres on: B's picture of A gets there over a few ticks, never past it.
+    { let t = a.town.as_mut().unwrap(); t.x += 10.0; }
+    a.tick(0, 0, 0);
+    room.pump(&mut [&mut a, &mut b]);
+    let mut xs = Vec::new();
+    for _ in 0..12 { b.tick(0, 0, 0); xs.push(b.others_at(&map)[0].1.x); }
+    assert!(xs[0] > x0 && xs[0] < x0 + 6.0, "{x0} {xs:?}");
+    assert!(xs.windows(2).all(|w| w[1] >= w[0] - 1e-9) && (xs[11] - (x0 + 10.0)).abs() < 0.5, "{xs:?}");
+    // Thirty metres in one go is a jump, not a glide.
+    { let t = a.town.as_mut().unwrap(); t.x += 30.0; }
+    a.tick(0, 0, 0);
+    room.pump(&mut [&mut a, &mut b]);
+    b.tick(0, 0, 0);
+    assert!((b.others_at(&map)[0].1.x - (x0 + 40.0)).abs() < 0.5);
+}
