@@ -2297,7 +2297,7 @@ fn front_drive_pulls_to_a_side_and_the_wheel_holds_it() {
     // With the wheel it stays in its lane, and runs the same time as one that never pulled.
     let (held, out, et) = pass(Driven::Front, 1.2, true);
     let straight = { let mut d = Race::new(&Drive { driven: Driven::Front, ..Drive::default() }, 1.0, None, 0, 0); d.tick(Controls { stage: true, ..Controls::default() }); for _ in 0..3000 { if d.phase == Phase::Slip { break; } let up = (d.gear == 0 && d.tree >= 51) || (d.gear > 0 && d.rpm > 7200.0 - 250.0); d.tick(Controls { throttle: true, up, ..Controls::default() }); } d.et };
-    assert!(held < 1.0 && out == 0 && et == straight, "{held} {et} {straight}");
+    assert!(held < LANE * 0.75 && out == 0 && et == straight, "{held} {et} {straight}");
 
     // In the game: a car pulls the same way all day, and over the line is disqualified, and the wall is a dent.
     let Some(bytes) = default_pack() else { return };
@@ -2451,4 +2451,53 @@ fn parts_change_the_sound() {
     g.state.cars[0].fitted.remove("Exhaust system");
     let open = g.listen();
     assert!(open.loud > 1.4 && open.rasp > 0.8, "{open:?}");
+}
+
+#[test]
+fn the_clutch_is_let_out_in_the_band_or_it_bogs_or_spins() {
+    use engine::pack::Drive;
+    use engine::race::{Launch, BAND};
+    // Staged; clutch in and first on the tree; the revs fed to `at`; let out on the green.
+    let pass = |at: f64| {
+        let d = Drive { auto: false, ..Drive::default() };
+        let mut r = Race::new(&d, 1.0, None, 0, 0);
+        r.tick(Controls { stage: true, ..Controls::default() });
+        r.tick(Controls { up: true, clutch: true, ..Controls::default() });
+        assert!(r.held && r.gear == 1 && r.v == 0.0, "in first with the clutch in, it sits there");
+        for _ in 0..3000 {
+            if r.phase == Phase::Slip { break; }
+            let waiting = r.held;
+            let green = r.tree >= 45;
+            let throttle = if waiting { r.rpm < at } else { true };
+            let up = !waiting && r.gear > 0 && r.rpm > d.redline - 250.0;
+            r.tick(Controls { throttle, clutch: waiting && !green, up, ..Controls::default() });
+            if r.held { assert!(r.v == 0.0, "not before it is let out"); }
+        }
+        (r.start, r.et, r.abuse)
+    };
+    let best = Drive::default().launch;
+    let (good, bog, spun) = (pass(best), pass(best - BAND * 3.0), pass(7100.0));
+    assert_eq!((good.0, bog.0, spun.0), (Launch::Good, Launch::Bogged, Launch::Spun));
+    assert!(good.1 < bog.1 && good.1 < spun.1, "{good:?} {bog:?} {spun:?}");
+    assert!(good.2 == 0.0 && spun.2 > 500.0);
+
+    // Let out before the green is a red light.
+    let d = Drive { auto: false, ..Drive::default() };
+    let mut r = Race::new(&d, 1.0, None, 0, 0);
+    r.tick(Controls { stage: true, ..Controls::default() });
+    r.tick(Controls { up: true, clutch: true, ..Controls::default() });
+    r.tick(Controls { throttle: true, ..Controls::default() });
+    assert!(r.red && r.phase == Phase::Run);
+
+    // In the game, a launch over the band takes it out of the clutch.
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra", None, 100);
+    g.outfit(&mut o);
+    o.fitted.insert("Clutch".into(), "s-clutch".into());
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    g.ride_clutch(spun.2);
+    assert!(g.state.cars[0].fitted["Clutch"].starts_with("s-clutch@"), "{:?}", g.state.cars[0].fitted["Clutch"]);
 }

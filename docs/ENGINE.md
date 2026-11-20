@@ -13,7 +13,7 @@ pack**, one file, made from a folder of JSON and PNGs.
 `python3 tools/bundle.py engine` then writes `build/engine.html`: the engine, its page and the
 default pack in one file, to open from disk or put anywhere a single page can go. On a phone the
 page lays buttons over the picture, and only the ones in use: Back in the menus, left, right, gas
-and brake in town, the two shifts and gas on the strip. Tapping the picture is Enter.
+and brake in town, the two shifts, gas, the wheel and the clutch on the strip. Tapping the picture is Enter.
 
 Needs Rust with the wasm target (`rustup target add wasm32-unknown-unknown`), and Python with
 Pillow and numpy for the pack tool.
@@ -74,6 +74,14 @@ All five steps are in the engine. The engine plays a season out of a pack:
   exhaust is louder and deeper, a header raspier, an open filter roars, a big turbo whistles and
   blows off harder, nitrous hisses, and no exhaust at all is loud. M mutes it all. A page
   without this (or an older one) still gets the beeps.
+- **The clutch**: in a car with a manual gearbox there is no launch limiter on the strip: the revs
+  go where your foot puts them. Hold Down for the clutch, Space for first, feather the gas to hold
+  the revs in the green band on the screen (the car's `launch` speed, give or take 600), and let
+  the clutch out on the green. Well under the band it bogs; over it the tyres spin for a while
+  (slower, and pulling harder to the side) and the clutch wears a point for every 150 revs over.
+  Space on the green without the clutch still drops it in from wherever the revs are. An
+  automatic sits against its converter at its launch speed, as before. On a phone, Clutch is the
+  button where Brake is in town.
 - **Torque steer**: on the strip a car has to be kept in its lane with the wheel (left and
   right). A front-wheel-drive car pulls hard to one side off the line and in the low gears, an
   all-wheel-drive one less, a rear-driven one only with its tyres spinning; which side is the

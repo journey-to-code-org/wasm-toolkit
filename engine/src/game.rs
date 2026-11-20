@@ -664,6 +664,20 @@ impl Game {
         self.save();
     }
 
+    /// A clutch let out with the revs over the band: it slips, and burns, a point for every
+    /// hundred and fifty revs over.
+    pub fn ride_clutch(&mut self, over: f64) {
+        if over <= 0.0 {
+            return;
+        }
+        let Some(cur) = self.state.cur else { return };
+        let found = self.state.cars[cur].fitted.iter().find(|(_, id)| cond_of(id) > 0 && self.part(id).is_some_and(|p| p.slips)).map(|(s, id)| (s.clone(), id.clone()));
+        if let Some((slot, id)) = found {
+            let left = cond_of(&id) - (over / 150.0).ceil() as i32;
+            self.state.cars[cur].fitted.insert(slot, worn(&id, left.max(0)));
+        }
+    }
+
     /// A gearbox that changes itself, worked out from the car's own ratios: up near the redline
     /// with the foot down and early when cruising, down again as the car slows, so a change drops
     /// the revs by what the next ratio drops them, not to idle. What it comes to is kept in `auto`.
@@ -2233,9 +2247,10 @@ impl Game {
             return self.settle((!alone).then_some(false));
         }
         if race.phase == Phase::Slip && hit & KEY_A != 0 {
-            let (won, blown, left, out) = (race.won, race.blown, race.bottle, race.out);
+            let (won, blown, left, out, abuse) = (race.won, race.blown, race.bottle, race.out, race.abuse);
             tone(0, 0);
             self.keep_bottle(left);
+            self.ride_clutch(abuse);
             self.settle((!alone).then_some(won));
             if blown {
                 self.blew();
@@ -2248,7 +2263,7 @@ impl Game {
             return;
         }
         let was = race.phase;
-        race.tick(Controls { throttle: keys & KEY_UP != 0, stage: hit & KEY_A != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0, nitrous: keys & KEY_N != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
+        race.tick(Controls { throttle: keys & KEY_UP != 0, stage: hit & KEY_A != 0, up: hit & KEY_X != 0, down: hit & KEY_Y != 0, nitrous: keys & KEY_N != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0, clutch: keys & KEY_DOWN != 0 });
         if was != Phase::Slip && race.phase == Phase::Slip && race.out != 0 {
             tone(90, 400);
         } else if was != Phase::Slip && race.phase == Phase::Slip {
@@ -2898,11 +2913,27 @@ impl Game {
             let at = x0 + w / 2 + (r.drift / crate::race::LANE * (w / 2 - 3) as f64) as i32;
             s.rect(at - 2, y + 1, 5, 5, if warn { shade(ramp("RED"), 28) } else { shade(ramp("LIME"), 26) });
         }
+        let waiting = r.manual() && (r.gear == 0 || r.held) && matches!(r.phase, Phase::Stage | Phase::Tree);
+        if waiting {
+            // The revs, and the band to let the clutch out in.
+            let (x0, w, y) = (120, 80, 22);
+            let at = |rpm: f64| x0 + ((rpm / r.redline()).clamp(0.0, 1.0) * w as f64) as i32;
+            let band = crate::race::BAND;
+            s.rect(x0, y + 3, w, 1, shade(ramp("CHROME"), 9));
+            s.rect(at(r.best_launch() - band), y + 1, at(r.best_launch() + band) - at(r.best_launch() - band), 5, shade(ramp("FOREST"), 16));
+            let good = (r.rpm - r.best_launch()).abs() <= band;
+            s.rect(at(r.rpm) - 1, y, 3, 7, if good { shade(ramp("LIME"), 28) } else { shade(ramp("ORANGE"), 28) });
+        }
         let versus = self.versus_says();
+        let started = r.phase == Phase::Run && r.pos < 30.0;
         let say = match r.phase {
             Phase::Stage if versus.is_some() => versus.as_ref().unwrap().0,
             Phase::Stage => "ENTER TO STAGE",
+            Phase::Tree if r.held => "REVS IN THE GREEN. LET IT OUT ON GO.",
+            Phase::Tree if r.gear == 0 && r.manual() => "DOWN: CLUTCH. SPACE: FIRST GEAR.",
             Phase::Tree if r.gear == 0 => "HOLD UP FOR REVS. SPACE ON THE GREEN.",
+            _ if started && !r.red && r.start == crate::race::Launch::Bogged => "BOGGED IT",
+            _ if started && !r.red && r.start == crate::race::Launch::Spun => "TOO MANY REVS: WHEELSPIN",
             Phase::Run if r.lean != 0.0 && r.gear == 1 && r.pos < 40.0 && !r.red => "LEFT AND RIGHT: HOLD YOUR LANE",
             _ if r.out == 1 => "OVER THE CENTRE LINE",
             _ if r.out == -1 => "INTO THE WALL",

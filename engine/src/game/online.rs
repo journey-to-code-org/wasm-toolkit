@@ -579,7 +579,7 @@ impl Game {
         let was = race.phase;
         // The tree comes down when both are staged.
         let stage = race.phase == Phase::Stage && vs.me_staged && vs.him_staged;
-        race.tick(Controls { throttle: keys & KEY_UP != 0, stage, up: hit & KEY_X != 0, down: hit & KEY_Y != 0, nitrous: false, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0 });
+        race.tick(Controls { throttle: keys & KEY_UP != 0, stage, up: hit & KEY_X != 0, down: hit & KEY_Y != 0, nitrous: false, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0, clutch: keys & KEY_DOWN != 0 });
         // Between hearing where they are, they carry on as fast as they were going.
         race.rival_pos += vs.him_v / crate::race::HZ;
         if matches!(race.phase, Phase::Tree | Phase::Run) && self.ticks % 5 == 0 {

@@ -280,7 +280,9 @@ impl Game {
                 break;
             }
             let up = (r.gear == 0 && r.tree >= 51) || (r.gear > 0 && r.rpm > d.redline - 250.0);
-            r.tick(Controls { throttle: true, up, ..Controls::default() });
+            // Feathered to its best launch speed on the line, and flat out after.
+            let throttle = r.gear > 0 || r.rpm < d.launch;
+            r.tick(Controls { throttle, up, ..Controls::default() });
         }
         Some(Sheet { curve, stock, hp, hp_at, torque, torque_at, redline: d.redline, weight_lb: d.weight_lb, et: if r.blown { 0 } else { r.et }, mph: r.mph, top: self.pace().top * crate::road::MPH })
     }
