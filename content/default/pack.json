@@ -958,7 +958,10 @@
       "price": 180,
       "pitch": "Breathes up top",
       "torque": 4,
-      "retune": true
+      "retune": true,
+      "sound": {
+        "intake": 90
+      }
     },
     "big-turbo": {
       "name": "Big turbo",
@@ -978,7 +981,10 @@
         "a big-frame O2 housing",
         "a big fuel pump"
       ],
-      "retune": true
+      "retune": true,
+      "sound": {
+        "whistle": 70
+      }
     },
     "header": {
       "name": "Tubular header",
@@ -989,7 +995,11 @@
       "gives": [
         "a big-frame manifold"
       ],
-      "retune": true
+      "retune": true,
+      "sound": {
+        "rasp": 35,
+        "loud": 10
+      }
     },
     "front-mount": {
       "name": "Front intercooler",
@@ -1000,7 +1010,10 @@
       "fits": [
         "umbra"
       ],
-      "retune": true
+      "retune": true,
+      "sound": {
+        "whistle": 15
+      }
     },
     "sticky-tyres": {
       "name": "Sticky tyres",
@@ -1114,7 +1127,11 @@
       "retune": true,
       "fits": [
         "umbra"
-      ]
+      ],
+      "sound": {
+        "deep": 15,
+        "loud": 10
+      }
     },
     "bottle": {
       "name": "Nitrous kit",
@@ -1247,7 +1264,10 @@
     "s-exhaust": {
       "name": "Exhaust",
       "slot": "Exhaust system",
-      "price": 180
+      "price": 180,
+      "sound": {
+        "loud": 0
+      }
     },
     "s-o2": {
       "name": "O2 housing",
@@ -1366,7 +1386,10 @@
       "price": 380,
       "pitch": "Breathes up top.",
       "torque": 3,
-      "retune": true
+      "retune": true,
+      "sound": {
+        "intake": 30
+      }
     },
     "wires-8mm": {
       "name": "8mm plug wires",
@@ -1409,7 +1432,11 @@
       "slot": "Exhaust system",
       "price": 420,
       "pitch": "Loud, and it flows.",
-      "torque": 5
+      "torque": 5,
+      "sound": {
+        "loud": 40,
+        "deep": 30
+      }
     },
     "o2-big": {
       "name": "Big O2 housing",

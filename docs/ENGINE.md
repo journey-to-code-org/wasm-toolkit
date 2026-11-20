@@ -70,7 +70,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
 - **Sound**: the page makes the car's sound itself from what the engine says each tick: an
   engine note at the firing rate of its cylinders that opens up under load, intake roar, turbo
   whistle as it spools and the blow-off valve when the throttle shuts on boost, tyres squealing
-  at their limit or under hard braking, the wind, and a siren behind you. M mutes it all. A page
+  at their limit or under hard braking, the wind, and a siren behind you. Parts change it: a big
+  exhaust is louder and deeper, a header raspier, an open filter roars, a big turbo whistles and
+  blows off harder, nitrous hisses, and no exhaust at all is loud. M mutes it all. A page
   without this (or an older one) still gets the beeps.
 - **Torque steer**: on the strip a car has to be kept in its lane with the wheel (left and
   right). A front-wheel-drive car pulls hard to one side off the line and in the low gears, an
@@ -462,6 +464,11 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   stock ones); `"handling": 30` makes it the suspension, and a fast bend throws the car 30 per
   cent less. Both count for less as the part wears, down to three fifths at nothing, and a wet
   road makes both worse. They work on roads and in town, and the rollers show them.
+  `"sound": { "loud": 40, "deep": 30, "rasp": 0, "intake": 0, "whistle": 0 }` is what it does
+  to the car's sound, each a percentage more (or less): the exhaust's loudness, depth and rasp,
+  the intake's roar, and the turbo's whistle and blow-off. They add up over what is fitted. A car
+  with a build sheet and nothing in its exhaust slot (a part with `loud` on the sheet, or a slot
+  called Exhaust system) runs straight out of the manifold: very loud, very rough.
   `"retune": true` means swapping it, on or off, leaves the engine needing a tune: it runs 15 per
   cent down until it is tuned, either on the car's own laptop at the rollers (which keeps its
   tune) or by the shop with `tuneup` (which puts it back on the factory map).

@@ -124,6 +124,19 @@ impl Default for Poker {
     }
 }
 
+/// What a part does to the sound of a car, each as a percentage more (or, below nothing, less):
+/// how loud the exhaust is, how deep, how raspy, how much the intake roars, and how loud and high
+/// the turbo whistles and how hard it blows off.
+#[derive(Deserialize, Clone, Copy, Debug, Default, PartialEq)]
+#[serde(default)]
+pub struct PartSound {
+    pub loud: i32,
+    pub deep: i32,
+    pub rasp: i32,
+    pub intake: i32,
+    pub whistle: i32,
+}
+
 /// What having the shop tune a car costs, and how many hours it takes.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
@@ -299,6 +312,9 @@ pub struct Part {
     /// Swapping it, on or off, leaves the engine needing a tune: until it has one it runs down.
     #[serde(default)]
     pub retune: bool,
+    /// How it changes what the car sounds like.
+    #[serde(default)]
+    pub sound: Option<PartSound>,
     /// A factory part only some cars came with: the per cent of cars with this slot on their
     /// build sheet that have it in place of the stock one. It is never in the paper new.
     #[serde(default)]

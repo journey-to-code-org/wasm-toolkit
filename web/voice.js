@@ -41,25 +41,30 @@ export function voice(audio, out) {
   noise().connect(squealBand);
   const wind = gain(out);
   noise().connect(filter("lowpass", 450, 0.7, wind));
+  // Nitrous: a hard hiss while it sprays.
+  const nitrous = gain(out);
+  noise().connect(filter("highpass", 3500, 0.7, nitrous));
   // The siren: a wail up and down.
   const siren = gain(out);
   const wail = a.createOscillator(); wail.type = "triangle"; wail.connect(siren); wail.start();
 
   let blowoffs = -1;
-  // The valve letting go: a burst of air that falls away.
-  const blowoff = () => {
+  // The valve letting go: a burst of air that falls away, harder from a bigger turbo.
+  const blowoff = (hard) => {
     const n = a.createBufferSource(); n.buffer = hiss;
     const band = a.createBiquadFilter(); band.type = "bandpass"; band.Q.value = 1.4;
     const g = a.createGain(), t = now();
     band.frequency.setValueAtTime(2400, t); band.frequency.exponentialRampToValueAtTime(700, t + 0.45);
-    g.gain.setValueAtTime(0.22, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+    g.gain.setValueAtTime(Math.min(0.22 * hard, 0.5), t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
     n.connect(band).connect(g).connect(out);
     n.start(t); n.stop(t + 0.5);
   };
 
-  // One tick's numbers: rpm, load, boost, cylinders, squeal, blow-offs, siren, wind.
+  // One tick's numbers: rpm, load, boost, cylinders, squeal, blow-offs, siren, wind; then what
+  // the parts make of it, as fractions more or less (loud, deep, rasp, intake, whistle); and nitrous.
   return (s) => {
     const [rpm, load, boost, cylinders, squeal, blown, sirenOn, speed] = s;
+    const [loud, deep, rasp, roar, whistleUp, spraying] = s.length > 8 ? [...s].slice(8, 14) : [0, 0, 0, 0, 0, 0];
     const on = rpm > 0;
     // Four strokes: each cylinder fires every other turn.
     const firing = Math.max(on ? rpm : 0, 600) / 60 * Math.max(cylinders, 1) / 2;
@@ -67,18 +72,22 @@ export function voice(audio, out) {
     const lump = 1 + (Math.random() - 0.5) * (rpm < 1500 ? 0.06 : 0.015);
     glide(fire.frequency, firing * lump, 0.015);
     glide(growl.frequency, firing / 2, 0.015);
-    glide(tone.frequency, 350 + load * 2200 + rpm * 0.25);
-    glide(engine.gain, on ? 0.05 + load * 0.09 : 0, 0.05);
+    // A deeper exhaust has more of the growl and less top; a raspier one, more top and a harder edge.
+    glide(growlLevel.gain, Math.max(0.1, 0.55 * (1 + deep)), 0.1);
+    glide(tone.frequency, (350 + load * 2200 + rpm * 0.25) * Math.max(0.4, 1 - deep * 0.35 + rasp * 0.6));
+    glide(tone.Q, 3 + Math.max(0, rasp) * 5, 0.1);
+    glide(engine.gain, on ? (0.05 + load * 0.09) * Math.max(0.2, 1 + loud) : 0, 0.05);
     glide(intakeBand.frequency, Math.min(200 + firing * 2, 3000));
-    glide(intake.gain, on ? load * 0.05 : 0, 0.05);
-    glide(whistle.frequency, 1800 + boost * 5200, 0.12);
-    glide(turbo.gain, on ? boost * 0.012 : 0, 0.1);
+    glide(intake.gain, on ? load * 0.05 * Math.max(0.2, 1 + roar) : 0, 0.05);
+    glide(whistle.frequency, 1800 + boost * 5200 * (1 + Math.max(0, whistleUp) * 0.4), 0.12);
+    glide(turbo.gain, on ? boost * 0.012 * Math.max(0.2, 1 + whistleUp) : 0, 0.1);
+    glide(nitrous.gain, on && spraying ? 0.05 : 0, 0.04);
     glide(tyres.gain, squeal * 0.07, 0.04);
     glide(squealBand.frequency, 2100 + Math.random() * 400, 0.02);
     glide(wind.gain, speed * speed * 0.08, 0.2);
     glide(wail.frequency, 720 + 260 * Math.sin(now() * Math.PI * 2 * 0.8), 0.02);
     glide(siren.gain, sirenOn * 0.03, 0.05);
-    if (blowoffs >= 0 && blown > blowoffs) blowoff();
+    if (blowoffs >= 0 && blown > blowoffs) blowoff(Math.max(0.3, 1 + whistleUp));
     blowoffs = blown;
   };
 }

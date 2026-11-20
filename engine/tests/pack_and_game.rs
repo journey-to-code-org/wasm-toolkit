@@ -2424,3 +2424,31 @@ fn a_change_up_drops_the_revs_by_the_next_ratio_not_to_idle() {
     g.shift_auto(25.0, false);
     assert!(g.auto.0 >= 3 && g.auto.1 < 2800.0, "{:?}", g.auto);
 }
+
+#[test]
+fn parts_change_the_sound() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra", None, 100);
+    g.outfit(&mut o);
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    g.state.place = "overlook".into();
+    g.scene = Scene::Place;
+    click(&mut g, 40, 186);
+    click(&mut g, 20, 186);
+    g.tick(KEY_A, 0, 0);
+    g.tick(KEY_UP, 0, 0);
+    let stock = g.listen();
+    assert!(stock.rpm > 0.0 && stock.loud == 0.0 && stock.deep == 0.0 && stock.whistle == 0.0, "{stock:?}");
+    // A big exhaust and an open filter: louder, deeper, and the intake roars.
+    g.state.cars[0].fitted.insert("Exhaust system".into(), "exhaust-3in".into());
+    g.state.cars[0].fitted.insert("Intake".into(), "cone-filter".into());
+    let built = g.listen();
+    assert!((built.loud - 0.4).abs() < 1e-6 && (built.deep - 0.3).abs() < 1e-6 && (built.intake - 0.9).abs() < 1e-6, "{built:?}");
+    // No exhaust at all: straight out of the manifold.
+    g.state.cars[0].fitted.remove("Exhaust system");
+    let open = g.listen();
+    assert!(open.loud > 1.4 && open.rasp > 0.8, "{open:?}");
+}

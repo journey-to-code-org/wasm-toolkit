@@ -21,11 +21,23 @@ pub struct Sound {
     pub siren: f32,
     /// How fast it is going, as wind: 0 to 1.
     pub wind: f32,
+    /// What its parts make of it, as fractions more (or less): exhaust loudness, depth and rasp,
+    /// intake roar, and the turbo's whistle.
+    pub loud: f32,
+    pub deep: f32,
+    pub rasp: f32,
+    pub intake: f32,
+    pub whistle: f32,
+    /// Nitrous spraying: 0 or 1.
+    pub spray: f32,
 }
 
+/// How many numbers a tick's sound is, for the page.
+pub const SOUND_LEN: usize = 14;
+
 impl Sound {
-    pub fn as_array(&self) -> [f32; 8] {
-        [self.rpm, self.load, self.boost, self.cylinders, self.squeal, self.blowoffs, self.siren, self.wind]
+    pub fn as_array(&self) -> [f32; SOUND_LEN] {
+        [self.rpm, self.load, self.boost, self.cylinders, self.squeal, self.blowoffs, self.siren, self.wind, self.loud, self.deep, self.rasp, self.intake, self.whistle, self.spray]
     }
 }
 
@@ -93,7 +105,35 @@ impl Game {
         self.spooled = if s.load >= 0.5 { s.boost } else { 0.0 };
         s.cylinders = cylinders;
         s.blowoffs = self.blowoffs as f32;
+        if s.rpm > 0.0 {
+            self.voice_of_parts(&mut s);
+            s.spray = match self.scene {
+                Scene::Race => self.race.as_ref().is_some_and(|r| r.spraying),
+                Scene::Road => self.trip.as_ref().is_some_and(|t| t.spray > 0.0),
+                _ => false,
+            } as i32 as f32;
+        }
         s
+    }
+
+    /// What the parts on the car in the bay do to its sound, added up; and a car with no exhaust
+    /// on it at all is very loud and very rough.
+    fn voice_of_parts(&self, s: &mut Sound) {
+        let Some((o, car)) = self.owned().zip(self.car()) else { return };
+        let mut v = crate::pack::PartSound::default();
+        for p in o.fitted.values().filter(|id| cond_of(id) > 0).filter_map(|id| self.part(id)) {
+            if let Some(ps) = p.sound {
+                (v.loud, v.deep, v.rasp, v.intake, v.whistle) = (v.loud + ps.loud, v.deep + ps.deep, v.rasp + ps.rasp, v.intake + ps.intake, v.whistle + ps.whistle);
+            }
+        }
+        // A slot on the build sheet that the exhaust goes in, with nothing in it: straight out of the manifold.
+        let open = o.sheet && car.stock.iter().any(|(slot, id)| self.part(id).is_some_and(|p| p.sound.is_some_and(|ps| ps.loud > 0) || slot.to_lowercase().contains("exhaust system")) && !o.fitted.contains_key(slot));
+        if open {
+            v.loud += 150;
+            v.rasp += 90;
+        }
+        let pct = |x: i32| (x.clamp(-90, 400) as f32) / 100.0;
+        (s.loud, s.deep, s.rasp, s.intake, s.whistle) = (pct(v.loud), pct(v.deep), pct(v.rasp), pct(v.intake), pct(v.whistle));
     }
 
     /// The engine note as a beep, for a page with no sound of its own; a page that makes its own
