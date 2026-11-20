@@ -3322,16 +3322,46 @@ impl Game {
                 }
             }
         }
+        // Cars about town, drawn from the pack's pictures of them where it has them: their backs
+        // going your way, their fronts coming at you, their sides crossing. Boxes where it has none.
+        let cars = &self.pack.manifest.cars;
+        let pictured: Vec<&Car> = cars.values().filter(|c| c.rear.is_some() && c.front.is_some()).collect();
+        let mut looks: Vec<(&crate::gfx::Picture, Tint, bool)> = Vec::new();
+        let mut a_car = |scene: &mut Scene3, ox: f64, oz: f64, heading: f64, paint: &str, car: Option<&Car>| {
+            let oy = g(ox, oz);
+            let rel = (heading - town.heading + 540.0).rem_euclid(360.0) - 180.0;
+            let car = car.or_else(|| (!pictured.is_empty()).then(|| pictured[paint.len() * 7 % pictured.len()]));
+            if let Some(c) = car {
+                let (pic, wide, mirror) = if rel.abs() < 50.0 {
+                    (c.rear.as_ref().and_then(|r| Some((self.pack.pictures.get(&r.picture)?, r.width_m))), 0.0, false)
+                } else if rel.abs() > 130.0 {
+                    (c.front.as_ref().and_then(|r| Some((self.pack.pictures.get(&r.picture)?, r.width_m))), 0.0, false)
+                } else {
+                    (self.pack.pictures.get(&c.side).map(|p| (p, 4.4)), 0.0, rel < 0.0)
+                };
+                let _ = wide;
+                if let Some((pic, width)) = pic {
+                    if let Some((_, _, depth)) = scene.point([ox, oy, oz]) {
+                        looks.push((pic, Self::tint(c, Some(paint), 0), mirror));
+                        if scene.sprite([ox, oy, oz], width, pic.h as f64 / pic.w as f64, looks.len() - 1, depth) {
+                            return;
+                        }
+                        looks.pop();
+                    }
+                }
+            }
+            // A body, and a cabin on it.
+            let (hs, hc) = heading.to_radians().sin_cos();
+            let (hl, hw) = if hs.abs() > hc.abs() { (2.1, 0.9) } else { (0.9, 2.1) };
+            Self::box3(scene, ox - hl, oz - hw, ox + hl, oz + hw, oy + 0.25, oy + 0.9, ramp(paint), 0.0);
+            Self::box3(scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, oy + 0.9, oy + 1.4, ramp("GLASS"), 0.5);
+        };
         for o in &town.others {
             let (ox, oz) = o.at(map);
             if (ox - town.x).abs() + (oz - town.z).abs() > SEE as f64 * p {
                 continue;
             }
-            // A body, and a cabin on it.
-            let (hl, hw) = if o.north { (0.9, 2.1) } else { (2.1, 0.9) };
-            let oy = g(ox, oz);
-            Self::box3(&mut scene, ox - hl, oz - hw, ox + hl, oz + hw, oy + 0.25, oy + 0.9, ramp(o.paint), 0.0);
-            Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, oy + 0.9, oy + 1.4, ramp("GLASS"), 0.5);
+            a_car(&mut scene, ox, oz, if o.north { 0.0 } else { 270.0 }, o.paint, None);
         }
         for road_id in map.blocks.values().filter_map(|b| b.road.as_ref()) {
             // Where a road leaves town it is seen leaving: tar on out past the last street, with its line.
@@ -3371,12 +3401,9 @@ impl Game {
             if (at.x - town.x).abs() + (at.z - town.z).abs() > SEE as f64 * p {
                 continue;
             }
-            let (hs, hc) = at.h.to_radians().sin_cos();
-            let (hl, hw) = if hs.abs() > hc.abs() { (2.1, 0.9) } else { (0.9, 2.1) };
             let (ox, oz) = (at.x, at.z);
             let oy = g(ox, oz);
-            Self::box3(&mut scene, ox - hl, oz - hw, ox + hl, oz + hw, oy + 0.25, oy + 0.9, ramp(who.paint.as_deref().unwrap_or("GREY")), 0.0);
-            Self::box3(&mut scene, ox - hl * 0.8, oz - hw * 0.5, ox + hl * 0.8, oz + hw * 0.5, oy + 0.9, oy + 1.4, ramp("GLASS"), 0.5);
+            a_car(&mut scene, ox, oz, at.h, who.paint.as_deref().unwrap_or("GREY"), who.car.as_ref().and_then(|c| cars.get(c)));
             if let Some((x, y, depth)) = scene.point([ox, oy + 1.9, oz]) {
                 if depth > 2.0 && depth < p * 4.0 && (0..320).contains(&x) {
                     // People before places: a name over a car keeps its spot, below the mirror.
@@ -3384,7 +3411,10 @@ impl Game {
                 }
             }
         }
-        scene.end(s);
+        scene.end_with(s, |s, id, (x, y, w, h)| {
+            let (pic, tint, mirror) = &looks[id];
+            if *mirror { s.picture_sized_mirror(pic, x, y, w, h, Some(tint)) } else { s.picture_sized(pic, x, y, w, h, Some(tint)) }
+        });
         // One that would be written over another goes on the line above it.
         let mut put: Vec<(i32, i32, i32)> = Vec::new();
         for (x, y, name, near) in &names {

@@ -171,6 +171,10 @@
       ],
       "drive": {
         "driven": "all"
+      },
+      "front": {
+        "picture": "front.pic",
+        "width_m": 1.7
       }
     },
     "umbra-base": {
@@ -367,7 +371,11 @@
         "Cruise control",
         "Seats",
         "Dashboard"
-      ]
+      ],
+      "front": {
+        "picture": "front.pic",
+        "width_m": 1.7
+      }
     }
   },
   "places": {
