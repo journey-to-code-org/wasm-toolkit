@@ -21,6 +21,7 @@ pub mod cards;
 pub mod projects;
 pub mod sound;
 pub mod world;
+pub mod open;
 mod balance;
 use online::Net;
 
@@ -223,6 +224,10 @@ pub enum Scene {
 
 pub struct Game {
     pub pack: Pack,
+    /// The town and the roads out of it, laid out as one place to drive, if the pack has them.
+    land: Option<crate::land::World>,
+    /// Hours owed for miles of road driven, not yet a whole one.
+    clock: f64,
     /// What is wrong with the pack, if it could not be read.
     pub problem: Option<String>,
     pub scene: Scene,
@@ -300,8 +305,9 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, auto: (0, 900.0), spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, auto: (0, 900.0), spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0, land: None, clock: 0.0,
         };
+        g.land = crate::land::World::build(&g.pack.manifest);
         g.state = g.fresh();
         g.saved = g.kept().is_some();
         g
@@ -592,7 +598,7 @@ impl Game {
         let p = self.pace();
         let handling = self.owned().map_or(1.0, |o| self.chassis(o).1);
         if let Some(t) = self.town.as_mut() {
-            (t.brakes, t.turn) = (p.brakes, handling.sqrt().clamp(0.75, 1.3));
+            (t.brakes, t.turn, t.accel, t.top) = (p.brakes, handling.sqrt().clamp(0.75, 1.3), p.accel, p.top);
         }
     }
 
@@ -1087,7 +1093,11 @@ impl Game {
         } else if let Some(words) = action.strip_prefix("say:") {
             self.say(words);
         } else if let Some(road) = action.strip_prefix("road:") {
-            self.take_road(&road.to_string(), None);
+            if self.laid(road) {
+                self.onto_road(&road.to_string());
+            } else {
+                self.take_road(&road.to_string(), None);
+            }
         } else if let Some(map) = action.strip_prefix("drive:") {
             let Some(m) = self.pack.manifest.maps.get(map) else { return };
             if self.state.cur.is_none() {
@@ -1118,6 +1128,10 @@ impl Game {
             });
             self.rng = rng;
             self.town = Some(town);
+            let traffic = self.new_traffic();
+            if let Some(t) = self.town.as_mut() {
+                t.rolling = traffic;
+            }
             self.fit_town();
             self.town_by_road = false;
             self.scene = Scene::Drive;
@@ -1815,6 +1829,21 @@ impl Game {
     /// Out on the map. Escape turns back to where you set out from; pulling up beside somewhere
     /// and pressing Enter is going in, and that is an hour gone.
     fn drive_tick(&mut self, keys: u32, hit: u32) {
+        let chased = self.town.as_ref().is_some_and(|t| t.chase.is_some());
+        if hit & KEY_B != 0 && !chased && self.out_of_town() {
+            self.note = Some("No turning back: pull up somewhere.".into());
+            return;
+        }
+        if hit & KEY_A != 0 && !chased {
+            // A place at a road's end, or a block in town that a road leads out from: out to the road itself.
+            if self.pull_in() {
+                return;
+            }
+            let road = self.town.as_ref().and_then(|t| Some(t.beside(self.pack.manifest.maps.get(&t.map)?)?.road.clone()?));
+            if let Some(road) = road.filter(|r| self.laid(r)) {
+                return self.to_gate(&road);
+            }
+        }
         let Some(town) = self.town.as_mut() else { return };
         let Some(map) = self.pack.manifest.maps.get(&town.map) else { return };
         if hit & KEY_B != 0 && town.chase.is_some() {
@@ -1838,7 +1867,9 @@ impl Game {
         }
         // The street out of town is the road: drive off the end of it and you are on it, still rolling.
         if town.speed > 3.0 && town.chase.is_none() {
-            let out = map.blocks.values().filter_map(|b| b.road.as_ref()).find(|road| map.gate(road).is_some_and(|(gx, gz, heading)| {
+            // Unless the road is laid out past the edge of town: then it is just driven on to.
+            let laid = |road: &String| self.land.as_ref().is_some_and(|w| w.lanes.iter().any(|l| &l.id == road));
+            let out = map.blocks.values().filter_map(|b| b.road.as_ref()).filter(|r| !laid(r)).find(|road| map.gate(road).is_some_and(|(gx, gz, heading)| {
                 let turned = ((town.heading - (heading + 180.0)).rem_euclid(360.0) + 180.0).rem_euclid(360.0) - 180.0;
                 (gx - town.x).abs() < map.road + 2.0 && (gz - town.z).abs() < map.road + 2.0 && turned.abs() < 55.0 && ((gx - town.x).abs() < 7.0 || (gz - town.z).abs() < 7.0)
             })).cloned();
@@ -1864,11 +1895,12 @@ impl Game {
                 return self.spend(1);
             }
         }
-        let (went, crashed) = town.tick(map, Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0, ..Pedals::default() });
-        if map.hills > 0.0 && town.speed > 0.2 {
+        let (went, crashed) = town.tick_on(map, self.land.as_ref(), Pedals { go: keys & KEY_UP != 0, stop: keys & KEY_DOWN != 0, left: keys & KEY_LEFT != 0, right: keys & KEY_RIGHT != 0, ..Pedals::default() });
+        if (map.hills > 0.0 || self.land.is_some()) && town.speed > 0.2 {
             // Up a hill it drags, and down one it runs away.
             let (hs, hc) = town.heading.to_radians().sin_cos();
-            let slope = (map.height(town.x + hs * 6.0, town.z + hc * 6.0) - map.height(town.x, town.z)) / 6.0;
+            let g = |x: f64, z: f64| self.land.as_ref().map_or_else(|| map.height(x, z), |w| w.ground(map, x, z));
+            let slope = (g(town.x + hs * 6.0, town.z + hc * 6.0) - g(town.x, town.z)) / 6.0;
             town.speed = (town.speed - 9.8 * slope / 30.0).max(0.0);
         }
         // The law: past one of them well over the limit and he is behind you until you stop.
@@ -1899,6 +1931,11 @@ impl Game {
         }
         let chased = town.chase.is_some();
         let (speed, per_km) = (town.speed, map.gas_per_km);
+        // Out on a road, its own gas, and the hours it takes.
+        let per_km = self.on_the_road(went).unwrap_or(per_km);
+        if self.town.is_none() || self.scene != Scene::Drive {
+            return;
+        }
         if let Some(words) = said {
             self.say(&words);
         }
@@ -3221,7 +3258,9 @@ impl Game {
         let horizon = view * 60 / 136;
         const SEE: i32 = 5;
         let (p, road) = (map.pitch, map.road);
-        let g = |x: f64, z: f64| map.height(x, z);
+        let g = |x: f64, z: f64| self.ground(map, x, z);
+        let out = self.out_of_town();
+        let road_here = self.lane_here().and_then(|n| self.pack.manifest.roads.get(&self.land()?.lanes[n.lane].id)).cloned();
         let dim = if self.dark() == 0 && !self.raining() {
             s.vgrad(0, 0, 320, horizon, ramp("SKY"), 15, 29);
             s.vgrad(0, horizon, 320, view - horizon, ramp("GRASS"), 14, 20);
@@ -3322,6 +3361,8 @@ impl Game {
                 }
             }
         }
+        // Past the last street, the roads on out and what is beside them.
+        let land_names = self.draw_land(&mut scene, map, dim);
         // Cars about town, drawn from the pack's pictures of them where it has them: their backs
         // going your way, their fronts coming at you, their sides crossing. Boxes where it has none.
         let cars = &self.pack.manifest.cars;
@@ -3363,8 +3404,31 @@ impl Game {
             }
             a_car(&mut scene, ox, oz, if o.north { 0.0 } else { 270.0 }, o.paint, None);
         }
+        // And out on the roads, the traffic: trucks pulling trailers among it.
+        if let Some(w) = self.land() {
+            for o in &town.rolling {
+                let (ox, oz, oy, h) = w.place_of(o);
+                if (ox - town.x).abs() + (oz - town.z).abs() > 360.0 {
+                    continue;
+                }
+                if o.rig {
+                    let f = (h.sin(), h.cos());
+                    let at = |d: f64, up: f64| [ox + f.0 * d, oy + up, oz + f.1 * d];
+                    Self::stand(&mut scene, at(3.6, 0.35), f, 3.3, 1.0, 0.45, ramp("GREY"));
+                    Self::stand(&mut scene, at(3.6, 0.8), f, 2.1, 0.85, 0.6, ramp(o.paint));
+                    Self::stand(&mut scene, at(-3.6, 0.3), f, 2.5, 1.0, 1.0, ramp("WHITE"));
+                    Self::stand(&mut scene, at(-3.2, 1.3), f, 1.2, 0.95, 0.75, ramp("GLASS"));
+                } else {
+                    a_car(&mut scene, ox, oz, h.to_degrees(), o.paint, None);
+                }
+            }
+        }
         for road_id in map.blocks.values().filter_map(|b| b.road.as_ref()) {
             // Where a road leaves town it is seen leaving: tar on out past the last street, with its line.
+            // A road laid out in the world is drawn as itself, all the way.
+            if self.laid(road_id) {
+                continue;
+            }
             let Some((gx, gz, heading)) = map.gate(road_id) else { continue };
             let (os, oc) = (heading + 180.0).to_radians().sin_cos();
             let (sx, sz) = (if os.abs() > 0.5 { gx } else { (gx / p).round() * p }, if oc.abs() > 0.5 { gz } else { (gz / p).round() * p });
@@ -3393,6 +3457,14 @@ impl Game {
             if let Some((x, y, depth)) = scene.point([mx, g(mx, mz) + b.height + 12.0, mz]) {
                 if depth > 6.0 && depth < p * 5.5 && (0..320).contains(&x) {
                     names.push((x, y.clamp(14, view - 30), name.to_uppercase().chars().take(14).collect(), depth < p * 1.6));
+                }
+            }
+        }
+        for (at, name) in land_names {
+            if let Some((x, y, depth)) = scene.point(at) {
+                if depth > 6.0 && depth < 360.0 && (0..320).contains(&x) {
+                    // Below the gauges in the corner, which a place's name is not to be written over.
+                    names.push((x, y.clamp(46, view - 30), name.to_uppercase().chars().take(14).collect(), depth < 90.0));
                 }
             }
         }
@@ -3432,10 +3504,16 @@ impl Game {
             let (gear, rpm) = self.auto;
             self.draw_cockpit(s, seat, self.dark() == 2, rpm, town.speed * 2.237, if town.speed > 8.0 { 6.0 } else { 0.0 }, if town.speed > 0.0 { gear + 1 } else { 0 }, town.steer * 90.0, false);
         } else {
-            self.panel(s, &map.title, &format!("{} mph", (town.speed * 2.237) as i32), "Arrows drive. Escape turns back.");
+            let title = road_here.as_ref().map_or(map.title.clone(), |r| r.title.clone());
+            self.panel(s, &title, &format!("{} mph", (town.speed * 2.237) as i32), if out { "Arrows drive. Pull in somewhere." } else { "Arrows drive. Escape turns back." });
+        }
+        if out {
+            // Out of town, the world in the corner instead of the streets.
+            self.draw_world_map(s, map, town.x, town.z, hs, hc);
         }
         // The town from above, in the corner: what is built, where there is to go, and you.
         let (mx0, my0, cell) = (44, 16, if cols.max(depth) <= 8 { 7 } else { 4 });
+        if !out {
         s.rect(mx0 - 2, my0 - 2, cols * cell + 4, depth * cell + 4, BLACK);
         for r in 0..depth {
             for c in 0..cols {
@@ -3463,19 +3541,26 @@ impl Game {
         let (ux, uy) = (mx0 + (town.x / p * cell as f64) as i32, my0 + depth * cell - (town.z / p * cell as f64) as i32);
         s.line(ux, uy, ux + (hs * 4.0) as i32, uy - (hc * 4.0) as i32, WHITE);
         s.disc(ux, uy, 1, shade(ramp("RED"), 28));
+        }
         let gas = self.owned().map_or(0.0, |o| o.gas);
         s.text_sh(216, 18, &format!("GAS {gas:.1}"), if gas < 1.0 { shade(ramp("RED"), 27) } else { shade(ramp("WHITE"), 26) }, BLACK);
-        let fast = map.cops > 0 && town.speed * 2.237 > map.limit + 10.0;
+        let (limit, cops) = road_here.as_ref().map_or((map.limit, map.cops), |r| (r.limit, r.cops));
+        let fast = cops > 0 && town.speed * 2.237 > limit + 10.0;
         s.text_sh(216, 27, &format!("MPH {:3}", (town.speed * 2.237) as i32), shade(ramp(if fast { "RED" } else { "WHITE" }), 26), BLACK);
-        if map.cops > 0 {
-            s.text_sh(216, 36, &format!("LIMIT {}", map.limit as i32), shade(ramp("WHITE"), 26), BLACK);
+        if cops > 0 {
+            s.text_sh(216, 36, &format!("LIMIT {}", limit as i32), shade(ramp("WHITE"), 26), BLACK);
         }
         if town.chase.is_some() {
             let blink = self.ticks / 8 % 2 == 0;
             s.rect(0, 0, 320, 4, shade(ramp(if blink { "RED" } else { "BLUE" }), 26));
             s.text_sh(132, 8, "POLICE!", shade(ramp(if blink { "RED" } else { "WHITE" }), 27), BLACK);
         }
-        if seat.is_some() && town.speed < 0.5 && town.beside(map).is_none() && self.note.is_none() && town.crash == 0 {
+        let site = self.site_beside().map(|st| self.pack.manifest.places.get(&st.place).map_or(st.place.clone(), |pl| pl.title.clone()));
+        if let Some(name) = site.as_ref().filter(|_| self.note.is_none()) {
+            let words = format!("ENTER: {}", name.to_uppercase());
+            s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, &words, shade(ramp("GOLD"), 28), BLACK);
+        }
+        if seat.is_some() && town.speed < 0.5 && town.beside(map).is_none() && site.is_none() && !out && self.note.is_none() && town.crash == 0 {
             let words = "ARROWS DRIVE. PULL UP AND PRESS ENTER.";
             s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, words, shade(ramp("GOLD"), 28), BLACK);
         }

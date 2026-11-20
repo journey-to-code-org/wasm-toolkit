@@ -4,6 +4,7 @@
 //! streets is a block, and what stands on it is whatever the pack's map says. x is east, z is
 //! north; a heading of 0 faces north and turns clockwise.
 
+use crate::land::{in_town, Rolling, World};
 use crate::pack::{Block, Map};
 
 const HZ: f64 = 30.0;
@@ -43,6 +44,11 @@ pub struct Town {
     /// How hard it stops and how sharply it turns, as shares of an ordinary car's.
     pub brakes: f64,
     pub turn: f64,
+    /// How hard it pulls and how fast it will go, metres a second: the car's own, out of town.
+    pub accel: f64,
+    pub top: f64,
+    /// The traffic out on the roads, when there is a world past the edge of town.
+    pub rolling: Vec<Rolling>,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -77,7 +83,7 @@ impl Town {
             let (cc, cr) = ((k % (map.cols() as u32 + 1)) as i32, ((k >> 8) % (map.depth() as u32 + 1)) as i32);
             (cc as f64 * map.pitch + map.road + 2.0, if (cc - c).abs() + (cr - r).abs() < 2 { (cr + 2) as f64 } else { cr as f64 } * map.pitch + map.road + 2.0)
         }).collect();
-        Town { cops, chase: None, map: id.to_string(), x: (c as f64 + 0.5) * map.pitch, z: r as f64 * map.pitch - 4.0, heading: 90.0, speed: 0.0, steer: 0.0, crash: 0, dents: 0, others, brakes: 1.0, turn: 1.0 }
+        Town { cops, chase: None, map: id.to_string(), x: (c as f64 + 0.5) * map.pitch, z: r as f64 * map.pitch - 4.0, heading: 90.0, speed: 0.0, steer: 0.0, crash: 0, dents: 0, others, brakes: 1.0, turn: 1.0, accel: 5.0, top: 56.0, rolling: Vec::new() }
     }
 
     /// The block this point is over: its column and row.
@@ -115,13 +121,28 @@ impl Town {
 
     /// A thirtieth of a second. Returns how far the car went, in metres, and whether it just hit something.
     pub fn tick(&mut self, map: &Map, p: Pedals) -> (f64, bool) {
+        self.tick_on(map, None, p)
+    }
+
+    /// Whether the car can be at a point: the streets in town, and past them, the world's roads
+    /// and what is beside them. With no world, past the last street is the end.
+    pub fn clear(map: &Map, land: Option<&World>, x: f64, z: f64) -> bool {
+        match land {
+            Some(w) if !in_town(map, x, z, 0.0) => w.open(map, x, z),
+            _ => !Self::blocked(map, x, z),
+        }
+    }
+
+    /// A thirtieth of a second, in a world that may run on past the edge of town.
+    pub fn tick_on(&mut self, map: &Map, land: Option<&World>, p: Pedals) -> (f64, bool) {
         if self.crash > 0 {
             self.crash -= 1;
             return (0.0, false);
         }
         // The pedals. It pulls hardest from rest and runs out of breath near 55 metres a second.
+        let (accel, top) = (self.accel.max(1.0), self.top.max(20.0));
         if p.go {
-            self.speed += 5.0 / HZ * (1.0 - self.speed / 56.0);
+            self.speed += accel / HZ * (1.0 - self.speed / top);
         } else {
             self.speed -= 1.0 / HZ;
         }
@@ -133,10 +154,26 @@ impl Town {
         let want = if p.left { -1.0 } else if p.right { 1.0 } else { 0.0 };
         self.steer += (want - self.steer) / 4.0;
         let grip = (self.speed / 12.0).min(1.0);
-        self.heading = (self.heading + self.steer * grip * (9.0 - self.speed / 9.0) * self.turn * 360.0 / 1024.0).rem_euclid(360.0);
+        self.heading = (self.heading + self.steer * grip * (9.0 - self.speed / 9.0).max(0.8) * self.turn * 360.0 / 1024.0).rem_euclid(360.0);
+        let out = land.is_some_and(|_| !in_town(map, self.x, self.z, 0.0));
+        if out && land.is_some_and(|w| w.on_tar(self.x, self.z).is_none()) && self.speed > 9.0 {
+            // Off the tar it is gravel and grass, and the car will not go quickly on them.
+            self.speed -= (self.speed - 9.0) * 1.5 / HZ;
+        }
         let (s, c) = self.heading.to_radians().sin_cos();
         let (nx, nz) = (self.x + s * self.speed / HZ, self.z + c * self.speed / HZ);
-        let mut hit = Self::blocked(map, nx + s * 2.0, nz + c * 2.0);
+        let mut hit = !Self::clear(map, land, nx + s * 2.0, nz + c * 2.0);
+        // The edge of the country: trees, rock, water, the drop. Into them slowly is only stopping,
+        // and quickly is a crash, as anywhere.
+        if let Some(w) = land {
+            w.roll(&mut self.rolling);
+            for o in &self.rolling {
+                let (ox, oz, _, _) = w.place_of(o);
+                if (nx - ox).powi(2) + (nz - oz).powi(2) < if o.rig { 3.2f64 } else { 2.4 }.powi(2) {
+                    hit = true;
+                }
+            }
+        }
         for o in &mut self.others {
             let length = if o.north { map.depth() } else { map.cols() } as f64 * map.pitch;
             o.along = (o.along + o.speed / HZ * if o.north { 1.0 } else { -1.0 }).rem_euclid(length);

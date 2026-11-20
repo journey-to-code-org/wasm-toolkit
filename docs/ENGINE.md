@@ -591,6 +591,21 @@ and what a ticket costs; with no police there is no limit.
 `drive:<map>` from a place starts you beside the block that leads to it. A block with
 `road` in place of `to` is the way onto that road.
 
+`"open": true` makes the map the middle of one world. Its roads are laid out on the ground from
+its edge, each from the street it leaves by, bending and climbing as its stretches say, and
+the places at their ends stand where the roads end. A road that starts at a place starts where
+the road before it ended; one from a place back to the same place is bent round to close as a
+loop. You drive out past the last street and on down the road with no change of view: the same
+car, keys and windscreen, with the road's traffic both ways, rock, trees, rails and water
+beside it as its stretches say, and the world from above in the corner. Off the tar it is slow
+going, and into what is solid beside the road is a crash, as in town. Pull up in a place's lot
+and Enter goes in; its `road:` buttons put you back in the car in its lot facing down that road,
+and Enter beside a block that leads to a road takes you to where it leaves town. A road takes
+its `hours` and `gas_per_km` as you drive it, a share for each share of its length, and one with
+a `rung` turns you round a little way down it until you have climbed that far. Road races and
+the poker run are still raced on the road view. Left out, each road is driven on a road view of
+its own.
+
 ### Roads
 
 ```json

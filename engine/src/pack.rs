@@ -658,6 +658,10 @@ pub struct Block {
 pub struct Map {
     pub title: String,
     pub rows: Vec<String>,
+    /// Whether the roads out of it are laid out on the ground past its last street and driven
+    /// there, one world with no change of view, rather than each on the road view of its own.
+    #[serde(default)]
+    pub open: bool,
     #[serde(default)]
     pub blocks: BTreeMap<String, Block>,
     /// Metres from one street to the next, and half the width of a street.
