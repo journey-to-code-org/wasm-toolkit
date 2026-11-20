@@ -153,7 +153,7 @@ impl Game {
     pub fn near_player(&self) -> Option<Person> {
         match self.scene {
             Scene::Drive => {
-                let t = self.town.as_ref().filter(|t| t.speed < 6.0)?;
+                let t = self.town.as_ref().filter(|t| t.speed < 6.0 && self.dash.is_none())?;
                 self.others_at(&format!("map:{}", t.map)).into_iter().filter(|(p, _)| p.car.is_some())
                     .map(|(p, s)| (((s.x - t.x).powi(2) + (s.z - t.z).powi(2)).sqrt(), p)).filter(|x| x.0 < NEAR_TOWN).min_by(|a, b| a.0.total_cmp(&b.0)).map(|x| x.1)
             }
@@ -169,7 +169,7 @@ impl Game {
     /// Whether a dare can come to you now: out and about, and not in a race of any kind.
     pub(super) fn free_for_a_dare(&self) -> bool {
         let scene = matches!(self.scene, Scene::Online | Scene::Place | Scene::Drive) || (self.scene == Scene::Road && self.trip.as_ref().is_some_and(|t| t.rival.is_none() && !t.poker));
-        scene && self.net.versus.is_none() && self.race.is_none() && self.bracket.is_none() && self.net.dare_in.is_none() && self.net.dare_out.is_none()
+        scene && self.dash.is_none() && self.net.versus.is_none() && self.race.is_none() && self.bracket.is_none() && self.net.dare_in.is_none() && self.net.dare_out.is_none()
     }
 
     /// Dares on the street: answering one, calling one off, or making one to whoever you have

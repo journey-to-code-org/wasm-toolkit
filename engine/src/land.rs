@@ -81,6 +81,13 @@ impl Lane {
         Pt { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, y: a.y + (b.y - a.y) * t, h: a.h + (b.h - a.h) * t, left: a.left, right: a.right }
     }
 
+    /// How hard it bends there, as a stretch says it: 1 a full bend to the right, -1 to the left.
+    pub fn bend(&self, along: f64) -> f64 {
+        let i = ((along / SEG).max(0.0) as usize).min(self.pts.len().saturating_sub(2));
+        let d = self.pts[i + 1].h - self.pts[i].h;
+        (d.sin().atan2(d.cos()) / BEND).clamp(-1.5, 1.5)
+    }
+
     /// `across` metres to the right of the point `along` metres down it.
     pub fn beside(&self, along: f64, across: f64) -> (f64, f64, f64) {
         let p = self.at(along);
@@ -118,12 +125,23 @@ impl World {
                 let ends = if reversed { [road.ends[1].clone(), road.ends[0].clone()] } else { road.ends.clone() };
                 let segs = Trip::new(id, road, reversed, 1).segs;
                 let (mut x, mut z, y0, mut h) = start;
+                // A loop is turned a little more at every step, so that it comes all the way
+                // round: the way it already leans, or with its water on the inside.
+                let round = if ends[0] == ends[1] && !segs.is_empty() {
+                    let own: f64 = segs.iter().map(|s| s.curve * BEND).sum();
+                    let wet = |side: fn(&crate::road::Seg) -> Side| segs.iter().filter(|s| side(s) == Side::Water).count();
+                    let (l, r) = (wet(|s| s.left), wet(|s| s.right));
+                    let way = if l > r { -1.0 } else if r > l || own >= 0.0 { 1.0 } else { -1.0 };
+                    (way * std::f64::consts::TAU - own) / segs.len() as f64
+                } else {
+                    0.0
+                };
                 let mut pts = Vec::with_capacity(segs.len() + 1);
                 for s in &segs {
                     pts.push(Pt { x, z, y: y0 + s.y, h, left: s.left, right: s.right });
                     x += h.sin() * SEG;
                     z += h.cos() * SEG;
-                    h += s.curve * BEND;
+                    h += s.curve * BEND + round;
                 }
                 let last = segs.last().map_or((Side::Trees, Side::Trees, 0.0), |s| (s.left, s.right, s.y));
                 pts.push(Pt { x, z, y: y0 + last.2, h, left: last.0, right: last.1 });
@@ -150,8 +168,13 @@ impl World {
 
     /// The road nearest a point, if one is within `reach` metres of it.
     pub fn near(&self, x: f64, z: f64, reach: f64) -> Option<Near> {
+        self.near_on(None, x, z, reach)
+    }
+
+    /// The same, on one road only if one is named.
+    pub fn near_on(&self, only: Option<usize>, x: f64, z: f64, reach: f64) -> Option<Near> {
         let mut best: Option<(f64, Near)> = None;
-        for (k, lane) in self.lanes.iter().enumerate() {
+        for (k, lane) in self.lanes.iter().enumerate().filter(|(k, _)| only.is_none_or(|o| o == *k)) {
             for (i, w) in lane.pts.windows(2).enumerate() {
                 let (a, b) = (w[0], w[1]);
                 if (a.x - x).abs() > reach + SEG || (a.z - z).abs() > reach + SEG {
@@ -265,6 +288,23 @@ impl World {
                 let speed = 13.0 + flow - slow + (r % 8) as f64;
                 let along = 60.0 + ((r >> 4) % 1000) as f64 / 1000.0 * (lane.len() - 120.0).max(1.0);
                 out.push(Rolling { lane: k, along, speed: if (r >> 3) & 1 == 0 { -speed } else { speed }, paint: PAINTS[(r as usize >> 8).wrapping_add(i) % 8], rig });
+            }
+        }
+        out
+    }
+
+    /// Where the police sit: as many as each road has, spread down it, off the tar on the right.
+    pub fn cops(&self, m: &Manifest, mut rand: impl FnMut() -> u32) -> Vec<(f64, f64)> {
+        let mut out = Vec::new();
+        for lane in &self.lanes {
+            let Some(road) = m.roads.get(&lane.id) else { continue };
+            let len = lane.len();
+            for i in 0..road.cops {
+                let spread = len / (road.cops + 1) as f64;
+                let jitter = (rand() % 100) as f64 / 100.0 - 0.5;
+                let along = (spread * (i as f64 + 1.0 + jitter * 0.5)).clamp(150.0, (len - 100.0).max(150.0));
+                let (x, z, _) = lane.beside(along, if i % 2 == 0 { HALF + 2.5 } else { -HALF - 2.5 });
+                out.push((x, z));
             }
         }
         out

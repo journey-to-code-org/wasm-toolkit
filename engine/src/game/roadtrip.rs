@@ -68,6 +68,9 @@ impl Game {
 
     /// Down a road against whoever has pulled in, for what was bet: no police, and first to the end.
     pub(super) fn start_road_race(&mut self, id: &str) {
+        if self.laid(id) {
+            return self.start_dash(id);
+        }
         let Some(r) = self.rival().cloned() else { return };
         let Some(road) = self.pack.manifest.roads.get(id) else { return };
         let mut road = road.clone();
@@ -127,6 +130,9 @@ impl Game {
         if self.state.cash < entry {
             return self.no(&format!("It is ${entry} to ride. You don't have it."));
         }
+        if self.laid(id) {
+            return self.start_poker_out(id, entry);
+        }
         let seed = self.rng | 1;
         let mut trip = Trip::new(id, road, false, seed);
         trip.pace = self.pace();
@@ -141,7 +147,7 @@ impl Game {
     }
 
     /// The run is ridden: your hand against everyone else's.
-    fn settle_poker(&mut self, cards: &[u8]) {
+    pub(super) fn settle_poker(&mut self, cards: &[u8]) {
         let (poker, day) = (self.pack.manifest.poker.clone(), self.day() as u32);
         let mine = cards::rank(cards);
         // The others' hands come off what is left of the same deck.
@@ -324,7 +330,15 @@ impl Game {
     /// The clutch's own words for a road start: the revs and the band on the line, what to do,
     /// and how it went.
     fn draw_road_launch(&self, s: &mut Screen, trip: &Trip) {
-        let Some(b) = trip.gearbox.as_ref().filter(|_| trip.best_launch > 0.0) else { return };
+        self.draw_launch(s, trip.gearbox.as_ref(), trip.best_launch, trip.hold, trip.held, trip.start, trip.z);
+    }
+
+    /// The same, for any start from a line: the gearbox, the best revs, the count, whether the
+    /// clutch is in, how it went, and how far from the line the car has got.
+    pub(super) fn draw_launch(&self, s: &mut Screen, gearbox: Option<&crate::road::Gearbox>, best_launch: f64, hold: i32, held: bool, start: crate::race::Launch, gone: f64) {
+        struct T<'a> { gearbox: Option<&'a crate::road::Gearbox>, best_launch: f64, hold: i32, held: bool, start: crate::race::Launch, z: f64 }
+        let trip = T { gearbox, best_launch, hold, held, start, z: gone };
+        let Some(b) = trip.gearbox.filter(|_| trip.best_launch > 0.0) else { return };
         let gold = shade(ramp("GOLD"), 28);
         let waiting = trip.hold > 0 || trip.held;
         if waiting {

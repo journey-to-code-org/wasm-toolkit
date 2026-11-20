@@ -602,9 +602,15 @@ going, and into what is solid beside the road is a crash, as in town. Pull up in
 and Enter goes in; its `road:` buttons put you back in the car in its lot facing down that road,
 and Enter beside a block that leads to a road takes you to where it leaves town. A road takes
 its `hours` and `gas_per_km` as you drive it, a share for each share of its length, and one with
-a `rung` turns you round a little way down it until you have climbed that far. Road races and
-the poker run are still raced on the road view. Left out, each road is driven on a road view of
-its own.
+a `rung` turns you round a little way down it until you have climbed that far. A road's police
+sit beside it, its `limit` and `ticket` are the law on it, and out there he can be outrun: well
+over the limit for twenty seconds and he is lost. A loop is turned all the way round, with its
+water on the inside. `roadrace:` and `pokerrun:` are run out on the road too: a race starts side
+by side in the place's lot with a count, the clutch and the gearbox as on the strip (the gearbox
+is worked by hand only in a race), no police, and first to the far end; a run deals a card at
+each sixth of the loop and is settled back where it began. Nitrous works anywhere you drive.
+Racing other people down a road is still on the road view. Left out, each road is driven on a
+road view of its own.
 
 ### Roads
 

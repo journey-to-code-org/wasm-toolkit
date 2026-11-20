@@ -51,7 +51,11 @@ fn cruise(g: &mut Game, ticks: u32, fast: f64) {
         }
         let t = g.town.as_ref().unwrap();
         let mut k = if t.speed < fast { UP } else { 0 };
-        if let Some(n) = g.land().and_then(|w| w.near(t.x, t.z, 40.0)) {
+        // Up a gear short of the redline, on every other tick so that each is a fresh press.
+        if t.gearbox.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && g.ticks % 2 == 0 {
+            k |= 64;
+        }
+        if let Some(n) = g.land().and_then(|w| w.near_on(g.dash.as_ref().map(|d| d.lane), t.x, t.z, 40.0)) {
             let lane = &g.land().unwrap().lanes[n.lane];
             let fwd = { let d = (t.heading.to_radians() - lane.at(n.along).h).sin_cos().1; d > 0.0 };
             let ahead = if fwd { (n.along + 25.0).min(lane.len()) } else { (n.along - 25.0).max(0.0) };
@@ -187,4 +191,105 @@ fn a_long_road_takes_hours_and_waits_for_its_rung() {
     let len = g.land().unwrap().lanes.iter().find(|l| l.id == "ohio").unwrap().len();
     let owed = (went * 6.0 / len) as i32;
     assert!(went > 1500.0 && g.state.hours - hours == owed, "{went} m, {} hours", g.state.hours - hours);
+}
+
+/// Into a place at the end of a road, by pulling up in its lot.
+fn pull_into(g: &mut Game, road: &str, at_start: bool) {
+    let len = g.land().unwrap().lanes.iter().find(|l| l.id == road).unwrap().len();
+    put(g, road, if at_start { 4.0 } else { len - 4.0 }, false);
+    g.tick(ENTER, 0, 0);
+    g.tick(0, 0, 0);
+    assert_eq!(g.scene, Scene::Place);
+}
+
+#[test]
+fn the_police_sit_out_on_the_roads_too() {
+    let Some(bytes) = default_pack() else { return };
+    let mut g = game(&bytes);
+    click(&mut g, 270, 60);
+    let t = g.town.as_ref().unwrap();
+    let roads: usize = g.pack.manifest.roads.values().map(|r| r.cops).sum();
+    assert_eq!(t.cops.len(), t.town_cops + roads);
+    // Past one on the ridge road at ninety: he is behind you, and stopping is the road's ticket.
+    let (cx, cz) = t.cops[t.town_cops..].iter().copied().find(|&(x, z)| {
+        let w = g.land().unwrap();
+        w.near(x, z, 20.0).is_some_and(|n| w.lanes[n.lane].id == "ridge")
+    }).unwrap();
+    let n = g.land().unwrap().near(cx, cz, 20.0).unwrap();
+    put(&mut g, "ridge", n.along - 30.0, false);
+    g.town.as_mut().unwrap().speed = 40.0;
+    let cash = g.state.cash;
+    cruise(&mut g, 30, 40.0);
+    assert!(g.town.as_ref().unwrap().chase.is_some(), "{:?}", g.note);
+    for _ in 0..400 {
+        g.tick(2, 0, 0);
+    }
+    let ticket = g.pack.manifest.roads["ridge"].ticket;
+    assert!(g.town.as_ref().unwrap().chase.is_none() && g.state.cash <= cash - ticket.min(cash), "{} {}", g.state.cash, cash);
+    // Inside the limit he lets you by.
+    put(&mut g, "ridge", n.along - 30.0, false);
+    cruise(&mut g, 200, 20.0);
+    assert!(g.town.as_ref().unwrap().chase.is_none());
+}
+
+#[test]
+fn a_road_race_is_run_on_the_road_itself() {
+    let Some(bytes) = default_pack() else { return };
+    let mut g = game(&bytes);
+    click(&mut g, 270, 60);
+    pull_into(&mut g, "ridge", false);
+    assert_eq!(g.state.place, "overlook");
+    click(&mut g, 186, 186);
+    assert_eq!(g.scene, Scene::Bets, "{:?}", g.note);
+    click(&mut g, 120, 186);
+    assert_eq!(g.scene, Scene::Drive, "{:?}", g.note);
+    assert!(g.trip.is_none() && g.dash.as_ref().is_some_and(|d| d.rival.is_some() && d.back));
+    // Three, two, one: nobody moves until the off.
+    let at = { let t = g.town.as_ref().unwrap(); (t.x, t.z) };
+    for _ in 0..80 {
+        g.tick(UP, 0, 0);
+    }
+    let t = g.town.as_ref().unwrap();
+    assert!((t.x, t.z) == at && t.hold > 0 && g.dash.as_ref().unwrap().rival.as_ref().unwrap().s == 12.0);
+    let mut s = engine::gfx::Screen::new();
+    g.draw(&mut s);
+    // Then down the hill to town, and it is settled when one of you gets there.
+    let (wins, losses) = (g.state.wins, g.state.losses);
+    cruise(&mut g, 6000, 45.0);
+    assert_eq!(g.scene, Scene::Place, "{:?}", g.dash_at());
+    assert_eq!((g.state.wins + g.state.losses, g.state.place.as_str()), (wins + losses + 1, "overlook"));
+    assert!(g.dash.is_none() && g.town.is_none());
+    // Lifting is losing.
+    click(&mut g, 186, 186);
+    click(&mut g, 120, 186);
+    assert_eq!(g.scene, Scene::Drive, "{:?}", g.note);
+    let losses = g.state.losses;
+    for _ in 0..100 {
+        g.tick(0, 0, 0);
+    }
+    g.tick(ESC, 0, 0);
+    assert_eq!((g.scene, g.state.losses), (Scene::Place, losses + 1));
+}
+
+#[test]
+fn the_poker_run_goes_round_the_lake() {
+    let Some(bytes) = default_pack() else { return };
+    let mut g = game(&bytes);
+    g.state.rung = 6;
+    click(&mut g, 270, 60);
+    pull_into(&mut g, "ohio", false);
+    assert_eq!(g.state.place, "norwalk");
+    let cash = g.state.cash;
+    click(&mut g, 80, 186);
+    assert_eq!(g.scene, Scene::Drive, "{:?}", g.note);
+    assert!(g.dash.as_ref().is_some_and(|d| d.poker) && g.state.cash == cash - g.pack.manifest.poker.entry);
+    // The lake is on the inside all the way round, and the road comes back to where it left.
+    let lake = g.land().unwrap().lanes.iter().find(|l| l.id == "lake").unwrap();
+    let turned: f64 = lake.pts.windows(2).map(|w| { let d = w[1].h - w[0].h; d.sin().atan2(d.cos()) }).sum();
+    assert!((turned - std::f64::consts::TAU).abs() < 0.3, "{turned}");
+    cruise(&mut g, 2000, 19.0);
+    assert!(g.scene == Scene::Drive && (1..5).contains(&g.dash.as_ref().unwrap().cards.len()));
+    cruise(&mut g, 20000, 19.0);
+    assert_eq!((g.scene, g.state.place.as_str()), (Scene::Place, "norwalk"), "{:?} {:?}", g.dash_at(), g.dash.as_ref().map(|d| d.far));
+    assert!(g.dash.is_none() && g.note.is_some());
 }
