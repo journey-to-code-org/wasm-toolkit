@@ -20,6 +20,7 @@ pub mod dyno;
 pub mod cards;
 pub mod projects;
 pub mod sound;
+mod balance;
 use online::Net;
 
 pub const KEY_UP: u32 = 1;
@@ -47,6 +48,9 @@ const PAGE: usize = 11;
 pub const MOST_CARS: usize = 16;
 const PAINTS: [&str; 8] = ["BLUE", "RED", "GOLD", "GREEN", "SILVER", "WHITE", "VIOLET", "TEAL"];
 const BETS: [i32; 4] = [10, 25, 50, 100];
+/// How many people will pay you in a day before word gets round. The next one up the ladder
+/// always will: he wants to see for himself.
+pub const PAID_A_DAY: usize = 2;
 
 /// A car of yours: which one, its paint, how healthy its engine is as a percentage, and what is
 /// bolted to it, by slot.
@@ -154,6 +158,10 @@ pub struct State {
     pub spares: Vec<String>,
     /// The day, and which of that day's cars in the paper have gone.
     pub sold: (i32, Vec<usize>),
+    /// The day, and who has lost money to you that day: none of them will put money up again
+    /// until tomorrow.
+    #[serde(default)]
+    pub paid_up: (i32, Vec<usize>),
     /// Races against someone won and lost, whatever they were for.
     #[serde(default)]
     pub knocked: (i32, Vec<(usize, i32)>),
@@ -600,7 +608,9 @@ impl Game {
             .map(|id| 1.0 - (50 - cond_of(id)) as f64 * 0.002).product::<f64>().max(0.75);
         // New parts on the old tune: it runs, but rich here and lean there, and down on power.
         let rough = if o.untuned { 0.85 } else { 1.0 };
-        ((100 + more) as f64 / 100.0 * o.cond as f64 / 100.0 * tired * rough * dyno::tuned(o.ecu, blown).0, turbo)
+        // A tired engine has lost compression, not most of itself: at nothing it still makes over half.
+        let health = 0.55 + 0.45 * o.cond as f64 / 100.0;
+        ((100 + more) as f64 / 100.0 * health * tired * rough * dyno::tuned(o.ecu, blown).0, turbo)
     }
 
     /// The car as it is set up: its own running gear with what the parts on it change. Tyres and
@@ -652,6 +662,12 @@ impl Game {
         self.save();
     }
 
+    /// What rebuilding the engine of the car in the bay costs: the pack's price, and a quarter of
+    /// what the car costs in the paper, since a bigger engine is more to rebuild.
+    pub fn rebuild_cost(&self) -> i32 {
+        self.pack.manifest.rebuild.cost + self.car().and_then(|c| c.price).unwrap_or(0) / 4
+    }
+
     /// What a car like this one costs in the paper, and what the dealer gives for yours.
     fn list_price(&self, car: &str, cond: i32) -> i32 {
         self.pack.manifest.cars.get(car).and_then(|c| c.price).unwrap_or(300) * cond / 70
@@ -686,10 +702,14 @@ impl Game {
         [self.wont_run_of(o).is_none().then(|| self.value(o)), self.shell_offer(o), Some(self.scrap_offer(o))]
     }
 
-    /// What they give today for a part off the shelf: 70 to 89 hundredths of what it cost.
+    /// What they give today for a part off the shelf: a used factory part 15 to 24 hundredths of
+    /// what it cost new, anything else 55 to 74, and less as it is worn.
     pub fn spare_offer(&self, id: &str) -> i32 {
         let n = self.pack.manifest.parts.keys().position(|k| k == base(id)).unwrap_or(0) as u32;
-        self.part(id).map(|p| p.price).unwrap_or(0) * (70 + (hash(self.day() as u32 * 16 + n + 3) >> 12) as i32 % 20) / 100 * cond_of(id) / 100
+        // A used factory part is worth a good deal less than a used part someone paid extra for.
+        let stock = self.pack.manifest.cars.values().any(|c| c.stock.values().any(|s| s == base(id)));
+        let (least, more) = if stock { (15, 10) } else { (55, 20) };
+        self.part(id).map(|p| p.price).unwrap_or(0) * (least + (hash(self.day() as u32 * 16 + n + 3) >> 12) as i32 % more) / 100 * cond_of(id) / 100
     }
 
     /// What selling the spare on the shelf at `i` brings, and which spares go: a part that needs
@@ -1191,8 +1211,8 @@ impl Game {
                     self.spend(hours);
                 }
                 "rebuild" => {
-                    let (cost, cond) = (self.pack.manifest.rebuild.cost, self.pack.manifest.rebuild.cond.clamp(1, 100));
                     let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
+                    let (cost, cond) = (self.rebuild_cost(), self.pack.manifest.rebuild.cond.clamp(1, 100));
                     if self.state.cars[cur].cond >= cond {
                         return self.say("The engine is as good as a rebuild would make it.");
                     }
@@ -1297,11 +1317,31 @@ impl Game {
         if self.state.cash < stake {
             return self.no("You don't have that kind of dough.");
         }
-        if stake > r.limit || (pinks && !r.king && (!r.pinks || self.rand() % 3 == 0)) {
+        // Someone you have beaten before is wary: he bets half what he would.
+        let limit = if self.who < self.state.rung { r.limit / 2 } else { r.limit };
+        if stake > limit || (pinks && !r.king && (!r.pinks || self.rand() % 3 == 0)) {
             return self.no("No way. Too rich for me.");
         }
+        let today = if self.state.paid_up.0 == self.day() { self.state.paid_up.1.clone() } else { Vec::new() };
+        if stake > 0 && today.contains(&self.who) {
+            return self.no("You had my money today. Tomorrow.");
+        }
+        // Two paid up in a day and word gets round: nobody else bets you until tomorrow.
+        if stake > 0 && today.len() >= PAID_A_DAY && self.who != self.state.rung {
+            return self.no("Word is out on you. Not today.");
+        }
         self.bet = b;
-        self.start_race((r.et * 1000.0) as i32);
+        let et = self.on_the_day(r.et);
+        self.start_race(et);
+    }
+
+    /// What a rival runs today, in milliseconds: nobody runs the same number twice. Mostly within
+    /// a tenth or two of his best, now and then well off it, now and then a little under.
+    pub fn on_the_day(&mut self, et: f64) -> i32 {
+        let spread = et * 1000.0 * 0.012;
+        // Three draws added up lean to the middle; a bad day is longer than a good one.
+        let k = (0..3).map(|_| self.rand() % 1001).sum::<u32>() as f64 / 1500.0 - 1.0;
+        (et * 1000.0 + spread * if k > 0.0 { k * 1.6 } else { k }) as i32
     }
 
     /// The race is run. `won` is None for a pass with nobody in the other lane.
@@ -1313,7 +1353,8 @@ impl Game {
         self.bet = 0;
         self.road_race = None;
         let et = self.pack.manifest.rivals[self.who].et;
-        self.start_race((et * 1000.0) as i32);
+        let et = self.on_the_day(et);
+        self.start_race(et);
     }
 
     /// A round of the shootout is run: through to the next, out, or the purse.
@@ -1389,6 +1430,13 @@ impl Game {
             } else {
                 self.state.cash += stake;
                 self.say(if stake > 0 { "Pay up. He did." } else { "You won. It was for kicks." });
+                if stake > 0 {
+                    let day = self.day();
+                    if self.state.paid_up.0 != day {
+                        self.state.paid_up = (day, Vec::new());
+                    }
+                    self.state.paid_up.1.push(self.who);
+                }
             }
             // Beating the next one up brings the one after out. Kicks do not count.
             if self.who == self.state.rung && self.bet > 0 && self.state.rung + 1 < self.pack.manifest.rivals.len() {
@@ -2101,8 +2149,8 @@ impl Game {
         }
         self.state.cash += paid;
         tone(660, 80);
-        // Stripping a car is a morning's work; a dealer or a tow is an hour.
-        self.spend(if way == 1 { 4 } else { 1 });
+        // Stripping a car is a day's work; a dealer or a tow is an hour.
+        self.spend(if way == 1 { 8 } else { 1 });
     }
 
     /// A car off your hands: out of the yard, and out of the bay if it was there.
@@ -2692,7 +2740,7 @@ impl Game {
             }
             let line = match under {
                 Some(0) => "The dealer takes it whole, if it runs.",
-                Some(1) => "Strip it, sell the shell. Four hours.",
+                Some(1) => "Strip it, sell the shell. A day's work.",
                 Some(2) => "Steel, and a bit for what is on it.",
                 _ => "Pick one, or Escape to keep it.",
             };

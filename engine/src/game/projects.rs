@@ -93,7 +93,7 @@ impl Game {
                 says.push(format!("Has a {}.", p.name.to_lowercase()).chars().take(38).collect());
             }
             // The price is for the car the ad describes, give or take; then the car is what it is.
-            let asked = self.value(&o) * (50 + next(35) as i32) / 100 + 40;
+            let asked = self.value(&o) * (70 + next(55) as i32) / 100 + 40;
             for slot in unsaid {
                 done(&mut o, slot);
             }

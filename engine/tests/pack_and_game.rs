@@ -222,7 +222,8 @@ fn the_bench_bolts_parts_on_and_the_yard_swaps_cars() {
     let mut s = Screen::new();
     g.state.spares = vec!["pipe".into(), "puffer".into()];
     let stock = g.tune(g.owned().unwrap());
-    assert_eq!(stock, (0.7, None));
+    // An engine at 70 per cent makes 0.55 + 0.45 of 0.7 of its power.
+    assert_eq!(stock, (0.865, None));
     click(&mut g, 180, 10);
     assert_eq!(g.scene, Scene::Bench);
     assert_eq!(g.slots(), vec!["Exhaust".to_string(), "Turbo".to_string()]);
@@ -230,7 +231,7 @@ fn the_bench_bolts_parts_on_and_the_yard_swaps_cars() {
     click(&mut g, 200, 36);
     assert_eq!((g.state.spares.len(), g.state.hours), (1, 1), "bolting one on takes an hour");
     let (gain, boost) = g.tune(g.owned().unwrap());
-    assert!((gain - 0.77).abs() < 1e-9 && boost.is_none());
+    assert!((gain - 1.1 * 0.865).abs() < 1e-9 && boost.is_none());
     click(&mut g, 200, 36);
     assert_eq!(g.tune(g.owned().unwrap()).1.map(|b| b.psi), Some(27.0));
     // Off again.
@@ -300,7 +301,7 @@ fn under_the_hood_parts_come_off_bolt_by_bolt() {
         click(&mut g, x, y);
     }
     assert_eq!(g.wont_run(), None);
-    assert!((g.tune(g.owned().unwrap()).0 - 0.77).abs() < 1e-9);
+    assert!((g.tune(g.owned().unwrap()).0 - 1.1 * 0.865).abs() < 1e-9);
     assert_eq!(g.floor(), vec![Loose::Stock("Exhaust".into())], "the stock one stays on the floor");
 
     // A loose bolt, and nobody is racing anybody. The bench will not do the hood's work either.
@@ -821,12 +822,15 @@ fn an_engine_held_on_the_limiter_lets_go_and_is_rebuilt() {
     g.state.cars[0].cond = 30;
     g.state.cash = 100;
     click(&mut g, 100, 10);
-    assert_eq!((g.owned().unwrap().cond, g.note.as_deref()), (30, Some("A rebuild is $300. You don't have it.")));
+    // The pack's price and a quarter of the car's.
+    let price = g.rebuild_cost();
+    assert_eq!(price, 300 + g.car().unwrap().price.unwrap() / 4);
+    assert_eq!((g.owned().unwrap().cond, g.note.clone()), (30, Some(format!("A rebuild is ${price}. You don't have it."))));
     g.state.cash = 1000;
     click(&mut g, 100, 10);
-    assert_eq!((g.owned().unwrap().cond, g.state.cash, g.state.hours), (90, 700, 4));
+    assert_eq!((g.owned().unwrap().cond, g.state.cash, g.state.hours), (90, 1000 - price, 4));
     click(&mut g, 100, 10);
-    assert_eq!(g.state.cash, 700, "a healthy engine is not rebuilt");
+    assert_eq!(g.state.cash, 1000 - price, "a healthy engine is not rebuilt");
 }
 
 #[test]
@@ -1083,8 +1087,10 @@ fn a_road_is_somewhere_to_race() {
     cruise(&mut g, 80.0, &|g| g.scene != Scene::Road);
     assert_eq!((g.scene, g.state.place.as_str(), g.state.cash, g.state.hours, g.state.rung), (Scene::Place, "road", 1010, 2, 1), "{:?}", g.note);
 
-    // Sit on the line and they get there first; Escape is giving it to them.
+    // Sit on the line and they get there first; Escape is giving it to them. (He paid up once
+    // today already, and would not bet again: it is tomorrow.)
     g.tick(0, 0, 0);
+    g.state.paid_up = (0, Vec::new());
     g.who = 0;
     click(&mut g, 250, 10);
     click(&mut g, 120, 186);
@@ -2110,7 +2116,7 @@ fn a_car_in_the_yard_goes_to_the_dealer_as_a_shell_or_for_scrap() {
     assert_eq!((g.parting, g.note.as_deref()), (Some(1), Some("It does not run. The dealer passes.")));
     let (cash, hours, shell) = (g.state.cash, g.state.hours, g.shell_offer(&dead).unwrap());
     click(&mut g, 150, 110);
-    assert_eq!((g.state.cars.len(), g.state.cash - cash, g.state.hours - hours, g.state.spares.len()), (2, shell, 4, dead.fitted.len()));
+    assert_eq!((g.state.cars.len(), g.state.cash - cash, g.state.hours - hours, g.state.spares.len()), (2, shell, 8, dead.fitted.len()));
     assert_eq!(g.parting, None);
 
     // Escape backs out of the choices, not out of the yard.
@@ -2351,4 +2357,39 @@ fn the_car_is_heard_as_it_goes() {
     assert!(t.listen().rpm > 0.0 && t.listen().siren == 0.0);
     t.town.as_mut().unwrap().chase = Some((1, 10.0));
     assert_eq!(t.listen().siren, 1.0);
+}
+
+#[test]
+fn nobody_pays_twice_in_a_day_and_rivals_run_a_little_different_every_time() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra", None, 100);
+    g.outfit(&mut o);
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    g.state.cash = 1000;
+    g.state.rung = 5;
+    // Beaten before: he takes half his limit. Paid up today: not again until tomorrow.
+    let day = g.day();
+    g.who = 4;
+    g.state.paid_up = (day, vec![4]);
+    g.scene = Scene::Bets;
+    click(&mut g, 100, 186);
+    assert_eq!(g.note.as_deref(), Some("You had my money today. Tomorrow."));
+    // Two paid up, and word is out: the rest will not bet, but the next one up the ladder still will.
+    g.state.paid_up = (day, vec![1, 2]);
+    g.who = 3;
+    g.scene = Scene::Bets;
+    click(&mut g, 100, 186);
+    assert_eq!(g.note.as_deref(), Some("Word is out on you. Not today."));
+    g.who = 5;
+    g.scene = Scene::Bets;
+    click(&mut g, 100, 186);
+    assert_eq!(g.scene, Scene::Race);
+    // What he runs is never quite his number, and usually near it.
+    let et = g.pack.manifest.rivals[5].et * 1000.0;
+    let runs: Vec<i32> = (0..200).map(|_| g.on_the_day(g.pack.manifest.rivals[5].et)).collect();
+    assert!(runs.iter().all(|&r| (r as f64 - et).abs() <= et * 0.02 + 1.0));
+    assert!(runs.iter().any(|&r| r as f64 > et + 100.0) && runs.iter().any(|&r| (r as f64) < et - 50.0));
 }
