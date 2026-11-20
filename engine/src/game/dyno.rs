@@ -266,7 +266,7 @@ impl Game {
     /// The car in the bay, on the rollers.
     pub fn dyno(&self) -> Option<Sheet> {
         let (o, car) = self.owned().zip(self.car())?;
-        let (d, (gain, turbo)) = (self.tuned_drive(o, car), self.tune(o));
+        let (d, (gain, turbo)) = (self.strip_drive(o, car), self.tune(o));
         let k = gain * self.blown(o, car);
         let curve: Vec<(f64, f64, f64)> = d.torque.iter().filter(|p| p[0] <= d.redline + 1.0).map(|p| (p[0], p[1] * k, p[0] * p[1] * k / 5252.0)).collect();
         let stock = car.drive.torque.iter().filter(|p| p[0] <= car.drive.redline + 1.0).map(|p| (p[0], p[0] * p[1] / 5252.0)).collect();

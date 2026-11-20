@@ -521,6 +521,18 @@
           "do": "charge",
           "button": "Charge",
           "needs_car": true
+        },
+        {
+          "rect": [
+            172,
+            39,
+            54,
+            16
+          ],
+          "label": "Set up the coilovers: stiff for the strip, soft for the road",
+          "do": "setup",
+          "button": "Coilovers",
+          "needs_car": true
         }
       ]
     },
@@ -1389,7 +1401,8 @@
       "pitch": "Lower, stiffer. It turns.",
       "grip": 6,
       "wears": 0.3,
-      "handling": 30
+      "handling": 30,
+      "adjustable": true
     },
     "mani-sheet": {
       "name": "Sheet-metal intake",

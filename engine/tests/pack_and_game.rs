@@ -2561,3 +2561,42 @@ fn a_road_race_starts_on_the_clutch_too() {
     for _ in 0..60 { t.tick(&road, Pedals { go: true, ..Pedals::default() }); }
     assert_eq!(t.start, Launch::None);
 }
+
+#[test]
+fn coilovers_are_set_stiff_for_the_strip_or_soft_for_the_road() {
+    let Some(bytes) = default_pack() else { return };
+    engine::host::store(b"");
+    let mut g = Game::new(Pack::parse(&bytes));
+    let mut o = Owned::new("umbra", None, 90);
+    g.outfit(&mut o);
+    g.state.cars = vec![o];
+    g.state.cur = Some(0);
+    g.state.place = "garage".into();
+    g.scene = Scene::Place;
+    // Nothing to adjust on struts.
+    click(&mut g, 199, 47);
+    assert_eq!(g.note.as_deref(), Some("Nothing on it to adjust."));
+    g.state.cars[0].fitted.insert("Suspension".into(), "coilovers".into());
+    let car = g.car().unwrap().clone();
+    let even = (g.strip_drive(&g.state.cars[0], &car).grip, g.chassis(&g.state.cars[0]).1, g.dyno().unwrap().et);
+    // Round it goes: a step stiffer, then set for the strip.
+    click(&mut g, 199, 47);
+    click(&mut g, 199, 47);
+    assert_eq!((g.state.cars[0].setup, g.note.as_deref()), (2, Some("Set for the strip: it sits down hard.")));
+    let strip = (g.strip_drive(&g.state.cars[0], &car).grip, g.chassis(&g.state.cars[0]).1, g.dyno().unwrap().et);
+    assert!(strip.0 > even.0 && strip.1 < even.1 && strip.2 <= even.2, "{even:?} {strip:?}");
+    // Then softer for the road, and back to even.
+    click(&mut g, 199, 47);
+    click(&mut g, 199, 47);
+    assert_eq!(g.state.cars[0].setup, -2);
+    let road = (g.strip_drive(&g.state.cars[0], &car).grip, g.chassis(&g.state.cars[0]).1);
+    assert!(road.0 < even.0 && road.1 > even.1);
+    click(&mut g, 199, 47);
+    assert_eq!(g.state.cars[0].setup, 0);
+    // Good suspension helps off the line on its own; worn out, it does not count at all.
+    let struts = { let mut o = g.state.cars[0].clone(); o.fitted.insert("Suspension".into(), "s-struts".into()); g.strip_drive(&o, &car).grip };
+    assert!(even.0 > struts);
+    g.state.cars[0].fitted.insert("Suspension".into(), "coilovers@0".into());
+    g.state.cars[0].setup = 2;
+    assert_eq!(g.setup_of(&g.state.cars[0]), 0);
+}

@@ -95,6 +95,10 @@ All five steps are in the engine. The engine plays a season out of a pack:
   keeps the clutch in until you let it out, and the band, the bog, the wheelspin (pulling to the
   side) and the wear on the clutch are as on the strip. Driving a road on your own starts as
   always.
+- **Suspension on the strip**: good suspension puts the power down a little better off the line
+  (a quarter of what it does for handling) and tired dampers a little worse. Coilovers can be set
+  up at the garage: stiffer for the strip hooks harder off the line and takes bends worse; softer
+  for the road the other way. The rollers' pass uses it.
 - **Torque steer**: on the strip a car has to be kept in its lane with the wheel (left and
   right). A front-wheel-drive car pulls hard to one side off the line and in the low gears, an
   all-wheel-drive one less, a rear-driven one only with its tyres spinning; which side is the
@@ -366,6 +370,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `online` | the meet: race other people |
   | `rebuild` | have the engine of the car in the bay rebuilt |
   | `paint` | a respray: pick one of the pack's paints |
+  | `setup` | set the adjustable suspension of the car in the bay: round from even, to stiff for the strip, to soft for the road; an hour |
   | `ghosts` | other players' cars in the shared world: switch between driving through them and hitting them |
   | `tuneup` | the shop tunes the car in the bay on its factory map, for the pack's `tuneup` cost and hours |
   | `shootout` | enter the shootout, on a day it is held |
@@ -491,6 +496,9 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   the intake's roar, and the turbo's whistle and blow-off. They add up over what is fitted. A car
   with a build sheet and nothing in its exhaust slot (a part with `loud` on the sheet, or a slot
   called Exhaust system) runs straight out of the manifold: very loud, very rough.
+  `"adjustable": true` makes suspension that can be set up with the `setup` action, from -2
+  (soft, for the road) to 2 (stiff, for the strip): each step toward the strip is 4 per cent more
+  grip off the line and 6 per cent less handling, and the other way the opposite.
   `"retune": true` means swapping it, on or off, leaves the engine needing a tune: it runs 15 per
   cent down until it is tuned, either on the car's own laptop at the rollers (which keeps its
   tune) or by the shop with `tuneup` (which puts it back on the factory map).

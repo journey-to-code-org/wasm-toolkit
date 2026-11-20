@@ -81,6 +81,9 @@ pub struct Owned {
     pub body: i32,
     #[serde(default)]
     pub tyres: f64,
+    /// How adjustable suspension is set: from -2, soft for the road, to 2, stiff for the strip.
+    #[serde(default)]
+    pub setup: i32,
     /// Parts that change how it breathes or fuels have been swapped since it was last tuned.
     #[serde(default)]
     pub untuned: bool,
@@ -123,7 +126,7 @@ fn some_gas() -> f64 {
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0, untuned: false, run: 0.0, sheet: false }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0, setup: 0, untuned: false, run: 0.0, sheet: false }
     }
 
     /// Which of a slot's `n` bolts are tight, a bit apiece.
@@ -563,7 +566,25 @@ impl Game {
     pub fn chassis(&self, o: &Owned) -> (f64, f64) {
         let part = |pick: fn(&Part) -> Option<i32>| o.fitted.values().filter_map(|id| Some((pick(self.part(id)?)?, cond_of(id))))
             .map(|(more, cond)| (1.0 + more as f64 / 100.0) * (0.6 + 0.4 * cond as f64 / 100.0)).product::<f64>();
-        (part(|p| p.brakes), part(|p| p.handling))
+        // Set up stiff for the strip, it takes a bend worse; soft, better.
+        (part(|p| p.brakes), part(|p| p.handling) * (1.0 - 0.06 * self.setup_of(o) as f64))
+    }
+
+    /// How the adjustable suspension on a car is set, if it has any that works: nothing otherwise.
+    pub fn setup_of(&self, o: &Owned) -> i32 {
+        let adjustable = o.fitted.values().any(|id| cond_of(id) > 0 && self.part(id).is_some_and(|p| p.adjustable));
+        if adjustable { o.setup.clamp(-2, 2) } else { 0 }
+    }
+
+    /// The car as it is on the strip: its drive, with what the suspension does for it off the line.
+    /// Good suspension puts the power down a little better and tired dampers a little worse, and
+    /// suspension set stiff for the strip sits down and hooks.
+    pub fn strip_drive(&self, o: &Owned, car: &Car) -> crate::pack::Drive {
+        let mut d = self.tuned_drive(o, car);
+        let handling = o.fitted.values().filter_map(|id| Some((self.part(id)?.handling?, cond_of(id))))
+            .map(|(more, cond)| (1.0 + more as f64 / 100.0) * (0.6 + 0.4 * cond as f64 / 100.0)).product::<f64>();
+        d.grip *= (1.0 + (handling - 1.0) * 0.25) * (1.0 + 0.04 * self.setup_of(o) as f64);
+        d
     }
 
     /// The town car brakes and turns as the car in the bay does.
@@ -1244,6 +1265,25 @@ impl Game {
                     }
                     self.scene = Scene::Paint;
                 }
+                "setup" => {
+                    // Adjustable suspension: round from even, stiffer for the strip, then softer for the road.
+                    let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
+                    let o = &self.state.cars[cur];
+                    if !o.fitted.values().any(|id| cond_of(id) > 0 && self.part(id).is_some_and(|p| p.adjustable)) {
+                        return self.no("Nothing on it to adjust.");
+                    }
+                    let next = match o.setup { 0 => 1, 1 => 2, 2 => -1, -1 => -2, _ => 0 };
+                    self.state.cars[cur].setup = next;
+                    self.say(match next {
+                        2 => "Set for the strip: it sits down hard.",
+                        1 => "A little stiffer for the strip.",
+                        -1 => "A little softer for the road.",
+                        -2 => "Set for the road: flat through bends.",
+                        _ => "Set even: half and half.",
+                    });
+                    tone(560, 60);
+                    self.spend(1);
+                }
                 "ghosts" => {
                     // Other people's cars: something to drive through, or something to hit.
                     self.state.solid = !self.state.solid;
@@ -1343,7 +1383,7 @@ impl Game {
         }
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let (gain, boost) = self.tune(o);
-        let drive = self.tuned_drive(o, car);
+        let drive = self.strip_drive(o, car);
         let spray = self.kit(o).map(|kit| (kit.gain as f64 / 100.0, o.bottle));
         let mut drive = drive;
         if self.raining() {
