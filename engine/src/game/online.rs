@@ -355,6 +355,10 @@ impl Game {
 
     /// A thirtieth of a second of a race down a road with someone.
     pub(super) fn versus_road_tick(&mut self, keys: u32, hit: u32) {
+        // An automatic picks its own gear from how fast it was going.
+        if let Some(speed) = self.trip.as_ref().filter(|t| t.gearbox.is_none()).map(|t| t.speed) {
+            self.shift_auto(speed, keys & KEY_UP != 0);
+        }
         let Some((trip, vs)) = self.trip.as_mut().zip(self.net.versus.as_mut()) else { return };
         let Some(road) = self.pack.manifest.roads.get(&trip.road) else { return };
         let to = vs.id;
@@ -386,11 +390,10 @@ impl Game {
                     tone(880, 250);
                 }
             } else if trip.crash == 0 && counting == 0 {
-                let v = (trip.speed * 10.0) as i32;
-                let hz = if trip.speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 };
+                let hz = (trip.gearbox.as_ref().map_or(self.auto.1, |b| b.rpm) / 40.0) as i32;
                 if !self.voiced {
-                tone(hz, 60);
-            }
+                    tone(hz, 60);
+                }
             }
             if counting == 0 && self.ticks % 5 == 0 {
                 out.push(json!({ "t": "pos", "to": to, "p": (trip.z * 10.0).round() / 10.0, "v": (trip.speed * 10.0).round() / 10.0, "x": (trip.x * 100.0).round() / 100.0 }));

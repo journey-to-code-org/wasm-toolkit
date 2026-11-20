@@ -261,6 +261,8 @@ pub struct Game {
     pub(crate) last_keys: u32,
     /// The page makes the engine's sound itself: no beeping for it.
     pub voiced: bool,
+    /// An automatic, or any car in town: the gear it has picked for itself, and the revs that makes.
+    pub auto: (usize, f64),
     /// How much boost there was while the throttle was down, and how many times the valve has let go.
     spooled: f32,
     blowoffs: u32,
@@ -291,7 +293,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, auto: (0, 900.0), spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -660,6 +662,31 @@ impl Game {
         }
         self.say("You blew the engine. It needs a rebuild.");
         self.save();
+    }
+
+    /// A gearbox that changes itself, worked out from the car's own ratios: up near the redline
+    /// with the foot down and early when cruising, down again as the car slows, so a change drops
+    /// the revs by what the next ratio drops them, not to idle. What it comes to is kept in `auto`.
+    pub fn shift_auto(&mut self, speed: f64, gas: bool) {
+        let Some((o, car)) = self.owned().zip(self.car()) else { return };
+        let d = self.tuned_drive(o, car);
+        if d.gears.is_empty() {
+            return;
+        }
+        // Metres a second at the wheel to engine speed, through a gear.
+        let revs = |g: usize| speed / 0.3 * d.gears[g] * d.final_drive * 60.0 / std::f64::consts::TAU;
+        let (mut gear, top) = (self.auto.0.min(d.gears.len() - 1), d.gears.len() - 1);
+        let (up, down) = if gas { (d.redline - 400.0, 2600.0) } else { (2800.0, 1300.0) };
+        while gear < top && revs(gear) > up {
+            gear += 1;
+        }
+        while gear > 0 && revs(gear) < down && revs(gear - 1) < d.redline - 600.0 {
+            gear -= 1;
+        }
+        // Pulling away, the converter or the clutch lets the engine run above the wheels.
+        let floor = if gas { 1800.0 } else { 850.0 };
+        let rpm = revs(gear).clamp(floor, d.redline);
+        self.auto = (gear, rpm);
     }
 
     /// What rebuilding the engine of the car in the bay costs: the pack's price, and a quarter of
@@ -1808,13 +1835,13 @@ impl Game {
         }
         self.scrub(went / 1000.0 * 0.4);
         self.roll(went / 1000.0);
+        self.shift_auto(speed, keys & KEY_UP != 0);
         let Some(town) = self.town.as_ref() else { return };
         if crashed {
             tone(70, 500);
         } else if town.crash == 0 {
             // The engine note: up through each gear and down again at the change.
-            let v = (speed * 10.0) as i32;
-            self.hum(if speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 });
+            self.hum((self.auto.1 / 40.0) as i32);
         }
         self.burn(went / 1000.0 * per_km);
         if self.owned().is_some_and(|o| o.gas <= 0.0) {
@@ -3246,10 +3273,9 @@ impl Game {
         }
         self.draw_rain(s, 320, view);
         s.clip_off();
-        let v = (town.speed * 10.0) as i32;
         if let Some(seat) = seat {
-            let rpm = if town.speed > 0.0 { 1500.0 + (v % 110) as f64 * 50.0 } else { 900.0 };
-            self.draw_cockpit(s, seat, self.dark() == 2, rpm, town.speed * 2.237, if town.speed > 8.0 { 6.0 } else { 0.0 }, if town.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, town.steer * 90.0, false);
+            let (gear, rpm) = self.auto;
+            self.draw_cockpit(s, seat, self.dark() == 2, rpm, town.speed * 2.237, if town.speed > 8.0 { 6.0 } else { 0.0 }, if town.speed > 0.0 { gear + 1 } else { 0 }, town.steer * 90.0, false);
         } else {
             self.panel(s, &map.title, &format!("{} mph", (town.speed * 2.237) as i32), "Arrows drive. Escape turns back.");
         }

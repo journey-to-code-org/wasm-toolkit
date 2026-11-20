@@ -37,12 +37,8 @@ impl Game {
         let car = self.car();
         let cylinders = car.map_or(4, |c| c.drive.cylinders.max(1)) as f32;
         let turbo = self.owned().zip(car).is_some_and(|(o, c)| self.tune(o).1.is_some() || c.drive.boost.is_some());
-        // An engine speed worked out from road speed, for a car with no gearbox to ask: up through
-        // each gear and down at the change.
-        let geared = |speed: f64| {
-            let v = speed * 10.0;
-            900.0 + (v % 110.0) * 45.0 + (v / 110.0).floor() * 300.0
-        };
+        // For a car with no gearbox to ask, the gear it has picked for itself.
+        let geared = |_: f64| self.auto.1;
         let mut s = match self.scene {
             Scene::Race => self.race.as_ref().map_or(Sound::default(), |r| Sound {
                 rpm: r.rpm as f32,

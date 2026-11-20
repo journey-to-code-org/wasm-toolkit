@@ -228,6 +228,9 @@ impl Game {
         }
         let poker = (h.arrived && trip.poker).then(|| trip.cards.clone());
         let (per_km, hours, end, id) = (road.gas_per_km, road.hours, road.ends[if trip.backwards { 0 } else { 1 }].clone(), trip.road.clone());
+        if revs.is_none() {
+            self.shift_auto(speed, keys & KEY_UP != 0);
+        }
         if h.crashed {
             tone(70, 500);
         } else if counting > 0 {
@@ -242,8 +245,7 @@ impl Game {
         } else if warned && self.radar() && self.ticks % 12 == 0 {
             tone(1500, 50);
         } else if !stopped {
-            let v = (speed * 10.0) as i32;
-            self.hum(match revs { Some(r) => (r / 40.0) as i32, None if speed > 0.0 || keys & KEY_UP != 0 => 60 + v % 110 + v / 110 * 12, None => 45 });
+            self.hum((revs.unwrap_or(self.auto.1) / 40.0) as i32);
         }
         self.burn(h.went / 1000.0 * per_km);
         self.scrub(h.went / 1000.0 * 0.4);
@@ -528,13 +530,12 @@ impl Game {
         self.draw_rain(s, 320, view);
         s.clip_off();
 
-        let v = (trip.speed * 10.0) as i32;
         let mph = trip.speed * MPH;
         if let Some(seat) = seat {
             // A gearbox shows the gear it is in and the revs it is at; an automatic, something like them.
             let (rpm, gear, light) = match &trip.gearbox {
                 Some(b) => (b.rpm, b.gear + 1, b.rpm > b.redline - 700.0),
-                None => (if trip.speed > 0.0 { 1500.0 + (v % 110) as f64 * 50.0 } else { 900.0 }, if trip.speed > 0.0 { (v / 110 + 1) as usize } else { 0 }, false),
+                None => (self.auto.1, if trip.speed > 0.0 { self.auto.0 + 1 } else { 0 }, false),
             };
             self.draw_cockpit(s, seat, self.dark() == 2, rpm, mph, if trip.speed > 8.0 { 6.0 } else { 0.0 }, gear, trip.steer * 90.0, light);
         } else {
