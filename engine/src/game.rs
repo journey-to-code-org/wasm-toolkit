@@ -19,6 +19,7 @@ pub mod roadtrip;
 pub mod dyno;
 pub mod cards;
 pub mod projects;
+pub mod sound;
 use online::Net;
 
 pub const KEY_UP: u32 = 1;
@@ -249,7 +250,12 @@ pub struct Game {
     sure: bool,
     rng: u32,
     last_under: Option<String>,
-    last_keys: u32,
+    pub(crate) last_keys: u32,
+    /// The page makes the engine's sound itself: no beeping for it.
+    pub voiced: bool,
+    /// How much boost there was while the throttle was down, and how many times the valve has let go.
+    spooled: f32,
+    blowoffs: u32,
     last_mouse: (i32, i32),
     pub ticks: u32,
 }
@@ -277,7 +283,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, last_mouse: (160, 100), ticks: 0,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0,
         };
         g.state = g.fresh();
         g.saved = g.kept().is_some();
@@ -1747,7 +1753,7 @@ impl Game {
             tone(160, 400);
             self.save();
         } else if chased && !crashed {
-            tone(if self.ticks / 9 % 2 == 0 { 760 } else { 570 }, 60);
+            self.hum(if self.ticks / 9 % 2 == 0 { 760 } else { 570 });
         }
         if crashed {
             self.dent();
@@ -1760,7 +1766,7 @@ impl Game {
         } else if town.crash == 0 {
             // The engine note: up through each gear and down again at the change.
             let v = (speed * 10.0) as i32;
-            tone(if speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 }, 60);
+            self.hum(if speed > 0.0 || keys & KEY_UP != 0 { 60 + v % 110 + v / 110 * 12 } else { 45 });
         }
         self.burn(went / 1000.0 * per_km);
         if self.owned().is_some_and(|o| o.gas <= 0.0) {
@@ -2175,7 +2181,8 @@ impl Game {
         } else if was == Phase::Stage && race.phase == Phase::Tree {
             tone(660, 60);
         } else if race.phase != Phase::Slip || race.v > 0.0 {
-            tone((race.rpm / 40.0) as i32, 60);
+            let hz = (race.rpm / 40.0) as i32;
+            self.hum(hz);
         }
     }
 

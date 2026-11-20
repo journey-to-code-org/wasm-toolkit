@@ -194,6 +194,8 @@ pub struct Drive {
     /// Which wheels it drives: the front ones pull it sideways on a hard launch (torque steer),
     /// all four less so, the back ones hardly at all.
     pub driven: Driven,
+    /// How many cylinders it has: what the engine sounds like, a four or a V8.
+    pub cylinders: u32,
 }
 
 /// The wheels the engine turns.
@@ -229,6 +231,7 @@ impl Default for Drive {
             weight_lb: 3060.0,
             auto: false,
             driven: Driven::Rear,
+            cylinders: 4,
             grip: 12.0,
             boost: Some(Boost { from: 2200.0, psi: 20.0, lag: 6.0 }),
         }

@@ -30,7 +30,7 @@ ENGINE_WASM := engine/target/wasm32-unknown-unknown/release/engine.wasm
 
 engine: web/engine.wasm web/$(PACK).pack
 
-web/engine.wasm: engine/Cargo.toml engine/src/*.rs
+web/engine.wasm: engine/Cargo.toml engine/src/*.rs engine/src/game/*.rs
 	cd engine && cargo build --release --target wasm32-unknown-unknown $(ENGINE_FLAGS)
 	cp $(ENGINE_WASM) $@
 

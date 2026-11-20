@@ -9,7 +9,9 @@ import sys
 
 game = sys.argv[1] if len(sys.argv) > 1 else "shootout"
 b64 = lambda path: base64.b64encode(open(path, "rb").read()).decode()
-host = open("web/wtk.js").read().replace("export async function boot", "async function boot")
+# The host, with the car's sound it imports put in front of it, in the one script.
+voice = open("web/voice.js").read().replace("export function voice", "function voice")
+host = voice + "\n" + open("web/wtk.js").read().replace("export async function boot", "async function boot").replace('import { voice } from "./voice.js";\n', "")
 page = open("web/engine.html" if game == "engine" else "web/index.html").read()
 start = page.index('<script type="module">')
 end = page.index("</script>", start)

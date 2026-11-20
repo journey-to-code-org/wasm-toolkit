@@ -1,5 +1,8 @@
 // The host for a wtk game: it loads the .wasm, shows its 320x240 screen scaled up in whole pixels,
-// feeds it the keyboard and the pointer thirty times a second, and is its PC speaker.
+// feeds it the keyboard and the pointer thirty times a second, and is its PC speaker. For an engine
+// that says what its car is doing (wtk_sound), it also makes the car's sound; M mutes it all.
+import { voice } from "./voice.js";
+
 const W = 320, H = 240, HZ = 30;
 const KEYS = {
   ArrowUp: 1, KeyW: 1, ArrowDown: 2, KeyS: 2, ArrowLeft: 4, KeyA: 4, ArrowRight: 8, KeyD: 8,
@@ -12,7 +15,9 @@ const KEYS = {
 // of a room's socket and what this player goes by. Without it the engine is told nobody can be reached.
 export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, pack = null, net = null) {
   const bytesOf = async (from) => (typeof from === "string" ? new Uint8Array(await (await fetch(from)).arrayBuffer()) : from);
-  let audio = null, osc = null, gain = null, quietAt = 0;
+  let audio = null, osc = null, gain = null, quietAt = 0, master = null, car = null;
+  let muted = false;
+  try { muted = localStorage.getItem("wtk:muted") === "1"; } catch { /* no storage */ }
   const speaker = (hz, ms) => {
     if (!audio) return;
     if (!osc) {
@@ -20,7 +25,7 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
       osc.type = "square";
       gain = audio.createGain();
       gain.gain.value = 0;
-      osc.connect(gain).connect(audio.destination);
+      osc.connect(gain).connect(master);
       osc.start();
     }
     const now = audio.currentTime;
@@ -32,8 +37,20 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
     } else gain.gain.setValueAtTime(0, now);
   };
   const wake = () => {
-    audio ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (!audio) {
+      audio = new (window.AudioContext || window.webkitAudioContext)();
+      master = audio.createGain();
+      master.gain.value = muted ? 0 : 1;
+      master.connect(audio.destination);
+      // The engine's sound is made here, so it need not beep it.
+      if (x?.wtk_sound) { car = voice(audio, master); x.wtk_voice?.(); }
+    }
     if (audio.state === "suspended") void audio.resume();
+  };
+  const mute = () => {
+    muted = !muted;
+    try { localStorage.setItem("wtk:muted", muted ? "1" : "0"); } catch { /* no storage */ }
+    if (master) master.gain.setTargetAtTime(muted ? 0 : 1, audio.currentTime, 0.02);
   };
 
   // A saved game lives in the browser, under the page's address.
@@ -87,6 +104,7 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
   // `latch` holds anything pressed since the last tick, so a tap shorter than a tick is not lost.
   let keys = 0, latch = 0, mx = W / 2, my = H / 2;
   const key = (down) => (e) => {
+    if (e.code === "KeyM" && down && !e.repeat) { wake(); return mute(); }
     const bit = KEYS[e.code];
     if (!bit) return;
     e.preventDefault();
@@ -129,6 +147,7 @@ export async function boot(canvas, url, seed = (Date.now() & 0x7fffffff) || 1, p
     last = now;
     let stepped = false;
     for (; owed >= 1; owed--) { x.wtk_input(keys | latch, mx, my); latch = 0; x.wtk_step(); stepped = true; }
+    if (stepped && car) car(new Float32Array(x.memory.buffer, x.wtk_sound(), 8));
     if (stepped) show();
     requestAnimationFrame(frame);
   };
