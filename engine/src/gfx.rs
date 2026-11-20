@@ -248,6 +248,21 @@ impl Screen {
         }
     }
 
+    /// The same, mirrored left to right: a car's side seen going the other way.
+    pub fn picture_sized_mirror(&mut self, pic: &Picture, x: i32, y: i32, w: i32, h: i32, tint: Option<&Tint>) {
+        if w <= 0 || h <= 0 {
+            return;
+        }
+        for j in 0..h {
+            for i in 0..w {
+                let v = pic.ix[((j * pic.h / h) * pic.w + (w - 1 - i) * pic.w / w) as usize];
+                if v != CLEAR {
+                    self.pset(x + i, y + j, tint.map_or(v, |t| t.apply(v)));
+                }
+            }
+        }
+    }
+
     /// A picture drawn `w` by `h`, whatever size it is: for something seen from a distance.
     pub fn picture_sized(&mut self, pic: &Picture, x: i32, y: i32, w: i32, h: i32, tint: Option<&Tint>) {
         if w <= 0 || h <= 0 {
