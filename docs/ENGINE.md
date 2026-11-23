@@ -457,7 +457,7 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   cannot be lifted until the air filter is off, and the air filter cannot go back until it is on. A place need not match any part in the paper:
   it is then just a stock part that comes off and goes back on, and the car will not run
   without it. Split things as finely as you like: an air filter and an intake pipe can be two
-  places, each with its own parts. The floor under the hood shows up to eight loose parts.
+  places, each with its own parts. The floor shows eight loose parts at a time, what fits an empty place first; with more, the last chip turns to the next seven.
 
   A place can be a shape in place of a box: `"poly": [[x, y], ...]`, its corners in order, up to
   160 of them. A point is on it if a line from it crosses the outline an odd number of times,

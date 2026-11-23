@@ -636,7 +636,7 @@ impl Game {
         if seat.is_some() && trip.z < 50.0 && trip.hold == 0 && self.note.is_none() && trip.crash == 0 {
             // Setting out: what the keys are.
             let kit = self.owned().is_some_and(|o| self.kit(o).is_some());
-            let words = if trip.rival.is_some() { "FIRST TO THE END. ESCAPE GIVES IT UP." } else if trip.transmission.is_some() { "ARROWS DRIVE. SPACE IS THE NEXT GEAR." } else if kit { "ARROWS DRIVE. N SPRAYS. ESC: BACK." } else { "ARROWS DRIVE. ESCAPE TURNS BACK." };
+            let words = if trip.rival.is_some() { "FIRST TO THE END. ESCAPE GIVES IT UP." } else if trip.transmission.is_some() { "ARROWS DRIVE. SHIFT UP: THE NEXT GEAR." } else if kit { "ARROWS DRIVE. N SPRAYS. ESC: BACK." } else { "ARROWS DRIVE. ESCAPE TURNS BACK." };
             s.text_sh(160 - words.len() as i32 * 4, view * 92 / 136, words, gold, BLACK);
         }
         self.draw_bottle(s, 36, self.owned().map_or(0.0, |o| o.bottle), trip.spray > 0.0);
