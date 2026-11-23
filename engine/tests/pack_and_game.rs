@@ -313,7 +313,7 @@ fn under_the_hood_parts_come_off_bolt_by_bolt() {
     click(&mut g, 20, 10);
     click(&mut g, 180, 10);
     click(&mut g, 50, 36);
-    assert_eq!(g.note.as_deref(), Some("That one is under the hood."));
+    assert_eq!((g.scene, g.note.as_deref()), (Scene::Hood, Some("It comes off under the hood.")));
 }
 
 #[test]
@@ -324,7 +324,7 @@ fn a_slot_has_its_own_bolts_and_a_part_its_own_picture() {
         assert!(at.iter().all(|b| (10..70).contains(&b[0]) && (10..50).contains(&b[1])), "{n}: {at:?}");
         assert!((0..n).all(|i| (0..i).all(|j| at[i] != at[j])), "no two in one place");
     }
-    assert_eq!((bolts_round([0, 0, 40, 40], 0).len(), bolts_round([0, 0, 40, 40], 20).len()), (1, 8));
+    assert_eq!((bolts_round([0, 0, 40, 40], 0).len(), bolts_round([0, 0, 40, 40], 20).len()), (0, 8));
 
     engine::host::store(b"");
     // Two places under this hood: the exhaust on two bolts, with a name for the stock one, and a
@@ -575,7 +575,7 @@ fn the_default_pack_is_a_ladder_that_can_be_climbed() {
     // Bolt-ons and the big turbo alone get near the top, not to it.
     let bolted = pass(&m, "umbra", 0.93 * all, big);
     assert!(bolted < rival(19) && bolted > rival(21), "{bolted}");
-    // With the engine, tyres, rims and gearbox too, on the rollers, it beats him.
+    // With the engine, tires, rims and transmission too, on the rollers, it beats him.
     if let Some(bytes) = default_pack() {
         engine::host::store(b"");
         let mut g = Game::new(Pack::parse(&bytes));
@@ -635,7 +635,7 @@ fn the_race_is_seen_from_the_seat_when_the_car_has_a_cockpit() {
     let paint = ramp(g.rival().unwrap().paint.as_deref().unwrap()) as u16;
     let seen = (0..136).flat_map(|y| (160..320).map(move |x| (x, y))).filter(|&(x, y)| s.at(x, y) >> 5 == paint).count();
     assert!(seen > 30, "he is ahead in the other lane, in his own paint ({seen} pixels)");
-    assert!((0..320).any(|x| s.at(x, 120) >> 5 == ramp("RED") as u16), "your bonnet is in your paint");
+    assert!((0..320).any(|x| s.at(x, 120) >> 5 == ramp("RED") as u16), "your hood is in your paint");
     if let Ok(dir) = std::env::var("SHOTS") {
         let mut out = b"P6 320 240 255\n".to_vec();
         out.extend(s.fb.iter().flat_map(|&c| { let v = s.pal[c as usize]; [v as u8, (v >> 8) as u8, (v >> 16) as u8] }));
@@ -756,8 +756,8 @@ fn you_drive_from_one_place_to_another_and_it_burns_gas() {
 
 #[test]
 fn parts_change_more_than_torque() {
-    let extra = r#""parts": { "tyres": { "name": "Tyres", "slot": "Tyres", "price": 10, "grip": 25 },
-        "box": { "name": "Box", "slot": "Gearbox", "price": 10, "gears": [3.4, 2.0, 1.4, 1.0], "final": 4.5 },
+    let extra = r#""parts": { "tires": { "name": "Tires", "slot": "Tires", "price": 10, "grip": 25 },
+        "box": { "name": "Box", "slot": "Transmission", "price": 10, "gears": [3.4, 2.0, 1.4, 1.0], "final": 4.5 },
         "light": { "name": "Light bits", "slot": "Body", "price": 10, "weight_lb": -400 },
         "forged": { "name": "Forged", "slot": "Bottom end", "price": 10, "redline": 8200 },"#;
     engine::host::store(b"");
@@ -782,14 +782,14 @@ fn parts_change_more_than_torque() {
         (r.sixty, r.et)
     };
     let before = time(&g);
-    for (slot, part) in [("Tyres", "tyres"), ("Body", "light")] {
+    for (slot, part) in [("Tires", "tires"), ("Body", "light")] {
         g.state.cars[0].fitted.insert(slot.into(), part.into());
     }
     let d = g.tuned_drive(g.owned().unwrap(), &car);
     assert_eq!((d.grip, d.weight_lb), (15.0, 2660.0));
     let after = time(&g);
     assert!(after.0 < before.0 && after.1 < before.1 - 200, "grip and less weight are quicker: {before:?} then {after:?}");
-    for (slot, part) in [("Gearbox", "box"), ("Bottom end", "forged")] {
+    for (slot, part) in [("Transmission", "box"), ("Bottom end", "forged")] {
         g.state.cars[0].fitted.insert(slot.into(), part.into());
     }
     let d = g.tuned_drive(g.owned().unwrap(), &car);
@@ -917,7 +917,7 @@ fn cruise(g: &mut Game, mph: f64, until: &dyn Fn(&Game) -> bool) {
         let mut keys = if t.speed * 2.237 < mph { KEY_UP } else { 0 };
         if t.x > 0.55 { keys |= 4 } else if t.x < 0.45 { keys |= 8 }
     // Up a gear short of the redline, on every other tick so that each is a fresh press.
-    if t.gearbox.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && t.clock % 2 == 0 { keys |= KEY_X }
+    if t.transmission.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && t.clock % 2 == 0 { keys |= KEY_X }
         g.tick(keys, 0, 0);
     }
     panic!("never happened: {:?}", g.trip.as_ref().map(|t| (t.z, t.x, t.speed)));
@@ -930,7 +930,7 @@ fn a_road_is_stretches_between_two_ends() {
     assert_eq!((road.len(), road.limit, road.cops), (840.0, 50.0, 1));
     let t = engine::road::Trip::new("pass", road, false, 3);
     assert_eq!((t.len(), t.segs.len()), (840.0, 140));
-    assert!((t.height(540.0) - 12.0).abs() < 0.2 && t.height(840.0).abs() < 0.7, "up twelve metres and down again");
+    assert!((t.height(540.0) - 12.0).abs() < 0.2 && t.height(840.0).abs() < 0.7, "up twelve meters and down again");
     assert!(t.seg(420.0).curve > 0.5 && t.seg(100.0).curve == 0.0 && t.seg(310.0).curve < 0.3, "a bend eases in");
     // The other way it is the same road turned about.
     let back = engine::road::Trip::new("pass", road, true, 3);
@@ -940,7 +940,7 @@ fn a_road_is_stretches_between_two_ends() {
     let bad = |from: &str, to: &str| Pack::parse(&files(&MANIFEST.replace("\"places\": {", &ROADS.replace(from, to)))).err().unwrap();
     assert!(bad("\"ends\": [\"shed\"", "\"ends\": [\"moon\"").contains("moon"));
     assert!(bad("\"right\": \"drop\"", "\"right\": \"lava\"").contains("lava"));
-    assert!(bad("{ \"len\": 300 }", "{ \"len\": 3 }").contains("12 metres"));
+    assert!(bad("{ \"len\": 300 }", "{ \"len\": 3 }").contains("12 meters"));
     assert!(bad("\"road\": \"pass\"", "\"road\": \"lane\"").contains("map:grid"));
     assert!(bad("\"curve\": 0.6", "\"curve\": 6").contains("bends more"));
     let spot = MANIFEST.replace("\"do\": \"say:Hello.\"", "\"do\": \"road:nowhere\"");
@@ -1218,7 +1218,7 @@ fn a_respray_a_swap_a_title_and_the_dark() {
     assert_eq!((g.scene, g.owned().unwrap().paint.as_deref(), g.state.cash, g.state.hours), (Scene::Place, Some("GOLD"), 940, 3));
     click(&mut g, 100, 10);
     click(&mut g, 95, 186);
-    assert_eq!((g.note.as_deref(), g.state.cash), (Some("It is that colour already."), 940));
+    assert_eq!((g.note.as_deref(), g.state.cash), (Some("It is that color already."), 940));
 
     // Three hours into a day of four it is getting dark.
     assert_eq!(g.dark(), 1);
@@ -1317,7 +1317,7 @@ fn the_rollers_are_strapped_pulled_and_read() {
 
 #[test]
 fn a_car_with_a_picture_of_its_back_is_seen_on_the_road() {
-    // The pack's car gets a back, all one colour that nothing else on a road is.
+    // The pack's car gets a back, all one color that nothing else on a road is.
     let pink = shade(ramp("PINK"), 20);
     let mut bytes = files(&MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"road:pass\"").replace("\"price\": 350,", "\"price\": 350, \"rear\": { \"picture\": \"back.pic\" },"));
     let (name, data) = ("back.pic", pic(8, 5, &[(40, pink)]));
@@ -1336,7 +1336,7 @@ fn a_car_with_a_picture_of_its_back_is_seen_on_the_road() {
     let count = |s: &Screen| (0..240).flat_map(|y| (0..320).map(move |x| (x, y))).filter(|&(x, y)| s.at(x, y) == pink).count();
     g.draw(&mut s);
     assert_eq!(count(&s), 0);
-    // One going the same way, twenty metres up the road, in your lane: 1.7 metres is 17 pixels there.
+    // One going the same way, twenty meters up the road, in your lane: 1.7 meters is 17 pixels there.
     g.trip.as_mut().unwrap().others.push(engine::road::Other { z: 20.0, lane: 0.5, speed: 0.0, paint: "PINK", rig: false });
     g.draw(&mut s);
     let n = count(&s);
@@ -1537,32 +1537,32 @@ fn an_automatic_shifts_itself_and_a_manual_is_shifted_on_the_road() {
     }
     assert!(r.phase == Phase::Slip && !r.red && r.rt > 200 && r.gear >= 4 && r.et > 0 && !r.blown, "{:?}", (r.rt, r.gear, r.et));
 
-    // On the road the test car has a gearbox: first gear is good for about forty, and no more until it is changed.
+    // On the road the test car has a transmission: first gear is good for about forty, and no more until it is changed.
     let mut g = road_game();
     click(&mut g, 100, 10);
-    let b = g.trip.as_ref().unwrap().gearbox.clone().unwrap();
+    let b = g.trip.as_ref().unwrap().transmission.clone().unwrap();
     assert_eq!((b.gear, b.ratios.len(), b.redline), (0, 5, 7200.0));
     for _ in 0..400 {
         let t = g.trip.as_ref().unwrap();
         g.tick(KEY_UP | if t.x > 0.55 { 4 } else if t.x < 0.45 { 8 } else { 0 }, 0, 0);
     }
     let t = g.trip.as_ref().unwrap();
-    assert!((t.speed * 2.237 - 39.0).abs() < 3.0 && t.gearbox.as_ref().unwrap().rpm >= 7200.0, "{}", t.speed * 2.237);
+    assert!((t.speed * 2.237 - 39.0).abs() < 3.0 && t.transmission.as_ref().unwrap().rpm >= 7200.0, "{}", t.speed * 2.237);
     // Space is the next gear, and it pulls again.
     g.tick(KEY_UP | engine::game::KEY_SPACE | KEY_A, 0, 0);
-    assert_eq!(g.trip.as_ref().unwrap().gearbox.as_ref().unwrap().gear, 1);
+    assert_eq!(g.trip.as_ref().unwrap().transmission.as_ref().unwrap().gear, 1);
     for _ in 0..60 { g.tick(KEY_UP, 0, 0); }
     assert!(g.trip.as_ref().unwrap().speed * 2.237 > 45.0);
     // Down a gear is refused when it would send the revs past the redline.
     g.tick(KEY_UP | 128, 0, 0);
-    assert_eq!(g.trip.as_ref().unwrap().gearbox.as_ref().unwrap().gear, 1);
+    assert_eq!(g.trip.as_ref().unwrap().transmission.as_ref().unwrap().gear, 1);
     // A part can make it an automatic, and then there is nothing to work.
     let auto = MANIFEST.replace("\"places\": {", ROADS).replace("\"torque\": 10 }", "\"torque\": 10, \"auto\": true }");
     let mut g = Game::new(Pack::parse(&files(&auto)));
     g.tick(KEY_A, 160, 100);
-    assert!(g.gearbox().is_some());
+    assert!(g.transmission().is_some());
     g.state.cars[0].fitted.insert("Exhaust".into(), "pipe".into());
-    assert!(g.gearbox().is_none());
+    assert!(g.transmission().is_none());
 }
 
 #[test]
@@ -1764,8 +1764,8 @@ fn a_road_can_have_water_trailers_and_a_ladder_to_climb_first() {
 }
 
 #[test]
-fn bodies_get_knocked_about_and_tyres_wear() {
-    let manifest = MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"bodywork\"").replace("\"do\": \"lamps\", \"needs_car\": true", "\"do\": \"tyres\"");
+fn bodies_get_knocked_about_and_tires_wear() {
+    let manifest = MANIFEST.replace("\"places\": {", ROADS).replace("\"do\": \"say:Hello.\"", "\"do\": \"bodywork\"").replace("\"do\": \"lamps\", \"needs_car\": true", "\"do\": \"tires\"");
     engine::host::store(b"");
     let mut g = Game::new(Pack::parse(&files(&manifest)));
     g.seed(7);
@@ -1781,15 +1781,15 @@ fn bodies_get_knocked_about_and_tyres_wear() {
     for _ in 0..3 { g.dent(); }
     g.scrub(60.0);
     let o = g.owned().unwrap().clone();
-    assert_eq!((o.body, o.tyres), (24, 60.0));
+    assert_eq!((o.body, o.tires), (24, 60.0));
     assert!(g.value(&o) < worth && g.pace().top < top && (g.tuned_drive(&o, &car).grip / grip - 0.82).abs() < 0.001);
     let mut s = Screen::new();
     g.draw(&mut s);
-    // Straightened for twenty dollars and four a point; tyres for eighty.
+    // Straightened for twenty dollars and four a point; tires for eighty.
     click(&mut g, 100, 10);
     assert_eq!((g.owned().unwrap().body, g.state.cash, g.state.hours), (0, 1000 - 116, 3));
     click(&mut g, 60, 10);
-    assert_eq!((g.owned().unwrap().tyres, g.state.cash), (0.0, 1000 - 196));
+    assert_eq!((g.owned().unwrap().tires, g.state.cash), (0.0, 1000 - 196));
     assert_eq!(g.value(g.owned().unwrap()), worth);
 }
 
@@ -2031,7 +2031,7 @@ fn parts_wear_with_use_and_a_battery_runs_down() {
     assert_eq!(g.use_parts(1.0), Some(("Timing belt".to_string(), true)));
     assert_eq!((g.state.cars[0].fitted["Belt"].as_str(), g.state.cars[0].fitted["Valves"].as_str()), ("belt@0", "valves@0"));
     assert!(g.wont_run().is_some());
-    // Four kilometres of road are a pass.
+    // Four kilometers of road are a pass.
     g.state.cars[0].fitted.insert("Belt".into(), "belt".into());
     for _ in 0..8 { g.roll(0.5); }
     assert_eq!(g.state.cars[0].fitted["Belt"], "belt@70");
@@ -2193,6 +2193,9 @@ fn new_parts_want_a_new_tune() {
     let Some(bytes) = default_pack() else { return };
     engine::host::store(b"");
     let mut g = Game::new(Pack::parse(&bytes));
+    // All of it done at the bench, as on a car with no places to work on.
+    let umbra = g.pack.manifest.cars.get_mut("umbra").unwrap();
+    (umbra.hood, umbra.areas) = (None, Vec::new());
     let mut o = Owned::new("umbra", None, 100);
     g.outfit(&mut o);
     g.state.cars = vec![o];
@@ -2310,7 +2313,7 @@ fn front_drive_pulls_to_a_side_and_the_wheel_holds_it() {
     };
     // Hands off: the front-driven car is over a line, the all-wheel one wanders but less, the rear-driven one hardly moves.
     let (front, out, et) = pass(Driven::Front, 1.0, false);
-    assert_eq!((out, et), (1, 0), "over the centre line, and no time");
+    assert_eq!((out, et), (1, 0), "over the center line, and no time");
     assert_eq!(pass(Driven::Front, -1.0, false).1, -1, "the other way is the wall");
     let (all, out, _) = pass(Driven::All, 1.0, false);
     let (rear, _, _) = pass(Driven::Rear, 1.0, false);
@@ -2355,7 +2358,7 @@ fn the_car_is_heard_as_it_goes() {
     for _ in 0..40 { g.tick(KEY_UP, 0, 0); }
     let s = g.listen();
     assert!(s.rpm > 3000.0 && s.load == 1.0 && s.cylinders == 4.0 && s.siren == 0.0, "{s:?}");
-    // Launched, the tyres spin and the turbo comes in; lift with it on boost and the valve lets go, once.
+    // Launched, the tires spin and the turbo comes in; lift with it on boost and the valve lets go, once.
     let mut most = 0.0f32;
     for _ in 0..120 {
         let r = g.race.as_ref().unwrap();
@@ -2425,7 +2428,7 @@ fn a_change_up_drops_the_revs_by_the_next_ratio_not_to_idle() {
     g.outfit(&mut o);
     g.state.cars = vec![o];
     g.state.cur = Some(0);
-    // Foot down from a stop to a hundred miles an hour, a metre a second at a time: watch every change.
+    // Foot down from a stop to a hundred miles an hour, a meter a second at a time: watch every change.
     let (mut gear, mut was, mut changes) = (0, 0.0, Vec::new());
     for v in 0..45 {
         g.shift_auto(v as f64, true);
@@ -2527,19 +2530,19 @@ fn the_clutch_is_let_out_in_the_band_or_it_bogs_or_spins() {
 #[test]
 fn a_road_race_starts_on_the_clutch_too() {
     use engine::race::Launch;
-    use engine::road::{Gearbox, Trip};
+    use engine::road::{Transmission, Trip};
     let Some(bytes) = default_pack() else { return };
     let pack = Pack::parse(&bytes).unwrap();
     let road = pack.manifest.roads.values().next().unwrap().clone();
     // From a three-second countdown: the revs fed to `at`, the clutch in at GO if `wait` and let out a second later.
     let start = |at: f64, wait: bool| {
         let mut t = Trip::new("r", &road, false, 3);
-        t.gearbox = Some(Gearbox { ratios: vec![12.0, 7.5, 5.2, 4.0, 3.2], redline: 7200.0, peak: 5500.0, gear: 0, rpm: 900.0 });
+        t.transmission = Some(Transmission { ratios: vec![12.0, 7.5, 5.2, 4.0, 3.2], redline: 7200.0, peak: 5500.0, gear: 0, rpm: 900.0 });
         t.best_launch = 5000.0;
         t.hold = 90;
         let mut still = true;
         for k in 0..240 {
-            let rpm = t.gearbox.as_ref().unwrap().rpm;
+            let rpm = t.transmission.as_ref().unwrap().rpm;
             let waiting = t.hold > 0 || t.held;
             let gas = if waiting { rpm < at } else { true };
             let clutch = wait && k < 120;

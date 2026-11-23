@@ -52,7 +52,7 @@ fn cruise(g: &mut Game, ticks: u32, fast: f64) {
         let t = g.town.as_ref().unwrap();
         let mut k = if t.speed < fast { UP } else { 0 };
         // Up a gear short of the redline, on every other tick so that each is a fresh press.
-        if t.gearbox.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && g.ticks % 2 == 0 {
+        if t.transmission.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && g.ticks % 2 == 0 {
             k |= 64;
         }
         if let Some(n) = g.land().and_then(|w| w.near_on(g.dash.as_ref().map(|d| d.lane), t.x, t.z, 40.0)) {

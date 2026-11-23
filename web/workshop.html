@@ -83,17 +83,17 @@
     <section id="roadBox" hidden>
       <h2>The road, from above, and how it climbs</h2>
       <canvas id="roadView" width="600" height="420" style="width:100%;max-width:600px" aria-label="The road from above with its first end at the dot, and below it how high it runs. The stretch being looked from is drawn thicker."></canvas>
-      <p class="hint">Green is trees, grey is rock, blue is a drop, tan is fields, white is posts. The view above is from the start of the stretch that is picked.</p>
+      <p class="hint">Green is trees, gray is rock, blue is a drop, tan is fields, white is posts. The view above is from the start of the stretch that is picked.</p>
     </section>
     <section id="sideBox">
       <h2>The picture, as the game stores it</h2>
-      <canvas id="side" aria-label="The car's picture. Click its bodywork to say which colour is the paint."></canvas>
+      <canvas id="side" aria-label="The car's picture. Click its bodywork to say which color is the paint."></canvas>
       <p class="hint" id="sideHint"></p>
     </section>
     <section id="hoodBox">
-      <h2>Under its hood</h2>
-      <div class="stage"><canvas id="hood" aria-label="The engine bay"></canvas><canvas id="hoodOver" class="over"></canvas></div>
-      <p class="hint">Drag a box to move it, or its corner to size it. Each box is where one slot's part sits.</p>
+      <h2 id="hoodTitle">Under its hood</h2>
+      <div class="stage"><canvas id="hood" aria-label="The place on the car being worked on"></canvas><canvas id="hoodOver" class="over"></canvas></div>
+      <p class="hint">Each outline is where one slot's part sits. Drag a part to move it. A box is sized by its corner; a shape is changed by dragging its corners, clicking its edge for a new one, or double-clicking a corner to take it away. Dashed ones are out of sight until what covers them is off.</p>
     </section>
   </div>
 </main>

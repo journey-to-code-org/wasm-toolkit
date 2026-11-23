@@ -1,4 +1,4 @@
-//! The screen: 320x240 palette indices, 1,024 colours in 32 ramps of 32 shades, and what draws on it.
+//! The screen: 320x240 palette indices, 1,024 colors in 32 ramps of 32 shades, and what draws on it.
 //! The palette and the picture format are the same as the C toolkit's, so the same pictures work.
 
 use crate::font::FONT;
@@ -14,9 +14,9 @@ pub const PW: i32 = W * S;
 pub const PH: i32 = H * S;
 pub const CLEAR: u16 = 0xFFFF;
 
-/// The ramps of the default palette, by name, in order. Ramp 0 is the EGA sixteen and sixteen greys.
+/// The ramps of the default palette, by name, in order. Ramp 0 is the EGA sixteen and sixteen grays.
 pub const RAMPS: [&str; 32] = [
-    "SYSTEM", "GREY", "RED", "ORANGE", "YELLOW", "LIME", "GREEN", "TEAL", "CYAN", "SKY", "BLUE", "INDIGO", "VIOLET", "MAGENTA", "PINK", "BROWN",
+    "SYSTEM", "GRAY", "RED", "ORANGE", "YELLOW", "LIME", "GREEN", "TEAL", "CYAN", "SKY", "BLUE", "INDIGO", "VIOLET", "MAGENTA", "PINK", "BROWN",
     "TAN", "BRICK", "CONCRETE", "ASPHALT", "GRASS", "GLASS", "CHROME", "RUBBER", "WOOD", "CREAM", "NAVY", "MAROON", "FOREST", "GOLD", "SILVER", "WHITE",
 ];
 const BASES: [[u8; 3]; 32] = [
@@ -32,12 +32,12 @@ const EGA: [[u8; 3]; 16] = [
 pub const BLACK: u16 = 0;
 pub const WHITE: u16 = 15;
 
-/// The ramp with this name, or grey if there is none.
+/// The ramp with this name, or gray if there is none (GREY, as packs once had it, is gray too).
 pub fn ramp(name: &str) -> usize {
     RAMPS.iter().position(|r| r.eq_ignore_ascii_case(name)).unwrap_or(1)
 }
 
-/// Shade `s` of a ramp: 0 is nearly black, 24 the colour itself, 31 a highlight.
+/// Shade `s` of a ramp: 0 is nearly black, 24 the color itself, 31 a highlight.
 pub fn shade(ramp: usize, s: i32) -> u16 {
     (ramp as i32 * 32 + s.clamp(0, 31)) as u16
 }
@@ -56,7 +56,7 @@ pub struct Picture {
 }
 
 impl Picture {
-    /// From the pack: little-endian words, width, height, then (count, colour) pairs. A width
+    /// From the pack: little-endian words, width, height, then (count, color) pairs. A width
     /// with its top bit set is of a picture painted fine: twice the dots each way for its size.
     pub fn from_bytes(bytes: &[u8]) -> Option<Picture> {
         let words: Vec<u16> = bytes.chunks_exact(2).map(|b| u16::from_le_bytes([b[0], b[1]])).collect();
@@ -226,7 +226,7 @@ impl Screen {
         }
     }
 
-    /// A filled shape with no dents in it, in two colours chequered (the same twice for a flat one).
+    /// A filled shape with no dents in it, in two colors chequered (the same twice for a flat one).
     pub fn poly(&mut self, pts: &[(i32, i32)], a: u16, b: u16) {
         let fine: Vec<(i32, i32)> = pts.iter().map(|p| (p.0 * S, p.1 * S)).collect();
         self.poly_fine(&fine, a, b);
@@ -277,6 +277,61 @@ impl Screen {
                 // Chequered by the dot: two shades of a surface, mixed.
                 for (k, d) in row.iter_mut().enumerate() {
                     *d = if (l + k as i32 + y) & 1 == 0 { a } else { b };
+                }
+            }
+        }
+    }
+
+    /// Any shape at all, dents and holes too, in places: a dot is in it if a line from it crosses
+    /// the outline an odd number of times. Two colors chequered, as `poly`.
+    pub fn shape(&mut self, pts: &[(i32, i32)], a: u16, b: u16) {
+        if pts.len() < 3 {
+            return;
+        }
+        let fine: Vec<(f64, f64)> = pts.iter().map(|p| ((p.0 * S) as f64, (p.1 * S) as f64)).collect();
+        let top = (fine.iter().map(|p| p.1).fold(f64::MAX, f64::min) as i32).max(self.clip[1]);
+        let bottom = (fine.iter().map(|p| p.1).fold(f64::MIN, f64::max) as i32).min(self.clip[3] - 1);
+        let mut xs: Vec<i32> = Vec::new();
+        for y in top..=bottom {
+            let py = y as f64 + 0.5;
+            xs.clear();
+            for i in 0..fine.len() {
+                let ((ax, ay), (bx, by)) = (fine[i], fine[(i + 1) % fine.len()]);
+                if (ay > py) != (by > py) {
+                    xs.push((ax + (bx - ax) * (py - ay) / (by - ay)).round() as i32);
+                }
+            }
+            xs.sort_unstable();
+            for pair in xs.chunks(2) {
+                let [l, r] = [pair[0], *pair.get(1).unwrap_or(&pair[0])];
+                for x in l.max(self.clip[0])..r.min(self.clip[2]) {
+                    self.fb[(y * PW + x) as usize] = if (x + y) & 1 == 0 { a } else { b };
+                }
+            }
+        }
+    }
+
+    /// The outline of a shape, a dot thick.
+    pub fn outline(&mut self, pts: &[(i32, i32)], c: u16) {
+        for i in 0..pts.len() {
+            let (p, q) = (pts[i], pts[(i + 1) % pts.len()]);
+            let (mut x0, mut y0, x1, y1) = (p.0 * S, p.1 * S, q.0 * S, q.1 * S);
+            let (dx, sx) = ((x1 - x0).abs(), if x0 < x1 { 1 } else { -1 });
+            let (dy, sy) = (-(y1 - y0).abs(), if y0 < y1 { 1 } else { -1 });
+            let mut err = dx + dy;
+            for _ in 0..8192 {
+                self.dot(x0, y0, c);
+                if x0 == x1 && y0 == y1 {
+                    break;
+                }
+                let e2 = 2 * err;
+                if e2 >= dy {
+                    err += dy;
+                    x0 += sx;
+                }
+                if e2 <= dx {
+                    err += dx;
+                    y0 += sy;
                 }
             }
         }
@@ -350,7 +405,7 @@ impl Screen {
         }
     }
 
-    /// A box of two colours, chequered.
+    /// A box of two colors, chequered.
     pub fn dither(&mut self, x: i32, y: i32, w: i32, h: i32, a: u16, b: u16) {
         for j in y..y + h {
             for i in x..x + w {
@@ -415,7 +470,7 @@ impl Screen {
         for j in 0..8 {
             for i in 0..8 {
                 let (p, up, down, left, right) = (on(i, j), on(i, j - 1), on(i, j + 1), on(i - 1, j), on(i + 1, j));
-                // Each quarter takes after the two neighbours it lies between, when they agree
+                // Each quarter takes after the two neighbors it lies between, when they agree
                 // with each other and not with the two across from them.
                 let quarter = |a: bool, b: bool, far_a: bool, far_b: bool| if a == b && a != far_a && b != far_b { a } else { p };
                 for (qx, qy, lit) in [(0, 0, quarter(left, up, right, down)), (1, 0, quarter(right, up, left, down)), (0, 1, quarter(left, down, right, up)), (1, 1, quarter(right, down, left, up))] {

@@ -1,4 +1,4 @@
-//! A pass down the quarter mile: the car's engine, clutch, turbo and gearbox, a thirtieth of a
+//! A pass down the quarter mile: the car's engine, clutch, turbo and transmission, a thirtieth of a
 //! second at a time. Hold the throttle to bring the revs up against the limiter, shift into first
 //! on the green, and shift up before the redline.
 //!
@@ -41,7 +41,7 @@ pub struct Controls {
     /// The wheel, to keep it in its lane.
     pub left: bool,
     pub right: bool,
-    /// The clutch pedal, in a car with a gearbox worked by hand: held in, first can be put in
+    /// The clutch pedal, in a car with a transmission worked by hand: held in, first can be put in
     /// without going anywhere, and letting it out is the launch.
     pub clutch: bool,
 }
@@ -57,12 +57,12 @@ pub enum Launch {
     /// Too few revs: it fell on its face.
     Bogged,
     Good,
-    /// Too many: the tyres went up in smoke.
+    /// Too many: the tires went up in smoke.
     Spun,
 }
 
 /// How far either way of the middle of its lane a car can wander before it is over a line: the
-/// lane is six metres, the car under two.
+/// lane is six meters, the car under two.
 pub const LANE: f64 = 2.1;
 
 pub struct Race {
@@ -81,7 +81,7 @@ pub struct Race {
     pub gear: usize,
     pub rpm: f64,
     pub boost: f64,
-    /// Metres down the strip, and metres a second.
+    /// Meters down the strip, and meters a second.
     pub pos: f64,
     pub v: f64,
     launch: f64,
@@ -110,14 +110,14 @@ pub struct Race {
     /// Which way, and how hard, this car pulls when it launches: 1 is to the right as hard as its
     /// driven wheels make it, -1 to the left. Nothing on the rollers, where it cannot wander.
     pub lean: f64,
-    /// Metres right of the middle of its lane (the centre line is to the right, the wall to the
+    /// Meters right of the middle of its lane (the center line is to the right, the wall to the
     /// left), how fast it is going that way, and where the wheel is, from -1 to 1.
     pub drift: f64,
     sideways: f64,
     pub wheel: f64,
-    /// Over a line: 1 across the centre line, -1 into the wall. Either is the race lost.
+    /// Over a line: 1 across the center line, -1 into the wall. Either is the race lost.
     pub out: i8,
-    /// The tyres are spinning this tick.
+    /// The tires are spinning this tick.
     pub spin: bool,
     /// How the launch went, how much wheelspin is still to come from it (in seconds), and how
     /// many revs over the band it was let out at: what it took out of the clutch.
@@ -147,7 +147,7 @@ impl Race {
         self.drive.launch
     }
 
-    /// A gearbox worked by hand, with a clutch pedal.
+    /// A transmission worked by hand, with a clutch pedal.
     pub fn manual(&self) -> bool {
         !self.drive.auto
     }
@@ -196,7 +196,7 @@ impl Race {
     }
 
     /// Away: the launch, at whatever the revs are now. Within the band of its best launch speed it
-    /// is a good one; well under, it bogs; well over, the tyres go up in smoke for a while and the
+    /// is a good one; well under, it bogs; well over, the tires go up in smoke for a while and the
     /// clutch pays for it.
     fn go(&mut self, green: bool, since_green: f64) {
         self.launch = self.rpm;
@@ -218,14 +218,14 @@ impl Race {
     }
 
     /// Torque steer: on the power the driven wheels drag the car to one side, hardest in first
-    /// with the tyres at their limit; the wheel brings it back, and more quickly the faster it goes.
+    /// with the tires at their limit; the wheel brings it back, and more quickly the faster it goes.
     fn wander(&mut self, c: Controls, asked: f64) {
         if self.lean == 0.0 {
             return;
         }
         let spin = asked >= 1.0;
         let pull = match self.drive.driven {
-            // A car driven from the back only pulls when its tyres are spinning.
+            // A car driven from the back only pulls when its tires are spinning.
             Driven::Rear if !spin => 0.0,
             d => d.torque_steer() * asked.min(1.0) / (self.gear.max(1) as f64).powf(1.5) * if spin { 1.4 } else { 1.0 },
         };
@@ -336,7 +336,7 @@ impl Race {
             return;
         }
         let mut push;
-        // How hard the tyres are being asked to drive it, as a share of all they have.
+        // How hard the tires are being asked to drive it, as a share of all they have.
         let mut asked = 0.0;
         self.spraying = false;
         // Held flat against the limiter in gear, an engine does not last: a second and a half of it,
@@ -367,7 +367,7 @@ impl Race {
             let want = force / (self.drive.weight_lb * KG) * self.gain * part * more;
             asked = (want / self.drive.grip.max(1.0)).min(1.3);
             push = want.min(self.drive.grip);
-            // Let out too high, the tyres are still spinning: smoke, not speed, and it squirms.
+            // Let out too high, the tires are still spinning: smoke, not speed, and it squirms.
             if self.smoke > 0.0 {
                 self.smoke -= 1.0 / HZ;
                 push = push.min(self.drive.grip * 0.62);

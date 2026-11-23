@@ -1,12 +1,12 @@
 // The car's sound, made in the page from what the engine says is happening each tick: how fast the
-// engine turns and how hard it works, the turbo, the tyres, the wind and a siren. The engine only
+// engine turns and how hard it works, the turbo, the tires, the wind and a siren. The engine only
 // hands over eight numbers (see wtk_sound); everything you hear is built here with Web Audio.
 
 export function voice(audio, out) {
   const a = audio, now = () => a.currentTime;
   const glide = (param, value, time = 0.03) => param.setTargetAtTime(value, now(), time);
 
-  // A couple of seconds of noise, looped: the raw stuff of intake roar, wind, tyres and valves.
+  // A couple of seconds of noise, looped: the raw stuff of intake roar, wind, tires and valves.
   const hiss = a.createBuffer(1, a.sampleRate * 2, a.sampleRate);
   const data = hiss.getChannelData(0);
   for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
@@ -35,9 +35,9 @@ export function voice(audio, out) {
   // The turbo: a thin whistle that climbs as it spools.
   const turbo = gain(out);
   const whistle = a.createOscillator(); whistle.type = "sine"; whistle.connect(turbo); whistle.start();
-  // Tyres at their limit, and the wind.
-  const tyres = gain(out);
-  const squealBand = filter("bandpass", 2300, 7, tyres);
+  // Tires at their limit, and the wind.
+  const tires = gain(out);
+  const squealBand = filter("bandpass", 2300, 7, tires);
   noise().connect(squealBand);
   const wind = gain(out);
   noise().connect(filter("lowpass", 450, 0.7, wind));
@@ -82,7 +82,7 @@ export function voice(audio, out) {
     glide(whistle.frequency, 1800 + boost * 5200 * (1 + Math.max(0, whistleUp) * 0.4), 0.12);
     glide(turbo.gain, on ? boost * 0.012 * Math.max(0.2, 1 + whistleUp) : 0, 0.1);
     glide(nitrous.gain, on && spraying ? 0.05 : 0, 0.04);
-    glide(tyres.gain, squeal * 0.07, 0.04);
+    glide(tires.gain, squeal * 0.07, 0.04);
     glide(squealBand.frequency, 2100 + Math.random() * 400, 0.02);
     glide(wind.gain, speed * speed * 0.08, 0.2);
     glide(wail.frequency, 720 + 260 * Math.sin(now() * Math.PI * 2 * 0.8), 0.02);

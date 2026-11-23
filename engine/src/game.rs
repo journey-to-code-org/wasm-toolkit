@@ -77,18 +77,18 @@ pub struct Owned {
     /// What has been done to its computer.
     #[serde(default)]
     pub ecu: Ecu,
-    /// How knocked about its body is, and how worn its tyres: each from nothing to a hundred.
+    /// How knocked about its body is, and how worn its tires: each from nothing to a hundred.
     #[serde(default)]
     pub body: i32,
-    #[serde(default)]
-    pub tyres: f64,
+    #[serde(default, alias = "tyres")]
+    pub tires: f64,
     /// How adjustable suspension is set: from -2, soft for the road, to 2, stiff for the strip.
     #[serde(default)]
     pub setup: i32,
     /// Parts that change how it breathes or fuels have been swapped since it was last tuned.
     #[serde(default)]
     pub untuned: bool,
-    /// Road gone by since the parts last wore, in kilometres.
+    /// Road gone by since the parts last wore, in kilometers.
     #[serde(default)]
     pub run: f64,
     /// It has a build sheet: it is made of the parts fitted to it, and a slot with nothing in it
@@ -127,7 +127,7 @@ fn some_gas() -> f64 {
 
 impl Owned {
     pub fn new(car: &str, paint: Option<String>, cond: i32) -> Owned {
-        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tyres: 0.0, setup: 0, untuned: false, run: 0.0, sheet: false }
+        Owned { car: car.to_string(), paint, cond, fitted: BTreeMap::new(), off: Vec::new(), bolts: BTreeMap::new(), gas: 8.0, bottle: 0.0, ecu: Ecu::default(), body: 0, tires: 0.0, setup: 0, untuned: false, run: 0.0, sheet: false }
     }
 
     /// Which of a slot's `n` bolts are tight, a bit apiece.
@@ -204,7 +204,7 @@ pub enum Scene {
     Hood,
     Yard,
     Bets,
-    /// Picking a colour for a respray.
+    /// Picking a color for a respray.
     Paint,
     /// The rollers: what the car makes.
     Dyno,
@@ -257,12 +257,16 @@ pub struct Game {
     /// How far down each long list has been turned: the car's parts and the shelf at the bench,
     /// and the parts in the paper.
     pub turned: [usize; 3],
+    /// Which group of parts the paper's parts page shows: 0 all of them, then one place on the car each.
+    pub shop_group: usize,
     /// How fast the car was going as it came off a road into a town, to carry on at.
     rolling: f64,
     pub rollers: dyno::Rollers,
     pub net: Net,
     selling: bool,
     pub carrying: Option<Loose>,
+    /// Which part of the car is being worked on: under the hood, the trunk, underneath...
+    pub area: usize,
     /// The car in the yard whose ways to get rid of it are being shown.
     pub parting: Option<usize>,
     saved: bool,
@@ -307,7 +311,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, auto: (0, 900.0), spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0, land: None, clock: 0.0, dash: None,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], shop_group: 0, rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, area: 0, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, auto: (0, 900.0), spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0, land: None, clock: 0.0, dash: None,
         };
         g.land = crate::land::World::build(&g.pack.manifest);
         g.state = g.fresh();
@@ -351,10 +355,27 @@ impl Game {
     /// A game saved before what came under the hood was on the build sheet: what was on there is
     /// fitted, and what was lying on the floor is on the shelf.
     pub fn settle_hood(&self, s: &mut State) {
+        // Slots saved under their old names, before the pack said them the American way.
+        for o in s.cars.iter_mut() {
+            let Some(car) = self.pack.manifest.cars.get(&o.car) else { continue };
+            for (old, new) in [("Tyres", "Tires"), ("Gearbox", "Transmission")] {
+                if !car.stock.contains_key(new) && car.area_of(new).is_none() {
+                    continue;
+                }
+                if let Some(p) = o.fitted.remove(old) {
+                    o.fitted.insert(new.to_string(), p);
+                }
+                if let Some(b) = o.bolts.remove(old) {
+                    o.bolts.insert(new.to_string(), b);
+                }
+                for slot in o.off.iter_mut().filter(|x| *x == old) {
+                    *slot = new.to_string();
+                }
+            }
+        }
         for i in 0..s.cars.len() {
             let Some(car) = self.pack.manifest.cars.get(&s.cars[i].car).filter(|_| s.cars[i].sheet) else { continue };
-            let Some(hood) = &car.hood else { continue };
-            for (slot, part) in car.stock.iter().filter(|(slot, _)| hood.slots.contains_key(*slot)) {
+            for (slot, part) in car.stock.iter().filter(|(slot, _)| car.area_of(slot).is_some()) {
                 let o = &mut s.cars[i];
                 if !o.fitted.contains_key(slot) && !o.off.contains(slot) {
                     let cond = o.cond;
@@ -400,7 +421,7 @@ impl Game {
         }
     }
 
-    /// The colours a car can be had in, or sprayed.
+    /// The colors a car can be had in, or sprayed.
     pub fn paints(&self) -> Vec<String> {
         let m = &self.pack.manifest;
         if m.paints.is_empty() { PAINTS.iter().map(|p| p.to_string()).collect() } else { m.paints.iter().take(12).cloned().collect() }
@@ -468,7 +489,7 @@ impl Game {
     pub(crate) fn sky(&self, s: &mut Screen, horizon: i32, view: i32, sky: usize, land: usize) -> i32 {
         match self.dark() {
             0 if self.raining() => {
-                s.vgrad(0, 0, 320, horizon, ramp("GREY"), 12, 22);
+                s.vgrad(0, 0, 320, horizon, ramp("GRAY"), 12, 22);
                 s.vgrad(0, horizon, 320, view - horizon, land, 10, 14);
                 2
             }
@@ -648,8 +669,8 @@ impl Game {
         ((100 + more) as f64 / 100.0 * health * tired * rough * dyno::tuned(o.ecu, blown).0, turbo)
     }
 
-    /// The car as it is set up: its own running gear with what the parts on it change. Tyres and
-    /// the like add grip, light parts take weight off, a gearbox brings its own ratios, and a
+    /// The car as it is set up: its own running gear with what the parts on it change. Tires and
+    /// the like add grip, light parts take weight off, a transmission brings its own ratios, and a
     /// built engine its own redline.
     pub fn tuned_drive(&self, o: &Owned, car: &Car) -> crate::pack::Drive {
         let mut d = car.drive.clone();
@@ -673,8 +694,8 @@ impl Game {
                 d.torque = p.curve.clone();
             }
         }
-        // Worn tyres have up to three tenths less bite.
-        d.grip *= grip.max(10) as f64 / 100.0 * (1.0 - o.tyres.clamp(0.0, 100.0) * 0.003);
+        // Worn tires have up to three tenths less bite.
+        d.grip *= grip.max(10) as f64 / 100.0 * (1.0 - o.tires.clamp(0.0, 100.0) * 0.003);
         d.weight_lb = d.weight_lb.max(500.0);
         d.launch = d.launch.min(d.redline - 400.0);
         d
@@ -718,7 +739,7 @@ impl Game {
         }
     }
 
-    /// A gearbox that changes itself, worked out from the car's own ratios: up near the redline
+    /// A transmission that changes itself, worked out from the car's own ratios: up near the redline
     /// with the foot down and early when cruising, down again as the car slows, so a change drops
     /// the revs by what the next ratio drops them, not to idle. What it comes to is kept in `auto`.
     pub fn shift_auto(&mut self, speed: f64, gas: bool) {
@@ -727,7 +748,7 @@ impl Game {
         if d.gears.is_empty() {
             return;
         }
-        // Metres a second at the wheel to engine speed, through a gear.
+        // Meters a second at the wheel to engine speed, through a gear.
         let revs = |g: usize| speed / 0.3 * d.gears[g] * d.final_drive * 60.0 / std::f64::consts::TAU;
         let (mut gear, top) = (self.auto.0.min(d.gears.len() - 1), d.gears.len() - 1);
         let (up, down) = if gas { (d.redline - 400.0, 2600.0) } else { (2800.0, 1300.0) };
@@ -817,7 +838,52 @@ impl Game {
     /// The parts in the paper: those that go on the car in the bay, or all of them with no car.
     pub fn shop(&self) -> Vec<(&String, &Part)> {
         let car = self.owned().map(|o| o.car.clone());
-        self.pack.manifest.parts.iter().filter(|(_, p)| p.rare == 0 && car.as_ref().is_none_or(|c| p.goes_on(c))).collect()
+        let mut all: Vec<(&String, &Part)> = self.pack.manifest.parts.iter().filter(|(_, p)| p.rare == 0 && car.as_ref().is_none_or(|c| p.goes_on(c))).collect();
+        // Grouped by where on the car they go, and cheapest first in each.
+        all.sort_by_key(|(_, p)| (self.group_of(p), p.price));
+        all
+    }
+
+    /// Which group a part is in on the parts page: one for each place on the car, then the rest.
+    fn group_of(&self, p: &Part) -> usize {
+        let Some(car) = self.car() else { return 0 };
+        car.area_of(&p.slot).map_or(car.areas().len(), |k| k) + 1
+    }
+
+    /// The groups across the top of the parts page, when the car in the bay has places to work on.
+    pub fn shop_groups(&self) -> Vec<String> {
+        let Some(car) = self.car().filter(|c| !c.areas().is_empty()) else { return Vec::new() };
+        let shop = self.shop();
+        let mut out = vec!["ALL".to_string()];
+        for (k, a) in car.areas().iter().enumerate() {
+            if shop.iter().any(|(_, p)| self.group_of(p) == k + 1) {
+                out.push(a.0.to_uppercase().chars().take(6).collect());
+            } else {
+                out.push(String::new());
+            }
+        }
+        if shop.iter().any(|(_, p)| self.group_of(p) == car.areas().len() + 1) {
+            out.push("ENGINE".to_string());
+        }
+        out
+    }
+
+    /// What the parts page shows: all of them, or one group.
+    pub fn shop_page(&self) -> Vec<(&String, &Part)> {
+        let g = self.shop_group;
+        self.shop().into_iter().filter(|(_, p)| g == 0 || self.group_of(p) == g).collect()
+    }
+
+    /// Where the list on the parts page starts: lower when the groups are across the top.
+    fn shop_top(&self) -> i32 {
+        if self.shop_groups().is_empty() { 56 } else { 66 }
+    }
+
+    /// The group buttons: (x, width, words, group), leaving out groups with nothing in them.
+    fn group_chips(&self) -> Vec<(i32, i32, String, usize)> {
+        let groups: Vec<(usize, String)> = self.shop_groups().into_iter().enumerate().filter(|(_, w)| !w.is_empty()).collect();
+        let w = 304 / groups.len().max(1) as i32;
+        groups.into_iter().enumerate().map(|(k, (g, words))| (8 + k as i32 * w, w - 2, words, g)).collect()
     }
 
     /// What a part does, in a few words, for the paper.
@@ -859,7 +925,8 @@ impl Game {
         if p.radar {
             said.push("warns of police".to_string());
         }
-        let hood = if self.under_hood(&p.slot) { " Under the hood." } else { "" };
+        let at = self.car().and_then(|c| Some(c.areas()[c.area_of(&p.slot)?].1.to_string()));
+        let hood = at.map_or(String::new(), |t| format!(" {t}."));
         if said.is_empty() {
             format!("{}.{hood}", p.slot)
         } else {
@@ -882,7 +949,7 @@ impl Game {
     }
 
     /// The button on the paper's parts page that goes to the bench, when there is something to fit.
-    const FIT_BUTTON: [i32; 4] = [220, 182, 92, 14];
+    const FIT_BUTTON: [i32; 4] = [220, 185, 92, 14];
 
     fn fit_button_shown(&self) -> bool {
         self.owned().is_some() && !self.state.spares.is_empty() && self.state.place == "garage"
@@ -961,8 +1028,7 @@ impl Game {
                 return Some(format!("It has no {}.", slot.to_lowercase()));
             }
         }
-        let hood = car.hood.as_ref()?;
-        hood.slots.iter().find_map(|(slot, place)| {
+        car.areas().into_iter().flat_map(|a| a.3.iter()).find_map(|(slot, place)| {
             let n = place.bolts.len();
             if o.off.contains(slot) {
                 Some(format!("The {} is off. It will not run.", slot.to_lowercase()))
@@ -1022,7 +1088,7 @@ impl Game {
         gone.map(|n| (n, true)).or(tired.map(|n| (n, false)))
     }
 
-    /// Road under the car: every kilometre of it is a quarter of a pass to the parts.
+    /// Road under the car: every kilometer of it is a quarter of a pass to the parts.
     pub fn roll(&mut self, km: f64) {
         let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) else { return };
         o.run += km;
@@ -1048,7 +1114,7 @@ impl Game {
     /// Rubber left on the road.
     pub fn scrub(&mut self, wear: f64) {
         if let Some(o) = self.state.cur.and_then(|i| self.state.cars.get_mut(i)) {
-            o.tyres = (o.tyres + wear).min(100.0);
+            o.tires = (o.tires + wear).min(100.0);
         }
     }
 
@@ -1170,6 +1236,12 @@ impl Game {
             } else {
                 self.take_road(&road.to_string(), None);
             }
+        } else if let Some(id) = action.strip_prefix("work:") {
+            // Straight to one place on the car: the trunk, the wheels...
+            let Some(k) = self.car().and_then(|c| c.areas().iter().position(|x| x.0 == id)) else { return self.say("Nothing to work on there.") };
+            self.area = k;
+            self.scene = Scene::Hood;
+            self.carrying = None;
         } else if let Some(map) = action.strip_prefix("drive:") {
             let Some(m) = self.pack.manifest.maps.get(map) else { return };
             if self.state.cur.is_none() {
@@ -1226,12 +1298,15 @@ impl Game {
                     self.scene = Scene::Bench;
                     self.selling = false;
                 }
-                "hood" => {
-                    if self.car().is_some_and(|c| c.hood.is_some()) {
+                "hood" | "work" => {
+                    // Under the hood, or the first place on the car there is to work on.
+                    let first = if action == "hood" { self.car().and_then(|c| c.areas().iter().position(|x| x.0 == "hood")) } else { None };
+                    if self.car().is_some_and(|c| !c.areas().is_empty()) {
+                        self.area = first.unwrap_or(0);
                         self.scene = Scene::Hood;
                         self.carrying = None;
                     } else {
-                        self.say("Nothing to work on under there.");
+                        self.say("Nothing to work on there.");
                     }
                 }
                 "yard" => self.scene = Scene::Yard,
@@ -1293,17 +1368,17 @@ impl Game {
                     tone(700, 120);
                     self.spend(3);
                 }
-                "tyres" => {
+                "tires" | "tyres" => {
                     let Some(cur) = self.state.cur else { return self.no("There is no car in the bay.") };
-                    if self.state.cars[cur].tyres < 5.0 {
+                    if self.state.cars[cur].tires < 5.0 {
                         return self.say("They are nearly new.");
                     }
                     if self.state.cash < 80 {
-                        return self.no("A set of tyres is $80. You don't have it.");
+                        return self.no("A set of tires is $80. You don't have it.");
                     }
                     self.state.cash -= 80;
-                    self.state.cars[cur].tyres = 0.0;
-                    self.say("A new set of tyres, for $80.");
+                    self.state.cars[cur].tires = 0.0;
+                    self.say("A new set of tires, for $80.");
                     tone(700, 120);
                     self.save();
                 }
@@ -1476,7 +1551,7 @@ impl Game {
         }
         let rt = 280 + (self.rand() % 260) as i32;
         self.burn(0.5);
-        // A launch is hard on the tyres.
+        // A launch is hard on the tires.
         self.scrub(2.0);
         let mut race = Race::new(&drive, gain, boost, rival_et, rt);
         race.lean = self.lean();
@@ -1677,8 +1752,8 @@ impl Game {
             match (self.scene == Scene::Race).then(|| self.race.as_ref().map(|r| r.phase)).flatten() {
                 Some(Phase::Tree | Phase::Run) => bare | KEY_X,
                 Some(Phase::Slip) => bare,
-                _ if self.scene == Scene::Road && self.trip.as_ref().is_some_and(|t| t.gearbox.is_some()) => bare | KEY_X,
-                _ if self.scene == Scene::Drive && self.town.as_ref().is_some_and(|t| t.gearbox.is_some()) => bare | KEY_X,
+                _ if self.scene == Scene::Road && self.trip.as_ref().is_some_and(|t| t.transmission.is_some()) => bare | KEY_X,
+                _ if self.scene == Scene::Drive && self.town.as_ref().is_some_and(|t| t.transmission.is_some()) => bare | KEY_X,
                 _ => bare | KEY_A,
             }
         };
@@ -1820,10 +1895,15 @@ impl Game {
                             }
                         }
                     } else {
-                        let len = self.shop().len();
-                        if len > PAGE && self.row(8, 312, 56 + PAGE as i32 * 10, 10, 1).is_some() {
+                        let (len, top) = (self.shop_page().len(), self.shop_top());
+                        let chip = self.group_chips().into_iter().find(|(x, w, _, _)| self.py >= 52 && self.py < 62 && self.px >= *x && self.px < x + w);
+                        if let Some((_, _, _, g)) = chip {
+                            self.shop_group = g;
+                            self.turned[2] = 0;
+                            self.note = None;
+                        } else if len > PAGE && self.row(8, 312, top + PAGE as i32 * 10, 10, 1).is_some() {
                             self.turned[2] = if self.turned[2] + PAGE >= len { 0 } else { self.turned[2] + PAGE };
-                        } else if let Some(i) = self.row(8, 312, 56, 10, (len - self.turned[2].min(len)).min(PAGE)) {
+                        } else if let Some(i) = self.row(8, 312, top, 10, (len - self.turned[2].min(len)).min(PAGE)) {
                             self.buy_part(i + self.turned[2]);
                         }
                     }
@@ -1885,7 +1965,7 @@ impl Game {
                         let (cost, hours) = (self.pack.manifest.respray.cost, self.pack.manifest.respray.hours);
                         let Some(cur) = self.state.cur else { return };
                         if self.state.cars[cur].paint.as_deref() == Some(paints[b].as_str()) {
-                            return self.say("It is that colour already.");
+                            return self.say("It is that color already.");
                         }
                         if self.state.cash < cost {
                             return self.no(&format!("A respray is ${cost}. You don't have it."));
@@ -2078,7 +2158,7 @@ impl Game {
         }
         self.scrub(went / 1000.0 * 0.4);
         self.roll(went / 1000.0);
-        let revs = self.town.as_ref().and_then(|t| t.gearbox.as_ref()).map(|b| b.rpm);
+        let revs = self.town.as_ref().and_then(|t| t.transmission.as_ref()).map(|b| b.rpm);
         if revs.is_none() {
             self.shift_auto(speed, keys & KEY_UP != 0);
         }
@@ -2176,7 +2256,7 @@ impl Game {
     }
 
     fn buy_part(&mut self, i: usize) {
-        let Some((id, part)) = self.shop().get(i).map(|(k, p)| ((*k).clone(), (*p).clone())) else { return };
+        let Some((id, part)) = self.shop_page().get(i).map(|(k, p)| ((*k).clone(), (*p).clone())) else { return };
         if self.has_part(&id) {
             return self.say("You have one.");
         }
@@ -2232,7 +2312,8 @@ impl Game {
                 return self.no("That does not fit this car.");
             }
             if self.under_hood(&slot) {
-                // Under the hood, holding it: the place it goes is marked, and so are its bolts.
+                // Where it goes, holding it: its place is marked, and so are its bolts.
+                self.area = self.car().and_then(|c| c.area_of(&slot)).unwrap_or(0);
                 self.scene = Scene::Hood;
                 self.carrying = Some(Loose::Part(id));
                 let bolted = !self.state.cars[cur].off.contains(&slot);
@@ -2250,8 +2331,13 @@ impl Game {
             self.spend(1);
         } else if let Some(i) = self.row(8, 156, 34, 10, (slots.len() - top.min(slots.len())).min(LINES)).map(|i| i + top) {
             let Some(cur) = self.state.cur else { return };
-            if self.under_hood(&slots[i]) {
-                return self.say("That one is under the hood.");
+            if let Some(k) = self.car().and_then(|c| c.area_of(&slots[i])) {
+                // Off where it is: there, with it marked.
+                self.area = k;
+                self.scene = Scene::Hood;
+                self.carrying = None;
+                let place = self.car().map_or(String::new(), |c| c.areas()[k].1.to_lowercase());
+                return self.say(&format!("It comes off {place}.").chars().take(38).collect::<String>());
             }
             let sheet = self.state.cars[cur].sheet;
             if let Some(old) = self.state.cars[cur].fitted.remove(&slots[i]) {
@@ -2278,31 +2364,71 @@ impl Game {
 
     /// Whether this slot of the car in the bay is worked on under its hood.
     fn under_hood(&self, slot: &str) -> bool {
-        self.car().and_then(|c| c.hood.as_ref()).is_some_and(|h| h.slots.contains_key(slot))
+        self.car().is_some_and(|c| c.area_of(slot).is_some())
+    }
+
+    /// The part of the car being worked on: its id, its name, its picture and its places.
+    pub fn area_here(&self) -> Option<(&str, &str, &str, &std::collections::BTreeMap<String, Slot>)> {
+        let areas = self.car()?.areas();
+        areas.get(self.area.min(areas.len().saturating_sub(1))).copied()
+    }
+
+    /// Whether a place is to be seen: not hidden behind something still on.
+    pub fn in_view(&self, slots: &std::collections::BTreeMap<String, Slot>, slot: &str) -> bool {
+        let Some(o) = self.owned() else { return false };
+        let mut at = slot;
+        for _ in 0..8 {
+            match slots.get(at).filter(|p| p.covered).and_then(|p| p.behind.as_deref()) {
+                Some(front) if !o.off.iter().any(|s| s == front) => return false,
+                Some(front) => at = front,
+                None => return true,
+            }
+        }
+        true
+    }
+
+    /// The tabs across the top of the work: one for each place on the car, (x, width).
+    fn area_tabs(&self) -> Vec<(i32, i32, String)> {
+        let Some(car) = self.car() else { return Vec::new() };
+        let areas = car.areas();
+        if areas.len() < 2 {
+            return Vec::new();
+        }
+        let w = (316 / areas.len() as i32).min(80);
+        areas.iter().enumerate().map(|(k, a)| (2 + k as i32 * w, w - 2, Self::short_title(a.0, a.1))).collect()
+    }
+
+    fn short_title(id: &str, title: &str) -> String {
+        match id {
+            "hood" => "HOOD".into(),
+            _ if id.len() <= 7 => id.to_uppercase(),
+            _ => title.split_whitespace().last().unwrap_or(id).to_uppercase().chars().take(9).collect(),
+        }
     }
 
     /// The slot under the pointer: its name, and its place on the picture. A bolt counts as its
     /// slot even where it sits outside the box.
     fn hood_slot_under(&self) -> Option<(String, Slot)> {
-        let hood = self.car()?.hood.as_ref()?;
-        if self.py >= 176 {
+        let (_, _, _, slots) = self.area_here()?;
+        if self.py >= 176 || self.py < 15 && !self.area_tabs().is_empty() {
             return None;
         }
+        let seen: Vec<(&String, &Slot)> = slots.iter().filter(|(s, _)| self.in_view(slots, s)).collect();
         let on_bolt = |p: &Slot| p.bolts.iter().any(|b| (self.px - b[0]).abs() <= 5 && (self.py - b[1]).abs() <= 5);
-        let inside = |p: &Slot| self.px >= p.rect[0] && self.px < p.rect[0] + p.rect[2] && self.py >= p.rect[1] && self.py < p.rect[1] + p.rect[3];
-        let found = hood.slots.iter().find(|(_, p)| on_bolt(p)).or_else(|| hood.slots.iter().find(|(_, p)| inside(p)));
-        found.map(|(s, p)| (s.clone(), p.clone()))
+        // What is uncovered lies in front of what covered it: the smaller first.
+        let found = seen.iter().find(|(_, p)| on_bolt(p)).or_else(|| seen.iter().filter(|(_, p)| p.contains(self.px, self.py)).min_by_key(|(_, p)| p.rect[2] * p.rect[3]));
+        found.map(|(s, p)| ((*s).clone(), (*p).clone()))
     }
 
     /// What is on the floor under the hood: the stock part of every slot it is not on, and the
     /// spares that go on this car there. The first eight are in reach.
     pub fn floor(&self) -> Vec<Loose> {
         let Some((o, car)) = self.owned().zip(self.car()) else { return Vec::new() };
-        let Some(hood) = &car.hood else { return Vec::new() };
+        let Some((_, _, _, slots)) = self.area_here() else { return Vec::new() };
         let held = |l: &Loose| self.carrying.as_ref() == Some(l);
         // On a car with a build sheet, what it came with there is a real part, on the shelf when it is off.
-        let stock = hood.slots.keys().filter(|s| !(o.sheet && car.stock.contains_key(*s))).filter(|s| o.off.contains(*s) || o.fitted.contains_key(*s)).map(|s| Loose::Stock(s.clone()));
-        let spares = self.state.spares.iter().filter(|id| self.part(id).is_some_and(|p| hood.slots.contains_key(&p.slot) && p.goes_on(&o.car))).map(|id| Loose::Part(id.clone()));
+        let stock = slots.keys().filter(|s| !(o.sheet && car.stock.contains_key(*s))).filter(|s| o.off.contains(*s) || o.fitted.contains_key(*s)).map(|s| Loose::Stock(s.clone()));
+        let spares = self.state.spares.iter().filter(|id| self.part(id).is_some_and(|p| slots.contains_key(&p.slot) && p.goes_on(&o.car))).map(|id| Loose::Part(id.clone()));
         stock.chain(spares).filter(|l| !held(l)).take(8).collect()
     }
 
@@ -2315,7 +2441,7 @@ impl Game {
 
     /// What the part a car came with in a slot is called.
     fn stock_name(&self, slot: &str) -> String {
-        let named = self.car().and_then(|c| c.hood.as_ref()).and_then(|h| h.slots.get(slot)).and_then(|p| p.stock.clone());
+        let named = self.car().and_then(|c| c.areas().into_iter().find_map(|a| a.3.get(slot))).and_then(|p| p.stock.clone());
         named.unwrap_or_else(|| format!("Stock {}", slot.to_lowercase()))
     }
 
@@ -2334,6 +2460,14 @@ impl Game {
     /// floor. Pick a part up off the floor, set it on the empty place it goes, and do the bolts up.
     fn hood_pick(&mut self) {
         let Some(cur) = self.state.cur else { return };
+        if self.py < 15 {
+            if let Some(k) = self.area_tabs().iter().position(|(x, w, _)| self.px >= *x && self.px < x + w) {
+                // Over to another part of the car: what you hold comes too.
+                self.area = k;
+                self.note = None;
+                return tone(480, 40);
+            }
+        }
         if self.py >= 176 {
             // The floor: put down what you are holding, or pick something up.
             if self.carrying.take().is_some() {
@@ -2352,9 +2486,9 @@ impl Game {
         }
         let Some((slot, place)) = self.hood_slot_under() else { return };
         let empty = self.state.cars[cur].off.contains(&slot);
-        // Holding the new part, the old one can still be undone and lifted off where it goes.
-        let holding_for = |l: &Loose| self.loose_slot(l) == slot;
-        let carry = self.carrying.clone().filter(|l| !(!empty && holding_for(l)));
+        // Holding a part, whatever is on the car can still be undone and lifted off: the old
+        // one where it goes, or what is in the way of it.
+        let carry = self.carrying.clone().filter(|_| empty);
         match (empty, carry) {
             (false, None) => {
                 let tight = self.state.cars[cur].tight(&slot, place.bolts.len());
@@ -2385,8 +2519,9 @@ impl Game {
                     self.swapped(&part);
                     self.state.spares.push(part);
                 }
-                self.state.cars[cur].off.push(slot);
-                self.say(if self.carrying.is_some() { "Off. Now set the new one on." } else { "It is off, and on the floor." });
+                self.state.cars[cur].off.push(slot.clone());
+                let goes_here = self.carrying.as_ref().is_some_and(|l| self.loose_slot(l) == slot);
+                self.say(if goes_here { "Off. Now set the new one on." } else { "It is off, and on the floor." });
                 tone(260, 90);
                 self.spend(1);
             }
@@ -2395,7 +2530,7 @@ impl Game {
                     return self.no("That does not go there.");
                 }
                 // And what it sits in front of has to be on before it is.
-                let waits = self.car().and_then(|c| c.hood.as_ref()).and_then(|h| h.slots.iter().find(|(name, p)| p.behind.as_deref() == Some(slot.as_str()) && self.state.cars[cur].off.contains(*name)).map(|(name, _)| name.clone()));
+                let waits = self.area_here().and_then(|a| a.3.iter().find(|(name, p)| p.behind.as_deref() == Some(slot.as_str()) && self.state.cars[cur].off.contains(*name)).map(|(name, _)| name.clone()));
                 if let Some(first) = waits {
                     return self.no(&format!("The {} goes on first.", first.to_lowercase()));
                 }
@@ -2509,7 +2644,7 @@ impl Game {
             if blown {
                 self.blew();
             } else if out == 1 {
-                self.no("Over the centre line. Disqualified.");
+                self.no("Over the center line. Disqualified.");
             } else if out == -1 {
                 self.dent();
                 self.no("Into the wall. Disqualified.");
@@ -2532,7 +2667,7 @@ impl Game {
 
     // ---- Drawing ----
 
-    /// A car's picture is painted in one colour; this moves its paint ramps to the paint it is in,
+    /// A car's picture is painted in one color; this moves its paint ramps to the paint it is in,
     /// `darker` shades down for the night.
     fn tint(car: &Car, paint: Option<&str>, darker: i8) -> Tint {
         let mut tint = Tint::none();
@@ -2548,7 +2683,7 @@ impl Game {
         tint
     }
 
-    /// A car from the pack in a paint, its tyres on `ground`. Half size for one seen from further off.
+    /// A car from the pack in a paint, its tires on `ground`. Half size for one seen from further off.
     fn draw_car(&self, s: &mut Screen, id: &str, paint: Option<&str>, lamps: bool, x: i32, ground: i32, half: bool) {
         let Some(car) = self.pack.manifest.cars.get(id) else { return };
         let name = if lamps { car.side_lamps.as_ref().unwrap_or(&car.side) } else { &car.side };
@@ -2725,7 +2860,7 @@ impl Game {
         let under = self.spot_under().map(|s| s.label.clone());
         let clock = format!("DAY {} OF {}. {} HOURS LEFT TODAY.", self.day(), self.pack.manifest.season.days, self.hours_left());
         if self.scene == Scene::Paint {
-            // A row of tins: each a button in its own colour.
+            // A row of tins: each a button in its own color.
             let (paints, over) = (self.paints(), self.button(self.paints().len()));
             let w = 312 / paints.len() as i32;
             for (i, p) in paints.iter().enumerate() {
@@ -2733,7 +2868,7 @@ impl Game {
                 s.vgrad(x + 1, 178, w - 2, 18, ramp(p), 26, 14);
                 s.frame(x + 1, 178, w - 2, 18, if on { WHITE } else { shade(ramp("CHROME"), 10) });
             }
-            let name = over.map(|i| paints[i].to_lowercase()).unwrap_or_else(|| "Pick a colour.".into());
+            let name = over.map(|i| paints[i].to_lowercase()).unwrap_or_else(|| "Pick a color.".into());
             self.panel(s, "A respray", &name, &format!("${}, and {} hours. Escape: never mind", self.pack.manifest.respray.cost, self.pack.manifest.respray.hours));
         } else if self.scene == Scene::Bets {
             let mut labels = vec!["KICKS".to_string()];
@@ -2751,10 +2886,10 @@ impl Game {
     }
 
     fn draw_paper(&self, s: &mut Screen, page: usize) {
-        let (ink, grey, cream) = (shade(ramp("RUBBER"), 3), shade(ramp("BROWN"), 14), ramp("CREAM"));
+        let (ink, gray, cream) = (shade(ramp("RUBBER"), 3), shade(ramp("BROWN"), 14), ramp("CREAM"));
         s.vgrad(0, 0, 320, 200, cream, 27, 23);
         s.text_big(8, 8, "THE PAPER", ink, 2);
-        s.text(200, 12, if self.rain_on(self.day() + 1) { "TOMORROW: RAIN" } else { "TOMORROW: DRY" }, grey);
+        s.text(200, 12, if self.rain_on(self.day() + 1) { "TOMORROW: RAIN" } else { "TOMORROW: DRY" }, gray);
         for (t, label, x) in [(3, "AS IS", 64), (2, "JOBS", 128), (0, "CARS", 192), (1, "PARTS", 256)] {
             if t == page {
                 s.rect(x, 34, 60, 16, ink);
@@ -2762,10 +2897,10 @@ impl Game {
             s.frame(x, 34, 60, 16, ink);
             s.text(x + 30 - label.len() as i32 * 4, 38, label, if t == page { shade(cream, 28) } else { ink });
         }
-        s.rect(8, 52, 304, 1, grey);
+        s.rect(8, 52, 304, 1, gray);
         let hover = shade(cream, 31);
         if page == 3 {
-            self.draw_projects(s, ink, grey, hover);
+            self.draw_projects(s, ink, gray, hover);
             // Whatever more the ad says than there was room for is read out for the one pointed at.
             let more: Vec<String> = self.row(8, 312, 54, 62, projects::PROJECTS).and_then(|i| self.projects().into_iter().nth(i).flatten()).map(|p| p.says.into_iter().skip(2).collect()).unwrap_or_default();
             let line = self.note.clone().or_else(|| more.first().cloned()).unwrap_or_else(|| "It does not run. The ad says why.".into());
@@ -2778,7 +2913,7 @@ impl Game {
                 if over == Some(i) && offer.is_some() {
                     s.rect(8, y, 304, 43, hover);
                 }
-                s.rect(8, y + 43, 304, 1, grey);
+                s.rect(8, y + 43, 304, 1, gray);
                 let Some(o) = offer else {
                     s.text(120, y + 18, "S O L D", shade(ramp("RED"), 20));
                     continue;
@@ -2788,13 +2923,13 @@ impl Game {
                 for (k, line) in wrap(&car.name.to_uppercase(), 16).iter().take(2).enumerate() {
                     s.text(180, y + 4 + k as i32 * 9, line, ink);
                 }
-                s.text(180, y + 24, cond_word(o.cond), grey);
+                s.text(180, y + 24, cond_word(o.cond), gray);
                 s.text(180, y + 34, &format!("${}", o.price), shade(ramp("FOREST"), 12));
                 let on = over == Some(i) && self.px >= 248 && (self.py - 54) % 44 >= 30;
-                s.text(256, y + 34, "HAGGLE", if on { shade(ramp("RED"), 20) } else { grey });
+                s.text(256, y + 34, "HAGGLE", if on { shade(ramp("RED"), 20) } else { gray });
             }
             if offers.is_empty() {
-                s.text(12, 60, "NO CARS FOR SALE.", grey);
+                s.text(12, 60, "NO CARS FOR SALE.", gray);
             }
             self.panel(s, "The paper", self.note.as_deref().unwrap_or("Pick a car to buy it, or haggle."), "Escape puts it down.");
         } else if page == 2 {
@@ -2806,26 +2941,33 @@ impl Game {
                     s.rect(8, y - 1, 304, 19, hover);
                 }
                 s.text(12, y + 1, &j.name.to_uppercase().chars().take(28).collect::<String>(), ink);
-                s.text(12, y + 10, &format!("{} HOURS", j.hours), grey);
+                s.text(12, y + 10, &format!("{} HOURS", j.hours), gray);
                 let pay = format!("${}", j.pay);
                 s.text(308 - pay.len() as i32 * 8, y + 5, &pay, shade(ramp("FOREST"), 12));
-                s.rect(8, y + 18, 304, 1, grey);
+                s.rect(8, y + 18, 304, 1, gray);
             }
             self.panel(s, "Help wanted", self.note.as_deref().unwrap_or("Pick a job to work it. It pays, and it takes the hours."), "Escape puts it down.");
         } else {
-            let parts = self.shop();
-            let top = self.turned[2].min(parts.len().saturating_sub(1));
-            let over = self.row(8, 312, 56, 10, (parts.len() - top.min(parts.len())).min(PAGE)).map(|i| i + top);
+            let parts = self.shop_page();
+            let (top, y0) = (self.turned[2].min(parts.len().saturating_sub(1)), self.shop_top());
+            // Where on the car: one button each, and one for all of them.
+            for (x, w, words, g) in self.group_chips() {
+                let (on, under) = (g == self.shop_group, self.py >= 52 && self.py < 62 && self.px >= x && self.px < x + w);
+                s.rect(x, 52, w, 10, if on { ink } else if under { hover } else { shade(cream, 24) });
+                s.frame(x, 52, w, 10, ink);
+                s.text(x + w / 2 - words.len() as i32 * 4, 53, &words, if on { shade(cream, 28) } else { ink });
+            }
+            let over = self.row(8, 312, y0, 10, (parts.len() - top.min(parts.len())).min(PAGE)).map(|i| i + top);
             if parts.len() > PAGE {
-                s.text(12, 56 + PAGE as i32 * 10, &format!("MORE: {} TO {} OF {}", top + 1, (top + PAGE).min(parts.len()), parts.len()), shade(ramp("BLUE"), 14));
+                s.text(12, y0 + PAGE as i32 * 10, &format!("MORE: {} TO {} OF {}", top + 1, (top + PAGE).min(parts.len()), parts.len()), shade(ramp("BLUE"), 14));
             }
             for (i, &(id, p)) in parts.iter().enumerate().skip(top).take(PAGE) {
-                let y = 56 + (i - top) as i32 * 10;
+                let y = y0 + (i - top) as i32 * 10;
                 if over == Some(i) {
                     s.rect(8, y - 1, 304, 10, hover);
                 }
                 s.text(12, y, &p.name.to_uppercase().chars().take(20).collect::<String>(), ink);
-                s.text(180, y, &p.slot.to_uppercase().chars().take(9).collect::<String>(), grey);
+                s.text(180, y, &p.slot.to_uppercase().chars().take(9).collect::<String>(), gray);
                 if let Some(at) = self.part_where(id) {
                     s.text(308 - at.len() as i32 * 8, y, at, shade(ramp(if at == "ON CAR" { "FOREST" } else { "BLUE" }), 14));
                 } else {
@@ -2834,7 +2976,7 @@ impl Game {
                 }
             }
             if parts.is_empty() {
-                s.text(12, 60, "NO PARTS FOR SALE.", grey);
+                s.text(12, 60, "NO PARTS FOR SALE.", gray);
             }
             if self.fit_button_shown() {
                 let [x, y, w, h] = Self::FIT_BUTTON;
@@ -2885,8 +3027,8 @@ impl Game {
                 None => format!("STOCK {}", slot.to_uppercase()),
             };
             let stock = on.is_some() && self.car().is_some_and(|c| c.stock.get(slot).map(String::as_str) == fitted.map(|id| base(id)));
-            let colour = if cond == 0 || (on.is_none() && sheet && needed && !self.under_hood(slot)) { shade(ramp("RED"), 27) } else if on.is_none() && sheet { shade(ramp("CREAM"), 14) } else if on.is_some() && !stock { shade(ramp("GOLD"), 27) } else { shade(ramp("CREAM"), 22) };
-            s.text_sh(10, y, &name.chars().take(18).collect::<String>(), colour, BLACK);
+            let color = if cond == 0 || (on.is_none() && sheet && needed && !self.under_hood(slot)) { shade(ramp("RED"), 27) } else if on.is_none() && sheet { shade(ramp("CREAM"), 14) } else if on.is_some() && !stock { shade(ramp("GOLD"), 27) } else { shade(ramp("CREAM"), 22) };
+            s.text_sh(10, y, &name.chars().take(18).collect::<String>(), color, BLACK);
         }
         if self.state.cur.is_none() {
             s.text_sh(10, 34 + slots.len() as i32 * 10 + 6, "NO CAR IN THE BAY.", shade(ramp("RED"), 26), BLACK);
@@ -2919,49 +3061,71 @@ impl Game {
 
     fn chip(&self, s: &mut Screen, x: i32, y: i32, l: &Loose) {
         let better = matches!(l, Loose::Part(_));
-        s.rect(x, y, 76, 10, shade(ramp(if better { "GOLD" } else { "GREY" }), if better { 20 } else { 12 }));
+        s.rect(x, y, 76, 10, shade(ramp(if better { "GOLD" } else { "GRAY" }), if better { 20 } else { 12 }));
         s.frame(x, y, 76, 10, shade(ramp("RUBBER"), 2));
         let name = self.loose_name(l).to_uppercase().replace("STOCK ", "STK ");
         s.text(x + 2, y + 1, &name.chars().take(9).collect::<String>(), if better { shade(ramp("RUBBER"), 2) } else { WHITE });
     }
 
     fn draw_hood(&self, s: &mut Screen) {
-        let Some((o, car)) = self.owned().zip(self.car()) else { return };
-        let Some(hood) = &car.hood else { return };
+        let Some(o) = self.owned() else { return };
+        let Some((_, area_title, picture, slots)) = self.area_here() else { return };
         s.clear(BLACK);
-        if let Some(pic) = self.pack.pictures.get(&hood.picture) {
+        if let Some(pic) = self.pack.pictures.get(picture) {
             s.picture(pic, 0, 0);
         }
         let over = self.hood_slot_under().map(|(slot, _)| slot);
         let (dark, chrome, gold) = (ramp("RUBBER"), ramp("CHROME"), ramp("GOLD"));
-        for (slot, place) in &hood.slots {
+        let blink = self.ticks / 10 % 2 == 0;
+        // Behind ones last, so that what is uncovered is drawn over what it was under.
+        let mut order: Vec<(&String, &Slot)> = slots.iter().filter(|(name, _)| self.in_view(slots, name)).collect();
+        order.sort_by_key(|(_, p)| p.covered);
+        let stock = self.car().map(|c| c.stock.clone()).unwrap_or_default();
+        let mut labels: Vec<(i32, i32, String)> = Vec::new();
+        for (slot, place) in order {
             let [x, y, w, h] = place.rect;
+            let pts: Vec<(i32, i32)> = if place.poly.len() >= 3 { place.poly.iter().map(|p| (p[0], p[1])).collect() } else { vec![(x, y), (x + w, y), (x + w, y + h), (x, y + h)] };
             let (empty, tight) = (o.off.contains(slot), o.tight(slot, place.bolts.len()));
-            let fitted = o.fitted.get(slot).and_then(|id| self.part(id));
+            // Only something better than the car came with is new: on a car of real parts, the
+            // stock part is fitted too.
+            let fitted = o.fitted.get(slot).filter(|id| stock.get(slot.as_str()).is_none_or(|s| s != base(id))).and_then(|id| self.part(id));
+            let (mut mx, mut my) = place.middle();
+            if place.poly.len() >= 3 && !place.contains(mx, my) {
+                // A ring, or some such: its tag goes on it, near its first corner.
+                let [fx, fy] = place.poly[0];
+                (mx, my) = (fx + (mx - fx) * 3 / 20, fy + (my - fy) * 3 / 20);
+                (mx, my) = (mx - (mx - place.middle().0).signum() * 6, my);
+            }
             if empty {
                 // Off the car: a dark hole where it was.
-                s.dither(x, y, w, h, shade(dark, 1), shade(ramp("NAVY"), 4));
-                s.frame(x, y, w, h, shade(chrome, 12));
-            } else if let Some(pic) = fitted.and_then(|p| p.picture.as_ref()).and_then(|n| self.pack.pictures.get(n)) {
-                // The better part is on, and the pack has a picture of it there.
-                s.picture_sized(pic, x, y, w, h, None);
-            } else if fitted.is_some() {
-                // The better part is on: a tag on it says so.
-                s.rect(x + w / 2 - 9, y + h / 2 - 5, 19, 10, shade(gold, 24));
-                s.frame(x + w / 2 - 9, y + h / 2 - 5, 19, 10, shade(dark, 2));
-                s.text(x + w / 2 - 7, y + h / 2 - 4, "+1", shade(dark, 2));
+                s.shape(&pts, shade(dark, 1), shade(ramp("NAVY"), 4));
+                s.outline(&pts, shade(chrome, 12));
+            } else if place.covered {
+                // Uncovered: the picture never showed it, so it is drawn plain, with its name.
+                s.shape(&pts, shade(ramp("CONCRETE"), 13), shade(ramp("CHROME"), 15));
+                s.outline(&pts, shade(dark, 3));
+                let words: String = slot.to_uppercase().chars().take(((w - 4) / 8).max(3) as usize).collect();
+                labels.push((mx - words.len() as i32 * 4, my - 4, words));
+            }
+            if !empty {
+                if let Some(pic) = fitted.and_then(|p| p.picture.as_ref()).and_then(|n| self.pack.pictures.get(n)) {
+                    // The better part is on, and the pack has a picture of it there.
+                    s.picture_sized(pic, x, y, w, h, None);
+                } else if fitted.is_some() && !place.covered {
+                    // The better part is on: a tag on it says so.
+                    s.rect(mx - 12, my - 5, 25, 10, shade(gold, 24));
+                    s.frame(mx - 12, my - 5, 25, 10, shade(dark, 2));
+                    s.text(mx - 11, my - 4, "NEW", shade(dark, 2));
+                }
             }
             // Holding a part, or with one on loose: where the work is, blinking.
-            let blink = self.ticks / 10 % 2 == 0;
             let loose = !empty && tight != (1 << place.bolts.len()) - 1 && self.carrying.is_none();
             let target = self.carrying.as_ref().is_some_and(|l| self.loose_slot(l) == *slot) || loose;
             if target && blink {
-                s.frame(x - 2, y - 2, w + 4, h + 4, shade(ramp("LIME"), 28));
-                s.frame(x - 3, y - 3, w + 6, h + 6, shade(dark, 1));
+                s.outline(&pts, shade(ramp("LIME"), 28));
             }
             if over.as_ref() == Some(slot) {
-                s.frame(x - 1, y - 1, w + 2, h + 2, shade(gold, 28));
-                s.frame(x - 2, y - 2, w + 4, h + 4, shade(dark, 1));
+                s.outline(&pts, shade(gold, 28));
             }
             for (b, &[bx, by]) in place.bolts.iter().enumerate() {
                 // The bolts to undo, or to do up, ringed while they want doing.
@@ -2979,6 +3143,23 @@ impl Game {
                 }
             }
         }
+        // The names of what has been uncovered, none written over another.
+        let mut placed: Vec<(i32, i32, i32)> = Vec::new();
+        for (x, mut y, words) in labels {
+            let w = words.len() as i32 * 8;
+            while placed.iter().any(|&(px, py, pw)| x < px + pw && px < x + w && (y - py).abs() < 9) {
+                y += 9;
+            }
+            placed.push((x, y, w));
+            s.text_sh(x, y, &words, WHITE, BLACK);
+        }
+        // The other parts of the car, along the top.
+        for (k, (x, w, words)) in self.area_tabs().into_iter().enumerate() {
+            let (on, under) = (k == self.area, self.py < 15 && self.px >= x && self.px < x + w);
+            s.rect(x, 2, w, 11, if on { shade(gold, 24) } else if under { shade(ramp("NAVY"), 14) } else { shade(ramp("NAVY"), 6) });
+            s.frame(x, 2, w, 11, shade(chrome, if on { 28 } else { 14 }));
+            s.text(x + w / 2 - words.len() as i32 * 4, 4, &words, if on { BLACK } else { WHITE });
+        }
         // The floor in front of the car, and what is lying on it.
         s.vgrad(0, 176, 320, 24, ramp("CONCRETE"), 18, 22);
         s.rect(0, 176, 320, 1, shade(dark, 2));
@@ -2995,10 +3176,10 @@ impl Game {
             s.text(8, 184, "NOTHING ON THE FLOOR.", shade(ramp("CONCRETE"), 8));
         }
         let (title, line, foot) = match (&over, chip_over, &self.carrying) {
-            (Some(slot), _, _) if o.off.contains(slot) => (slot.clone(), "Nothing on it.".to_string(), "Enter to pick. Escape shuts the hood.".to_string()),
+            (Some(slot), _, _) if o.off.contains(slot) => (slot.clone(), "Nothing on it.".to_string(), "Enter to pick. Escape goes back.".to_string()),
             (Some(slot), _, _) => {
                 let name = o.fitted.get(slot).and_then(|id| self.part(id)).map(|p| p.name.clone()).unwrap_or_else(|| self.stock_name(slot));
-                let n = hood.slots[slot].bolts.len();
+                let n = slots[slot].bolts.len();
                 let foot = match o.tight(slot, n).count_ones() as usize {
                     0 => "The bolts are out. Pick it to lift it.".to_string(),
                     k if k == n => "Bolted down. Pick a bolt to undo it.".to_string(),
@@ -3006,17 +3187,17 @@ impl Game {
                 };
                 (slot.clone(), name, foot)
             }
-            (None, Some(l), _) => (self.loose_name(l), "Pick it up.".to_string(), "Enter to pick. Escape shuts the hood.".to_string()),
+            (None, Some(l), _) => (self.loose_name(l), "Pick it up.".to_string(), "Enter to pick. Escape goes back.".to_string()),
             (None, None, Some(l)) => {
                 let slot = self.loose_slot(l);
-                let step = match hood.slots.get(&slot) {
+                let step = match slots.get(&slot) {
                     Some(p) if !o.off.contains(&slot) && o.tight(&slot, p.bolts.len()) != 0 => format!("Undo the ringed bolts on the {}.", slot.to_lowercase()),
                     Some(_) if !o.off.contains(&slot) => format!("Pick the {} to lift it off.", slot.to_lowercase()),
                     _ => format!("Set it on the {}, marked.", slot.to_lowercase()),
                 };
                 ("Holding".to_string(), self.loose_name(l), step)
             }
-            _ => ("Under the hood".to_string(), "Point at a part.".to_string(), "Enter to pick. Escape shuts the hood.".to_string()),
+            _ => (area_title.to_string(), "Point at a part.".to_string(), "Enter to pick. Escape goes back.".to_string()),
         };
         self.panel(s, &title, &line, self.note.as_deref().unwrap_or(&foot));
         if let Some(l) = &self.carrying {
@@ -3038,7 +3219,7 @@ impl Game {
             }
             let car = &self.pack.manifest.cars[&o.car];
             s.rect(10, y, 12, 8, BLACK);
-            s.vgrad(11, y + 1, 10, 6, ramp(o.paint.as_deref().or(car.paint.as_deref()).unwrap_or("GREY")), 27, 16);
+            s.vgrad(11, y + 1, 10, 6, ramp(o.paint.as_deref().or(car.paint.as_deref()).unwrap_or("GRAY")), 27, 16);
             let here = self.state.cur == Some(i);
             s.text_sh(28, y, &car.name.to_uppercase().chars().take(14).collect::<String>(), if here { shade(ramp("GOLD"), 27) } else { WHITE }, BLACK);
             s.text_sh(148, y, cond_word(o.cond), WHITE, BLACK);
@@ -3088,13 +3269,13 @@ impl Game {
     fn draw_race_side(&self, s: &mut Screen, r: &Race) {
         const PER_M: f64 = 27.0;
         const NOSE: i32 = 172;
-        let at = |metres: f64| NOSE + ((metres - r.pos) * PER_M) as i32;
+        let at = |meters: f64| NOSE + ((meters - r.pos) * PER_M) as i32;
         s.vgrad(0, 0, 320, 70, ramp("NAVY"), 1, 8);
         for i in 0..30u32 {
             let h = hash(i + 7);
             s.pset((h % 320) as i32, ((h >> 9) % 60) as i32, shade(ramp("WHITE"), 10 + ((h >> 20) % 16) as i32));
         }
-        // The far wall, in boards ten metres long, and the floodlights over it.
+        // The far wall, in boards ten meters long, and the floodlights over it.
         let first = (r.pos / 10.0).floor() as i32 - 1;
         for k in first..first + 3 {
             let x = at(k as f64 * 10.0);
@@ -3192,11 +3373,11 @@ impl Game {
             s.rect(40, 12, 201, 1, shade(ramp("CHROME"), 12));
             s.rect(240, 8, 1, 9, WHITE);
             let mark = |pos: f64| 40 + ((pos / QUARTER).clamp(0.0, 1.0) * 200.0) as i32 - 2;
-            s.rect(mark(r.rival_pos), 13, 5, 3, shade(ramp(self.opponent().and_then(|v| v.1).as_deref().unwrap_or("GREY")), 24));
+            s.rect(mark(r.rival_pos), 13, 5, 3, shade(ramp(self.opponent().and_then(|v| v.1).as_deref().unwrap_or("GRAY")), 24));
             s.rect(mark(r.pos), 8, 5, 3, shade(ramp(self.owned().and_then(|o| o.paint.as_deref()).unwrap_or("WHITE")), 26));
         }
         if r.lean != 0.0 && r.phase == Phase::Run {
-            // Where the car is in its lane: the wall on the left, the centre line on the right.
+            // Where the car is in its lane: the wall on the left, the center line on the right.
             let (x0, w, y) = (120, 80, 22);
             let warn = r.drift.abs() > crate::race::LANE * 0.7;
             s.rect(x0, y, 2, 7, shade(ramp("CONCRETE"), 20));
@@ -3227,7 +3408,7 @@ impl Game {
             _ if started && !r.red && r.start == crate::race::Launch::Bogged => "BOGGED IT",
             _ if started && !r.red && r.start == crate::race::Launch::Spun => "TOO MANY REVS: WHEELSPIN",
             Phase::Run if r.lean != 0.0 && r.gear == 1 && r.pos < 40.0 && !r.red => "LEFT AND RIGHT: HOLD YOUR LANE",
-            _ if r.out == 1 => "OVER THE CENTRE LINE",
+            _ if r.out == 1 => "OVER THE CENTER LINE",
             _ if r.out == -1 => "INTO THE WALL",
             _ if r.red => "RED LIGHT",
             _ => "",
@@ -3275,14 +3456,14 @@ impl Game {
     }
 
     /// The view from the seat: the cabin is the pack's painting, and over it go the things that
-    /// move. Under it, through the glass, is the bonnet in the car's own paint.
+    /// move. Under it, through the glass, is the hood in the car's own paint.
     #[allow(clippy::too_many_arguments)]
     fn draw_cockpit(&self, s: &mut Screen, seat: &Cockpit, night: bool, rpm: f64, mph: f64, boost: f64, gear: usize, wheel: f64, shift: bool) {
         let Some((o, car)) = self.owned().zip(self.car()) else { return };
         let pic = |name: &Option<String>| name.as_ref().and_then(|n| self.pack.pictures.get(n));
         self.draw_wipers(s, seat.view_h);
-        if let Some(bonnet) = pic(&seat.bonnet) {
-            s.picture_tint(bonnet, 0, 0, Some(&Self::tint(car, o.paint.as_deref(), if night { 17 } else { 0 })));
+        if let Some(hood) = pic(&seat.hood) {
+            s.picture_tint(hood, 0, 0, Some(&Self::tint(car, o.paint.as_deref(), if night { 17 } else { 0 })));
         }
         let cabin = if night { pic(&seat.night) } else { None }.or_else(|| self.pack.pictures.get(&seat.picture));
         if let Some(cabin) = cabin {
@@ -3377,14 +3558,14 @@ impl Game {
                 None => {
                     // No picture of its back: a plain shape in its paint, with two lamps.
                     let w = (1.7 * cam.focal / depth) as i32;
-                    let (h, paint) = (w * 5 / 8, ramp(rv.paint.as_deref().unwrap_or("GREY")));
+                    let (h, paint) = (w * 5 / 8, ramp(rv.paint.as_deref().unwrap_or("GRAY")));
                     s.vgrad(x - w / 2, ground - h, w, h, paint, 20, 8);
                     s.rect(x - w / 2, ground - h * 2 / 5, w / 4, h / 8 + 1, shade(ramp("RED"), 22));
                     s.rect(x + w / 2 - w / 4, ground - h * 2 / 5, w / 4, h / 8 + 1, shade(ramp("RED"), 22));
                 }
             }
         }
-        // The floodlights: a pole, a hot spot, and the flare it makes on a dirty windscreen.
+        // The floodlights: a pole, a hot spot, and the flare it makes on a dirty windshield.
         for ((bx, by, depth), (tx, ty, _)) in lights {
             let rad = (cam.focal * 0.69 / depth) as i32;
             s.line(bx, by, tx, ty, shade(ramp("CHROME"), 6));
@@ -3507,9 +3688,9 @@ impl Game {
                     }
                 }
                 let Some(b) = block.filter(|b| b.height > 0.0) else {
-                    // Grass, and nothing to hit. Somewhere to go that is only a lot gets a marked kerb.
+                    // Grass, and nothing to hit. Somewhere to go that is only a lot gets a marked curb.
                     if block.is_some_and(|b| b.water) {
-                        // A pond: flat, a little below the kerb, and catching the light.
+                        // A pond: flat, a little below the curb, and catching the light.
                         let (wy, wave) = (base.min(g(x0, z0)).min(g(x1, z1)) - 0.4, ((self.ticks / 8 + c as u32) % 3) as i32);
                         scene.poly(&[[x0, wy, z0], [x1, wy, z0], [x1, wy, z1], [x0, wy, z1]], shade(ramp("BLUE"), 15 + wave * 2), shade(ramp("BLUE"), 17 + wave * 2), -3500.0);
                         continue;
@@ -3529,7 +3710,7 @@ impl Game {
                         f += 1;
                     }
                 }
-                // A cap round the top; and somewhere to go has an awning over the pavement.
+                // A cap round the top; and somewhere to go has an awning over the sidewalk.
                 Self::box3(&mut scene, x0 - 0.03, z0 - 0.03, x1 + 0.03, z1 + 0.03, base + b.height - 0.5, base + b.height, ramp("RUBBER"), 1.0);
                 if b.to.is_some() || b.road.is_some() {
                     Self::box3(&mut scene, x0 - 1.5, z0 - 1.5, x1 + 1.5, z1 + 1.5, base + 3.2, base + 4.0, ramp("GOLD"), 2.0);
@@ -3593,7 +3774,7 @@ impl Game {
                 if o.rig {
                     let f = (h.sin(), h.cos());
                     let at = |d: f64, up: f64| [ox + f.0 * d, oy + up, oz + f.1 * d];
-                    Self::stand(&mut scene, at(3.6, 0.35), f, 3.3, 1.0, 0.45, ramp("GREY"));
+                    Self::stand(&mut scene, at(3.6, 0.35), f, 3.3, 1.0, 0.45, ramp("GRAY"));
                     Self::stand(&mut scene, at(3.6, 0.8), f, 2.1, 0.85, 0.6, ramp(o.paint));
                     Self::stand(&mut scene, at(-3.6, 0.3), f, 2.5, 1.0, 1.0, ramp("WHITE"));
                     Self::stand(&mut scene, at(-3.2, 1.3), f, 1.2, 0.95, 0.75, ramp("GLASS"));
@@ -3654,7 +3835,7 @@ impl Game {
             }
             let (ox, oz) = (at.x, at.z);
             let oy = g(ox, oz);
-            a_car(&mut scene, ox, oz, at.h, who.paint.as_deref().unwrap_or("GREY"), who.car.as_ref().and_then(|c| cars.get(c)));
+            a_car(&mut scene, ox, oz, at.h, who.paint.as_deref().unwrap_or("GRAY"), who.car.as_ref().and_then(|c| cars.get(c)));
             if let Some((x, y, depth)) = scene.point([ox, oy + 1.9, oz]) {
                 if depth > 2.0 && depth < p * 4.0 && (0..320).contains(&x) {
                     // People before places: a name over a car keeps its spot, below the mirror.
@@ -3684,7 +3865,7 @@ impl Game {
         self.draw_rain(s, 320, view);
         s.clip_off();
         if let Some(seat) = seat {
-            let (gear, rpm, light) = match &town.gearbox {
+            let (gear, rpm, light) = match &town.transmission {
                 Some(b) => (b.gear + 1, b.rpm, b.rpm > b.redline - 700.0),
                 None => (if town.speed > 0.0 { self.auto.0 + 1 } else { 0 }, self.auto.1, false),
             };
@@ -3704,14 +3885,14 @@ impl Game {
         for r in 0..depth {
             for c in 0..cols {
                 let b = map.block(c, r);
-                let colour = match b {
+                let color = match b {
                     Some(b) if b.to.is_some() || b.road.is_some() => shade(ramp("GOLD"), 27),
                     Some(b) if b.water => shade(ramp("BLUE"), 18),
-                    Some(b) if b.height > 0.0 => shade(ramp("GREY"), 10),
+                    Some(b) if b.height > 0.0 => shade(ramp("GRAY"), 10),
                     _ => shade(ramp("GRASS"), 12),
                 };
                 // North is up, so the far rows of the map are drawn first.
-                s.rect(mx0 + c * cell + 1, my0 + (depth - 1 - r) * cell + 1, cell - 1, cell - 1, colour);
+                s.rect(mx0 + c * cell + 1, my0 + (depth - 1 - r) * cell + 1, cell - 1, cell - 1, color);
             }
         }
         if self.radar() {
@@ -3744,7 +3925,7 @@ impl Game {
             s.text_sh(216, 54, "RADAR!", shade(ramp("RED"), 27), BLACK);
         }
         self.draw_bottle(s, 45, self.owned().map_or(0.0, |o| o.bottle), town.spray > 0.0);
-        if let Some(b) = &town.gearbox {
+        if let Some(b) = &town.transmission {
             s.text_sh(280, 27, &format!("G{}", b.gear + 1), shade(ramp(if b.rpm > b.redline - 700.0 { "RED" } else { "WHITE" }), 26), BLACK);
         }
         // A race or a run: who is in front and by how much, how far there is to go, and the cards.
@@ -3757,7 +3938,7 @@ impl Game {
                 let (gap, name) = ((r.s - at) as i32, self.opponent().map_or("THEM".to_string(), |x| x.2.to_uppercase().chars().take(6).collect()));
                 let words = if gap > 2 { format!("{name} +{gap} M") } else if gap < -2 { format!("{name} {gap} M") } else { format!("{name} LEVEL") };
                 s.text_sh(98, 18, &words.chars().take(14).collect::<String>(), if gap > 2 { red } else { gold }, BLACK);
-                self.draw_launch(s, town.gearbox.as_ref(), town.best_launch, town.hold, town.held, town.start, at - 12.0);
+                self.draw_launch(s, town.transmission.as_ref(), town.best_launch, town.hold, town.held, town.start, at - 12.0);
                 if town.hold > 0 {
                     let n = format!("{}", (town.hold - 1) / 30 + 1);
                     s.text_big(150, 50, &n, BLACK, 4);

@@ -4,7 +4,7 @@
 The old games were painted, not drawn by the program: a picture for the dash, with the needles
 moving over it. This does the same. Each picture is built here at four times its size, with
 gradients, grain, soft shadows and real lettering, brought down to 320x240, and matched to the
-toolkit's 1,024 colours with an ordered dither. What comes out is run-length C arrays of palette
+toolkit's 1,024 colors with an ordered dither. What comes out is run-length C arrays of palette
 indices (0xFFFF is clear).
 
 Usage: tools/paint.py [--png DIR]   writes games/shootout/art.h; --png also saves each picture.
@@ -127,22 +127,22 @@ def fill(img, shape, top, bottom=None, y0=None, y1=None, across=False, grain=0, 
     img.paste(layer, (0, 0), m)
 
 
-def shade(img, shape, colour, alpha, blur=2, dx=0, dy=0):
+def shade(img, shape, color, alpha, blur=2, dx=0, dy=0):
     """A soft shadow or a soft light, laid over what is there."""
     m = mask_of(img.size, shape).filter(ImageFilter.GaussianBlur(blur * S))
     if dx or dy:
         m = Image.fromarray(np.roll(np.asarray(m), (int(dy * S), int(dx * S)), (0, 1)))
     m = m.point(lambda v: int(v * alpha))
-    img.paste(Image.new("RGBA", img.size, colour + (255,)), (0, 0), m)
+    img.paste(Image.new("RGBA", img.size, color + (255,)), (0, 0), m)
 
 
-def line(img, pts, colour, width=1.0):
-    ImageDraw.Draw(img).line([(x * S, y * S) for x, y in pts], fill=colour + (255,), width=max(1, int(width * S)), joint="curve")
+def line(img, pts, color, width=1.0):
+    ImageDraw.Draw(img).line([(x * S, y * S) for x, y in pts], fill=color + (255,), width=max(1, int(width * S)), joint="curve")
 
 
-def text(img, x, y, s, size, colour):
+def text(img, x, y, s, size, color):
     f = ImageFont.truetype(FONT, int(size * S))
-    ImageDraw.Draw(img).text((x * S, y * S), s, font=f, fill=colour + (255,), anchor="mm")
+    ImageDraw.Draw(img).text((x * S, y * S), s, font=f, fill=color + (255,), anchor="mm")
 
 
 def finish(img):
@@ -272,7 +272,7 @@ def cockpit(lit=False):
             x, y = polar(17, 224, r, a / 360)
             fill(img, disc(x, y, 0.7), (6, 6, 8))
 
-    # The centre stack, turned to face you: vents, the heater, the radio, and the gate for the shifter.
+    # The center stack, turned to face you: vents, the heater, the radio, and the gate for the shifter.
     stack = [(200, 142), (304, 147), (312, 240), (196, 240)]
     shade(img, poly(stack), (0, 0, 0), 0.5, 3, -2, 0)
     fill(img, poly(stack), (72, 73, 80), (34, 34, 38), grain=3)
@@ -466,7 +466,7 @@ def garage():
     return img
 
 
-# The wedge coupe, side on, in metres from the back bumper and up from the road: the outline of the
+# The wedge coupe, side on, in meters from the back bumper and up from the road: the outline of the
 # body, and of the glass in it.
 BODY = [(0.00, 0.34), (0.02, 0.78), (0.06, 0.93), (0.02, 0.99), (0.32, 0.985), (0.36, 0.95), (1.20, 1.14), (1.88, 1.25), (2.34, 1.21),
         (2.96, 0.88), (3.50, 0.80), (4.04, 0.68), (4.30, 0.60), (4.36, 0.52), (4.36, 0.36), (4.28, 0.25), (0.14, 0.25)]
@@ -529,7 +529,7 @@ def car_side(lamps):
         shade(img, disc(lx + 17, ly + 4.5, 3), (255, 250, 200), 0.6, 1.5)
     else:
         line(img, [at(3.86, 0.70), at(4.14, 0.645)], seam, 0.5)
-    # The wheels in their arches: a tyre, a rim with five spokes, and a bright lip.
+    # The wheels in their arches: a tire, a rim with five spokes, and a bright lip.
     for ax in AXLES:
         cx, cy = at(ax, 0.31)
         fill(img, disc(cx, cy, 0.385 * PPM), (6, 8, 14))
@@ -560,7 +560,7 @@ def main():
     ib, inn, iw = to_indices(base), to_indices(night, dither=9), to_indices(rim, dither=10)
     out = [
         "/* The game's painted pictures, as palette indices. Made by tools/paint.py; do not edit by hand.",
-        "   The pictures are run-length: width, height, then (count, colour) pairs. 0xFFFF is clear. */",
+        "   The pictures are run-length: width, height, then (count, color) pairs. 0xFFFF is clear. */",
         "#ifndef SHOOTOUT_ART_H\n#define SHOOTOUT_ART_H",
         f"#define ART_TACH_X {TACH[0]}\n#define ART_TACH_Y {TACH[1]}\n#define ART_DIAL_R {TACH[2]}",
         f"#define ART_SPEEDO_X {SPEEDO[0]}\n#define ART_SPEEDO_Y {SPEEDO[1]}",

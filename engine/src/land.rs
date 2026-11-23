@@ -17,7 +17,7 @@ pub const SITE: f64 = 30.0;
 /// How far past the edge of the tar the shoulder runs before the country starts.
 pub const SHOULDER: f64 = 1.0;
 
-/// A point down a road, every `SEG` metres: where it is, how high, which way it runs (radians,
+/// A point down a road, every `SEG` meters: where it is, how high, which way it runs (radians,
 /// clockwise from north), and what is on each side.
 #[derive(Clone, Copy, Debug)]
 pub struct Pt {
@@ -49,8 +49,8 @@ pub struct Site {
     pub h: f64,
 }
 
-/// Where a point is, near a road: which road, how far along it (metres), how far across from its
-/// middle (metres, to the right of the way its points run is more than nothing), and how high it is there.
+/// Where a point is, near a road: which road, how far along it (meters), how far across from its
+/// middle (meters, to the right of the way its points run is more than nothing), and how high it is there.
 #[derive(Clone, Copy, Debug)]
 pub struct Near {
     pub lane: usize,
@@ -72,7 +72,7 @@ impl Lane {
         (self.pts.len().saturating_sub(1)) as f64 * SEG
     }
 
-    /// The point `along` metres down it, and the way it runs there.
+    /// The point `along` meters down it, and the way it runs there.
     pub fn at(&self, along: f64) -> Pt {
         let f = (along / SEG).clamp(0.0, (self.pts.len() - 1) as f64);
         let i = (f.floor() as usize).min(self.pts.len().saturating_sub(2));
@@ -88,7 +88,7 @@ impl Lane {
         (d.sin().atan2(d.cos()) / BEND).clamp(-1.5, 1.5)
     }
 
-    /// `across` metres to the right of the point `along` metres down it.
+    /// `across` meters to the right of the point `along` meters down it.
     pub fn beside(&self, along: f64, across: f64) -> (f64, f64, f64) {
         let p = self.at(along);
         (p.x + p.h.cos() * across, p.z - p.h.sin() * across, p.y)
@@ -166,7 +166,7 @@ impl World {
         (!lanes.is_empty()).then(|| World { home: home.clone(), lanes, sites })
     }
 
-    /// The road nearest a point, if one is within `reach` metres of it.
+    /// The road nearest a point, if one is within `reach` meters of it.
     pub fn near(&self, x: f64, z: f64, reach: f64) -> Option<Near> {
         self.near_on(None, x, z, reach)
     }
@@ -232,7 +232,7 @@ impl World {
     }
 }
 
-/// Whether a point is inside a map's streets, give or take `margin` metres.
+/// Whether a point is inside a map's streets, give or take `margin` meters.
 pub fn in_town(map: &Map, x: f64, z: f64, margin: f64) -> bool {
     let (w, d, e) = (map.cols() as f64 * map.pitch, map.depth() as f64 * map.pitch, map.road + margin);
     x >= -e && z >= -e && x <= w + e && z <= d + e

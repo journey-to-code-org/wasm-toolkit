@@ -10,7 +10,7 @@ Sources: Street Rod from `kylofon/street-rod-sdl3` (`port/spec/game_flow.md`, `g
 `race.md`, section numbers as given). Test Drive from `kylofon/testdrive-enhanced` and
 `kylofon/testdrive3-enhanced` (their README and `ENHANCED.md`). Vette! from `Vesuri/vette`
 (`docs/manual.md`, `docs/gameplay-coverage.md`). The first three are MIT; the Vette! repository has
-no licence, so it is read and not copied. Nothing here is copied from any of them: our cars, town,
+no license, so it is read and not copied. Nothing here is copied from any of them: our cars, town,
 words and pictures are our own.
 
 ## Street Rod
@@ -20,7 +20,7 @@ words and pictures are our own.
 | What the original had | Ours | Status |
 | --- | --- | --- |
 | New game: $750, no car, straight to the paper (§4.6, §4.3) | The same | done |
-| A driver's licence where you type your name; "Old Game" on it (§4.6) | Enter for new, E for old; no name | part |
+| A driver's license where you type your name; "Old Game" on it (§4.6) | Enter for new, E for old; no name | part |
 | One game hour for each thing you do; 12 hours a day; real time also passes (§4.7) | An hour a thing, 12 a day; real time does not pass | part |
 | Day 0 is a Sunday in June; day 91 ends the summer (§4.7) | Day 1 to day 91, ending at the Shootout; no weekdays or months | part |
 | Calendar screen (§4.7) | The day on the wall, and a line when you pick it | part |
@@ -46,7 +46,7 @@ words and pictures are our own.
 | Change tires | None | no |
 | Change transmission | None | no |
 | Pop the hood | The hood | done |
-| Front bumper, rear bumper, the roof (customising) | None | no |
+| Front bumper, rear bumper, the roof (customizing) | None | no |
 | Stickers, $5 | None | no |
 | Wanna tank? | The gas can by the door | part |
 | Car info | None | no |
@@ -59,9 +59,9 @@ words and pictures are our own.
 | --- | --- | --- |
 | Front page with the date, then Used Cars or Auto Parts (§4.4) | Two pages, Cars and Parts | part |
 | 25 car models in classes, three makes; ads change (§5.2) | One model, in eight paints and a range of conditions | no |
-| 43 parts: engines, transmissions, carbs, manifolds, tyres, by make and grade (§5.1) | 4 bolt-ons: intake, turbo, exhaust, intercooler | no |
+| 43 parts: engines, transmissions, carbs, manifolds, tires, by make and grade (§5.1) | 4 bolt-ons: intake, turbo, exhaust, intercooler | no |
 | Parts only fit their make; manifolds and carbs must match (§5.1) | Everything fits | no |
-| Wear on engines, transmissions and tyres (§4.2) | A fixed engine condition a car; nothing wears | no |
+| Wear on engines, transmissions and tires (§4.2) | A fixed engine condition a car; nothing wears | no |
 | Selling spares: an offer of 70 to 89 hundredths for bolt-ons, by condition for the rest (§4.5) | The same for bolt-ons | done |
 | Selling a car, and what it is worth (§4.6) | The dealer's price, in the paper and the yard | done |
 
@@ -73,7 +73,7 @@ words and pictures are our own.
 | Swapping the whole engine; carbs on a manifold, 1 to 3 of them (§4.11) | None | no |
 | Tuning the ignition by ear (§4.13) | None | no |
 | Changing the transmission from under the car (§4.10) | None | no |
-| Changing tyres (§4.9) | None | no |
+| Changing tires (§4.9) | None | no |
 | "Is it runnable?" before you can leave (§4.12) | Every part on and bolted | done |
 | Top speed worked out from the parts (§4.16) | Torque and boost from the parts, at the strip | part |
 
@@ -84,7 +84,7 @@ words and pictures are our own.
 | The cruise across town to get there, 0.2 gallons a leg (§4.1) | The gas is spent; the cruise is not driven | part |
 | Opponents arrive one at a time after a wait; a car-hop comes and goes | One is always there; "Next" brings another | part |
 | 21 opponents in three classes of seven, and the King (`game_flow` §4.6) | 21 in three classes and the King, met in order | part |
-| Their cars: model, colour, and what has been done to them (§4.9) | A paint and a time each | part |
+| Their cars: model, color, and what has been done to them (§4.9) | A paint and a time each | part |
 | Drag race or road race | Drag only | no |
 | Bets: kicks, $10, $25, $50, $100, pink slips; he may refuse (`challenge_accept`) | The same; refusal by his limit and a dice roll | part |
 | Kicks do not count (§4.14) | The same | done |
@@ -111,7 +111,7 @@ words and pictures are our own.
 | --- | --- | --- |
 | A screen: take the cap off, take the nozzle, pump, pay | Filled in one go from the garage | part |
 | $1 for three gallons; $2 if you wait for full service | $1 for three gallons | part |
-| The attendant, the windscreen wash, forgetting the cap ($10) | None | no |
+| The attendant, the windshield wash, forgetting the cap ($10) | None | no |
 | A tank of 17 gallons; "You've got a full tank!"; "Gas ain't free!" | The same | done |
 
 ## Test Drive
@@ -125,7 +125,7 @@ words and pictures are our own.
 | Traffic both ways, and passing it | TD1 | Traffic on the grid, one way a street | part |
 | A radar detector, speed traps, the police chasing and stopping you | TD1 | None | no |
 | A gas station at the end of each stage; time and average speed scored | TD1 | None | no |
-| Crashing cracks the windscreen and costs a life | TD1 | A bump and a count of dents | part |
+| Crashing cracks the windshield and costs a life | TD1 | A bump and a count of dents | part |
 | Rear-view mirror that shows what is behind | TD1, TD3 (R) | A mirror with nothing in it | no |
 | Open 3D country you can leave the road in | TD3 `ENHANCED.md` Projection, Faces | A 3D grid of blocks | part |
 | Hills, bridges, tunnels, scenery as sprites | TD3 Sprites, Sky and ground | None | no |

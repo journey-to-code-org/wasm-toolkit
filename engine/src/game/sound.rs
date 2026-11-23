@@ -1,5 +1,5 @@
 //! What the car sounds like this tick, for a page that can make a sound of its own: how fast the
-//! engine is turning and how hard it is working, the turbo, the tyres, the wind and the law. The
+//! engine is turning and how hard it is working, the turbo, the tires, the wind and the law. The
 //! page turns these into noise; the engine only says what is happening.
 
 use super::*;
@@ -13,7 +13,7 @@ pub struct Sound {
     /// How much of its boost the turbo is making, 0 to 1; nothing without a turbo.
     pub boost: f32,
     pub cylinders: f32,
-    /// Tyres at their limit, 0 to 1.
+    /// Tires at their limit, 0 to 1.
     pub squeal: f32,
     /// Goes up by one each time the throttle shuts on boost: the page hears the valve let go.
     pub blowoffs: f32,
@@ -49,7 +49,7 @@ impl Game {
         let car = self.car();
         let cylinders = car.map_or(4, |c| c.drive.cylinders.max(1)) as f32;
         let turbo = self.owned().zip(car).is_some_and(|(o, c)| self.tune(o).1.is_some() || c.drive.boost.is_some());
-        // For a car with no gearbox to ask, the gear it has picked for itself.
+        // For a car with no transmission to ask, the gear it has picked for itself.
         let geared = |_: f64| self.auto.1;
         let mut s = match self.scene {
             Scene::Race => self.race.as_ref().map_or(Sound::default(), |r| Sound {
@@ -61,7 +61,7 @@ impl Game {
                 ..Sound::default()
             }),
             Scene::Road => self.trip.as_ref().map_or(Sound::default(), |t| {
-                let rpm = t.gearbox.as_ref().map_or_else(|| geared(t.speed), |b| b.rpm.max(800.0));
+                let rpm = t.transmission.as_ref().map_or_else(|| geared(t.speed), |b| b.rpm.max(800.0));
                 // A bend taken too fast, or the brakes hard on at speed.
                 let bend = t.seg(t.z).curve.abs() * (t.speed / 56.0).powi(2) * t.pace.slide;
                 let braking = keys & KEY_DOWN != 0 && t.speed > 12.0;
@@ -76,7 +76,7 @@ impl Game {
                 }
             }),
             Scene::Drive => self.town.as_ref().map_or(Sound::default(), |t| {
-                let rpm = t.gearbox.as_ref().map_or_else(|| geared(t.speed), |b| b.rpm.max(800.0));
+                let rpm = t.transmission.as_ref().map_or_else(|| geared(t.speed), |b| b.rpm.max(800.0));
                 Sound {
                     rpm: rpm as f32,
                     load: if gas { 1.0 } else { 0.15 },

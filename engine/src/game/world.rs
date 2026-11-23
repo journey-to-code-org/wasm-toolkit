@@ -26,7 +26,7 @@ pub struct Seen {
 
 /// How long to wait before trying the meet again, in ticks: half a minute.
 const AGAIN: u32 = 30 * 30;
-/// How near, in metres, someone has to be to be dared from the street.
+/// How near, in meters, someone has to be to be dared from the street.
 const NEAR_TOWN: f64 = 14.0;
 const NEAR_ROAD: f64 = 30.0;
 

@@ -3,7 +3,7 @@
 //!
 //!     cd engine && cargo test --lib balance -- --nocapture --ignored
 //!
-//! It keeps its car running (parts, a charge, a tune, a rebuild, tyres, gas), races the next one
+//! It keeps its car running (parts, a charge, a tune, a rebuild, tires, gas), races the next one
 //! up the ladder for what it can afford to lose, launches on the green a human reaction late,
 //! shifts near the redline and steers to hold its lane. When it cannot win it works, and buys
 //! whatever takes the most off its time for the money.
@@ -158,10 +158,10 @@ impl Game {
                 self.act("rebuild");
                 continue;
             }
-            if o.tyres > 70.0 {
+            if o.tires > 70.0 {
                 if self.state.cash < 100 { self.bot_work(s); continue; }
                 s.repairs += 80;
-                self.act("tyres");
+                self.act("tires");
                 continue;
             }
             if o.body > 60 && self.state.cash > 20 + o.body * 4 + 150 {

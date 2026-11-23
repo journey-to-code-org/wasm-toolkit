@@ -32,7 +32,7 @@ async function play(shots) {
     writeFileSync(`${shots}/${name}.ppm`, Buffer.concat([Buffer.from(`P6 ${W} ${H} 255\n`), out]));
   };
   const run = (n, keys, mx = 160, my = 100) => { for (let i = 0; i < n; i++) { x.wtk_input(keys, mx, my); x.wtk_step(); } };
-  const colours = (s) => new Set(s).size;
+  const colors = (s) => new Set(s).size;
 
   const click = (mx, my) => { run(1, 0, mx, my); run(1, A, mx, my); run(1, 0, mx, my); };
 
@@ -124,7 +124,7 @@ async function play(shots) {
   run(400, UP | LEFT);
   const later = screen();
   run(1, B); run(2, 0);
-  return { title, paper, bought, garage, lamps, hood, stripped, refused, fitted, yard, spares, gassed, lot, betting, staged, green, running, slip, after, parked, moving, later, tones, colours };
+  return { title, paper, bought, garage, lamps, hood, stripped, refused, fitted, yard, spares, gassed, lot, betting, staged, green, running, slip, after, parked, moving, later, tones, colors };
 }
 
 const one = await play(flag === "--shots" ? dir : null);
@@ -132,8 +132,8 @@ const two = await play(null);
 const same = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const differ = (a, b) => a.reduce((n, v, i) => n + (v !== b[i]), 0);
 
-for (const k of Object.keys(one)) if (k !== "tones" && k !== "colours") check(same(one[k], two[k]), `${k} is the same both times`);
-check(one.colours(one.title) >= 4, "the title has something on it");
+for (const k of Object.keys(one)) if (k !== "tones" && k !== "colors") check(same(one[k], two[k]), `${k} is the same both times`);
+check(one.colors(one.title) >= 4, "the title has something on it");
 check(differ(one.title, one.paper) > 20000, "a new game opens on the paper");
 check(differ(one.paper, one.bought) > 50, "a car can be bought out of it");
 check(differ(one.bought, one.garage) > 20000, "and it is in the garage");
@@ -152,7 +152,7 @@ check(differ(one.green, one.running) > 3000, "the car leaves the line");
 check(differ(one.running, one.slip) > 5000, "there is a timeslip at the other end");
 check(differ(one.slip, one.after) > 20000 && differ(one.after, one.lot) < 20000, "and then the lot again");
 check(differ(one.after, one.parked) > 20000 && differ(one.parked, one.moving) > 3000, "a cruise goes into town, and the street goes by");
-check(one.colours(one.moving) >= 40, "there is a town to look at, in a good many colours");
+check(one.colors(one.moving) >= 40, "there is a town to look at, in a good many colors");
 check(one.tones.some((hz) => hz > 60), "the engine makes a noise");
 check(one.tones.includes(70), "driving in circles ends at a wall");
 check(Math.max(...one.later) < 1024 && Math.max(...one.title) < 1024, "nothing is drawn outside the palette");

@@ -25,7 +25,7 @@ check(before.ok && again.ok && before.rgba.every((v, i) => v === again.rgba[i]),
 const pic = picDecode(pack.files.get("car.pic"));
 const stored = picDecode(picEncode(pic.w, pic.h, pic.ix));
 check(stored.w === pic.w && stored.ix.every((v, i) => v === pic.ix[i]), "a picture is stored and read back the same");
-check(groundOf(pic.w, pic.h, pic.ix) >= pack.manifest.cars.umbra.ground, "the ground is found under the tyres");
+check(groundOf(pic.w, pic.h, pic.ix) >= pack.manifest.cars.umbra.ground, "the ground is found under the tires");
 
 // A car made here: an orange slab with black wheels on a white background, 60 x 20.
 const w = 60, h = 20, rgba = new Uint8ClampedArray(w * h * 4);
@@ -40,7 +40,7 @@ check(RAMPS[made.ramp] === "ORANGE" && rampOf(pal, [20, 40, 230]) === RAMPS.inde
 check(made.ix[0] === CLEAR && made.ix[5 * w + 30] >> 5 === made.ramp && made.ix[13 * w + 10] >> 5 !== made.ramp, "background is clear, bodywork is paint, wheels are not");
 check(made.painted > 400 && made.painted < 560, "only the bodywork counts as paint");
 check(new Set(Array.from(made.ix).filter((v) => v >> 5 === made.ramp)).size > 3, "the paint keeps its light and shade");
-check(groundOf(w, h, made.ix) === 20, "its tyres are on the bottom row");
+check(groundOf(w, h, made.ix) === 20, "its tires are on the bottom row");
 check(slug("My '90 Coupe!") === "my-90-coupe", "names make ids");
 
 pack.files.set("slab.pic", picEncode(w, h, made.ix));
@@ -61,7 +61,7 @@ let threw = false;
 try { parsePack(new Uint8Array([1, 2, 3])); } catch { threw = true; }
 check(threw, "a file that is not a pack is refused by the page");
 
-// Cutting a sprite out of a sheet: a red square with a grey middle, on a noisy checkerboard.
+// Cutting a sprite out of a sheet: a red square with a gray middle, on a noisy checkerboard.
 {
   const w = 40, h = 30, rgba = new Uint8ClampedArray(w * h * 4);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -72,7 +72,7 @@ check(threw, "a file that is not a pack is refused by the page");
   const cut = knockOut(rgba, w, h, 40);
   check(cut && cut.w === 20 && cut.h === 14, "a cut is trimmed to the sprite: " + (cut && [cut.w, cut.h]));
   check(cut.rgba[3] === 255 && cut.rgba[0] === 200, "the sprite is kept");
-  check(cut.rgba[(6 * 20 + 10) * 4 + 3] === 255, "and so is the same grey as the board, inside it");
+  check(cut.rgba[(6 * 20 + 10) * 4 + 3] === 255, "and so is the same gray as the board, inside it");
   const whole = knockOut(rgba, w, h, 0);
   check(whole.w === w && whole.h === h, "at 0 nothing is taken away");
   check(knockOut(new Uint8ClampedArray(16 * 4).fill(90), 4, 4, 40) === null, "a box of nothing but background is nothing");

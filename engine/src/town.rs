@@ -1,13 +1,13 @@
 //! Driving round a map: the car, the other cars, and what there is to run into.
 //!
-//! Streets run north and south and east and west, one every `pitch` metres. What is between four
+//! Streets run north and south and east and west, one every `pitch` meters. What is between four
 //! streets is a block, and what stands on it is whatever the pack's map says. x is east, z is
 //! north; a heading of 0 faces north and turns clockwise.
 
 use crate::land::{in_town, Rolling, World};
 use crate::pack::{Block, Map};
 use crate::race::{Launch, BAND};
-use crate::road::Gearbox;
+use crate::road::Transmission;
 
 const HZ: f64 = 30.0;
 const PAINTS: [&str; 8] = ["BLUE", "SILVER", "WHITE", "GREEN", "GOLD", "TEAL", "MAROON", "ORANGE"];
@@ -46,7 +46,7 @@ pub struct Town {
     /// How hard it stops and how sharply it turns, as shares of an ordinary car's.
     pub brakes: f64,
     pub turn: f64,
-    /// How hard it pulls and how fast it will go, metres a second: the car's own, out of town.
+    /// How hard it pulls and how fast it will go, meters a second: the car's own, out of town.
     pub accel: f64,
     pub top: f64,
     /// The traffic out on the roads, when there is a world past the edge of town.
@@ -57,10 +57,10 @@ pub struct Town {
     pub fled: u32,
     /// Nitrous going in: how much more the car makes just now, as a fraction.
     pub spray: f64,
-    /// A race from a line: the gearbox, if the car has one to work (it is worked only in a race),
+    /// A race from a line: the transmission, if the car has one to work (it is worked only in a race),
     /// ticks until the off, and the start as the road has it: the best revs to launch from,
-    /// whether the clutch is still in, how it went, and how long the tyres spin or the engine bogs.
-    pub gearbox: Option<Gearbox>,
+    /// whether the clutch is still in, how it went, and how long the tires spin or the engine bogs.
+    pub transmission: Option<Transmission>,
     pub hold: i32,
     pub best_launch: f64,
     pub held: bool,
@@ -78,7 +78,7 @@ pub struct Pedals {
     pub stop: bool,
     pub left: bool,
     pub right: bool,
-    /// A gear up and a gear down, for a car with a gearbox to work.
+    /// A gear up and a gear down, for a car with a transmission to work.
     pub up: bool,
     pub down: bool,
 }
@@ -98,13 +98,13 @@ impl Town {
             Other { north, street: (k % streets as u32) as i32, along: ((k >> 8) % 1000) as f64 / 1000.0 * length as f64 * map.pitch, speed: 8.0 + ((k >> 20) % 8) as f64, paint: PAINTS[(k >> 4) as usize % 8] }
         }).collect();
         // On the street along the block's south side, in the right-hand lane, facing east.
-        // The police park on the pavement at a corner, never the one you set out from.
+        // The police park on the sidewalk at a corner, never the one you set out from.
         let cops = (0..map.cops.min(12)).map(|_| {
             let k = rand();
             let (cc, cr) = ((k % (map.cols() as u32 + 1)) as i32, ((k >> 8) % (map.depth() as u32 + 1)) as i32);
             (cc as f64 * map.pitch + map.road + 2.0, if (cc - c).abs() + (cr - r).abs() < 2 { (cr + 2) as f64 } else { cr as f64 } * map.pitch + map.road + 2.0)
         }).collect();
-        Town { cops, chase: None, map: id.to_string(), x: (c as f64 + 0.5) * map.pitch, z: r as f64 * map.pitch - 4.0, heading: 90.0, speed: 0.0, steer: 0.0, crash: 0, dents: 0, others, brakes: 1.0, turn: 1.0, accel: 5.0, top: 56.0, rolling: Vec::new(), town_cops: map.cops.min(12), fled: 0, spray: 0.0, gearbox: None, hold: 0, best_launch: 0.0, held: false, start: Launch::None, smoke: 0.0, bog: 0.0, abuse: 0.0, pull: 0.0 }
+        Town { cops, chase: None, map: id.to_string(), x: (c as f64 + 0.5) * map.pitch, z: r as f64 * map.pitch - 4.0, heading: 90.0, speed: 0.0, steer: 0.0, crash: 0, dents: 0, others, brakes: 1.0, turn: 1.0, accel: 5.0, top: 56.0, rolling: Vec::new(), town_cops: map.cops.min(12), fled: 0, spray: 0.0, transmission: None, hold: 0, best_launch: 0.0, held: false, start: Launch::None, smoke: 0.0, bog: 0.0, abuse: 0.0, pull: 0.0 }
     }
 
     /// The block this point is over: its column and row.
@@ -112,8 +112,8 @@ impl Town {
         ((x / map.pitch).floor() as i32, (z / map.pitch).floor() as i32)
     }
 
-    /// A street is clear. A block with something built on it is not, three metres in from the
-    /// kerb, and nor is the country beyond the last street.
+    /// A street is clear. A block with something built on it is not, three meters in from the
+    /// curb, and nor is the country beyond the last street.
     pub fn blocked(map: &Map, x: f64, z: f64) -> bool {
         let (w, d) = (map.cols() as f64 * map.pitch, map.depth() as f64 * map.pitch);
         if x < -map.road || z < -map.road || x > w + map.road || z > d + map.road {
@@ -140,7 +140,7 @@ impl Town {
         }).map(|(_, _, b)| b)
     }
 
-    /// A thirtieth of a second. Returns how far the car went, in metres, and whether it just hit something.
+    /// A thirtieth of a second. Returns how far the car went, in meters, and whether it just hit something.
     pub fn tick(&mut self, map: &Map, p: Pedals) -> (f64, bool) {
         self.tick_on(map, None, p)
     }
@@ -156,7 +156,7 @@ impl Town {
 
     /// On the line in a car with a clutch: the gas revs it freely, up to the limiter.
     fn rev_free(&mut self, gas: bool) {
-        if let Some(b) = self.gearbox.as_mut() {
+        if let Some(b) = self.transmission.as_mut() {
             b.rpm = if gas { (b.rpm + 5200.0 / HZ).min(b.redline - 250.0) } else { (b.rpm - 3600.0 / HZ).max(900.0) };
         }
     }
@@ -164,7 +164,7 @@ impl Town {
     /// Away from the line at whatever the revs are: a good start in the band, a bog well under
     /// it, and wheelspin over it.
     fn away(&mut self) {
-        let Some(b) = self.gearbox.as_mut().filter(|_| self.best_launch > 0.0) else { return };
+        let Some(b) = self.transmission.as_mut().filter(|_| self.best_launch > 0.0) else { return };
         let over = b.rpm - (self.best_launch + BAND);
         self.start = if b.rpm < self.best_launch - BAND * 2.0 { Launch::Bogged } else if over > 0.0 { Launch::Spun } else { Launch::Good };
         match self.start {
@@ -177,7 +177,7 @@ impl Town {
 
     /// A thirtieth of a second, in a world that may run on past the edge of town.
     pub fn tick_on(&mut self, map: &Map, land: Option<&World>, p: Pedals) -> (f64, bool) {
-        let clutch = self.best_launch > 0.0 && self.gearbox.is_some();
+        let clutch = self.best_launch > 0.0 && self.transmission.is_some();
         if self.hold > 0 {
             self.hold -= 1;
             if clutch {
@@ -201,11 +201,11 @@ impl Town {
             self.crash -= 1;
             return (0.0, false);
         }
-        // The pedals. It pulls hardest from rest and runs out of breath near 55 metres a second.
+        // The pedals. It pulls hardest from rest and runs out of breath near 55 meters a second.
         let (accel, top) = (self.accel.max(1.0), self.top.max(20.0));
-        // A gearbox, in a race: how hard it pulls is the gear it is in and where the revs are.
+        // A transmission, in a race: how hard it pulls is the gear it is in and where the revs are.
         let mut pull = 1.0;
-        if let Some(b) = self.gearbox.as_mut() {
+        if let Some(b) = self.transmission.as_mut() {
             if p.up && b.gear + 1 < b.ratios.len() {
                 b.gear += 1;
             }
@@ -229,7 +229,7 @@ impl Town {
         if p.go {
             let pull = pull * bite;
             // On the power the driven wheels drag it to one side: hardest low in the gears, going.
-            let low = match self.gearbox.as_ref() { Some(b) => 1.0 / ((b.gear + 1) as f64).powf(1.5), None => (1.0 - self.speed / top).max(0.0).powi(2) };
+            let low = match self.transmission.as_ref() { Some(b) => 1.0 / ((b.gear + 1) as f64).powf(1.5), None => (1.0 - self.speed / top).max(0.0).powi(2) };
             drag = self.pull * (pull.min(1.0) * low * (self.speed / 12.0).min(1.0) + if bite < 1.0 && self.smoke > 0.0 { 1.5 * (self.speed / 8.0).min(1.0) } else { 0.0 });
             self.speed += pull * accel * (1.0 + self.spray) / HZ * (1.0 - self.speed / (top * (1.0 + self.spray * 0.3)));
         } else {
@@ -250,7 +250,7 @@ impl Town {
             self.speed -= (self.speed - 9.0) * 1.5 / HZ;
         }
         let (s, c) = self.heading.to_radians().sin_cos();
-        // What the power drags it sideways, it goes sideways: half a road's width is five metres.
+        // What the power drags it sideways, it goes sideways: half a road's width is five meters.
         let side = drag * 5.0 / HZ;
         let (nx, nz) = (self.x + s * self.speed / HZ + c * side, self.z + c * self.speed / HZ - s * side);
         let mut hit = !Self::clear(map, land, nx + s * 2.0, nz + c * 2.0);
