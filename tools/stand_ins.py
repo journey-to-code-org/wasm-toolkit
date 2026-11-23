@@ -404,11 +404,61 @@ def inside():
     return p, slots
 
 
+# ---- The engine out, on a stand, from the side. ----
+
+def engine():
+    p = Pic((44, 44, 48))
+    slots = {}
+    # The shop wall and floor, and the stand: a post on a cross of legs, with its casters.
+    p.grad(box(0, 0, W, 140), (70, 72, 78), (46, 48, 52))
+    p.grad(box(0, 140, W, 36), (96, 98, 102), (64, 66, 70))
+    p.line([[0, 140], [W, 140]], (40, 40, 44), 1.0)
+    p.cylinder(30, 70, 70, 80, (200, 60, 40))
+    p.cylinder(30, 80, 40, 160, (200, 60, 40), across=False)
+    p.cylinder(10, 158, 90, 166, (200, 60, 40))
+    for x in (14, 86):
+        p.disc(x, 168, 5, (60, 60, 64), (20, 20, 22))
+    # The block: the body of it, with its ribs.
+    block = [[70, 64], [250, 64], [258, 120], [250, 128], [72, 128], [64, 120]]
+    p.shadow(block, blur=3, dx=3, dy=4)
+    p.grad(block, (150, 152, 158), (84, 86, 92))
+    for x in range(88, 248, 20):
+        p.line([[x, 70], [x, 124]], (110, 112, 118), 1.0)
+    block_bolts = [[78, 70], [242, 70], [244, 122], [80, 122]]
+    for b in block_bolts:
+        p.bolt(*b)
+    slots["Block"] = {"poly": block, "bolts": block_bolts, "behind": "Crankshaft"}
+    # The head on top, with its cam caps.
+    head = [[74, 36], [246, 36], [252, 62], [70, 62]]
+    p.shadow(head, blur=2, dy=3)
+    p.grad(head, (186, 188, 194), (110, 112, 118))
+    for x in range(90, 240, 18):
+        p.flat(box(x, 40, 10, 6), (120, 122, 128))
+    head_bolts = [[82, 56], [124, 56], [166, 56], [208, 56], [240, 56], [104, 42], [148, 42], [192, 42]]
+    for b in head_bolts:
+        p.bolt(*b, 2.0)
+    slots["Cylinder head"] = {"poly": head, "bolts": head_bolts}
+    slots["Bottom end"] = {"poly": [[90, 40], [232, 40], [236, 60], [86, 60]], "bolts": [[100, 50], [222, 50]], "behind": "Cylinder head", "covered": True}
+    # The oil pan underneath, and the crank behind it; the crank pulley out the front.
+    pan = [[96, 128], [236, 128], [228, 150], [104, 150]]
+    p.shadow(pan, blur=2)
+    p.grad(pan, (60, 62, 66), (26, 26, 28))
+    pan_bolts = [[102, 132], [166, 132], [230, 132]]
+    for b in pan_bolts:
+        p.bolt(*b, 1.8)
+    slots["Oil pan"] = {"poly": pan, "bolts": pan_bolts, "stock": "Oil pan"}
+    slots["Crankshaft"] = {"poly": [[104, 126], [228, 126], [224, 146], [108, 146]], "bolts": [[120, 136], [212, 136]], "behind": "Oil pan", "covered": True}
+    p.disc(262, 110, 14, (90, 92, 96), (30, 30, 32))
+    p.disc(262, 110, 5, (170, 172, 176), (80, 80, 84))
+    return p, slots
+
+
 AREAS = {
     "trunk": ("In the trunk", trunk),
     "under": ("Under the car", under),
     "wheels": ("At the wheels", wheel),
     "inside": ("Inside", inside),
+    "engine": ("On the engine stand", engine),
 }
 
 

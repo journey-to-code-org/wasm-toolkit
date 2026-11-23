@@ -284,7 +284,8 @@ fn under_the_hood_parts_come_off_bolt_by_bolt() {
     }
     assert_eq!(g.wont_run().as_deref(), Some("The exhaust is not bolted down."));
     click(&mut g, 120, 70);
-    assert_eq!((g.owned().unwrap().off.len(), g.state.hours), (1, 1), "lifting it off is an hour's work");
+    // Four bolts and a lift are twenty-two minutes: not yet an hour.
+    assert_eq!((g.owned().unwrap().off.len(), g.state.hours), (1, 0), "work is counted in minutes");
     assert_eq!(g.wont_run().as_deref(), Some("The exhaust is off. It will not run."));
     assert_eq!(g.floor(), vec![Loose::Stock("Exhaust".into()), Loose::Part("pipe".into())]);
     g.draw(&mut s);
