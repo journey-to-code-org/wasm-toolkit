@@ -40,8 +40,9 @@ All five steps are in the engine. The engine plays a season out of a pack:
   the pack, or a slot its hood does not show, parts go on and off here with one pick. A part
   that goes under the hood takes you there holding it: where it goes blinks, and so do the
   bolts to undo, then the bolts to do up once it is in.
-- **Parts in the paper**: with a car in the bay, only what fits it, each with its slot and,
-  pointed at, what it does. Bought from the garage, FIT PARTS goes straight to the bench. The
+- **Parts in the paper**: with a car in the bay, only what fits it, grouped by where on the car
+  it goes (a button for each group across the top), each with its slot and, pointed at, what
+  it does. Bought from the garage, FIT PARTS goes straight to the bench. The
   default garage has Parts and Hood buttons as well as its spots.
 - **The yard**: up to sixteen cars; bring one into the bay or sell it to the dealer.
 - **Rivals**: they pull in one at a time, in the pack's order. Race for kicks, for money up to
@@ -58,7 +59,7 @@ All five steps are in the engine. The engine plays a season out of a pack:
   them, with mountains along the horizon and trees on the open ground. Buildings are what the map
   says they are; other cars are about. A map in the corner shows the blocks, where there is to
   go in gold, and you; every place to go has a sign on a pole on its roof and its name written
-  over it in the windscreen. When it rains the wipers go. A hill slows the car going up it and hurries it going down.
+  over it in the windshield. When it rains the wipers go. A hill slows the car going up it and hurries it going down.
   A town can have police at its corners and a limit: pass one more than ten over and he is
   behind you until you stop for the ticket; he is not to be lost in town, and running for
   twenty-five seconds doubles it. A radar detector puts them on the corner map.
@@ -83,15 +84,15 @@ All five steps are in the engine. The engine plays a season out of a pack:
   any other. If the meet cannot be reached the game plays alone and tries again every half minute.
 - **Sound**: the page makes the car's sound itself from what the engine says each tick: an
   engine note at the firing rate of its cylinders that opens up under load, intake roar, turbo
-  whistle as it spools and the blow-off valve when the throttle shuts on boost, tyres squealing
+  whistle as it spools and the blow-off valve when the throttle shuts on boost, tires squealing
   at their limit or under hard braking, the wind, and a siren behind you. Parts change it: a big
   exhaust is louder and deeper, a header raspier, an open filter roars, a big turbo whistles and
   blows off harder, nitrous hisses, and no exhaust at all is loud. M mutes it all. A page
   without this (or an older one) still gets the beeps.
-- **The clutch**: in a car with a manual gearbox there is no launch limiter on the strip: the revs
+- **The clutch**: in a car with a manual transmission there is no launch limiter on the strip: the revs
   go where your foot puts them. Hold Down for the clutch, Space for first, feather the gas to hold
   the revs in the green band on the screen (the car's `launch` speed, give or take 600), and let
-  the clutch out on the green. Well under the band it bogs; over it the tyres spin for a while
+  the clutch out on the green. Well under the band it bogs; over it the tires spin for a while
   (slower, and pulling harder to the side) and the clutch wears a point for every 150 revs over.
   Space on the green without the clutch still drops it in from wherever the revs are. An
   automatic sits against its converter at its launch speed, as before. On a phone, Clutch is the
@@ -106,8 +107,8 @@ All five steps are in the engine. The engine plays a season out of a pack:
   for the road the other way. The rollers' pass uses it.
 - **Torque steer**: on the strip a car has to be kept in its lane with the wheel (left and
   right). A front-wheel-drive car pulls hard to one side off the line and in the low gears, an
-  all-wheel-drive one less, a rear-driven one only with its tyres spinning; which side is the
-  same for a car all day. Over the centre line or into the wall is a disqualification, and the
+  all-wheel-drive one less, a rear-driven one only with its tires spinning; which side is the
+  same for a car all day. Over the center line or into the wall is a disqualification, and the
   wall is a dent. On a road the power drags it across the lane the same way. A marker at the top
   of the screen shows where the car is in its lane.
 - **Brakes and suspension**: better brakes stop shorter and better suspension takes bends
@@ -119,7 +120,7 @@ All five steps are in the engine. The engine plays a season out of a pack:
   takes it whole if it runs; a shell good enough to sell (body no worse than 70) goes for the
   shell, with every part stripped onto the shelf first, in a day's work (eight hours); or the scrapyard takes it
   as it stands, for $50 and a little for each part still on it. Any car can also just sit.
-- **Wear**: parts a pack says wear do, with every pass and every kilometre. A tired one costs
+- **Wear**: parts a pack says wear do, with every pass and every kilometer. A tired one costs
   power, a note says when one will not last, and one that wears out stops the car. A battery
   runs down with the lamps left on overnight, or sitting in the yard, and charges as you drive.
 - **A can of gas**: a car with too little in it to leave home is not stuck: trying to drive
@@ -162,7 +163,7 @@ All five steps are in the engine. The engine plays a season out of a pack:
   the weakest lets go, sooner the more it is over. Fit a stronger one and the next weakest is next.
 - **Wear and damage**: every knock on the road or in town marks the body, which shows as
   scuffs on the car, takes a little off its top speed and up to half off what it is worth, until
-  it is straightened. Tyres wear with every launch and every mile, and worn ones have up to three
+  it is straightened. Tires wear with every launch and every mile, and worn ones have up to three
   tenths less grip, until a new set goes on. The rollers' sheet says how both stand.
 - **Nitrous**: a kit is a part and a bottle. The bottle is filled where the pack says, lasts
   seconds, and is more power while the button is held.
@@ -177,7 +178,7 @@ All five steps are in the engine. The engine plays a season out of a pack:
   step at a time. Timing and boost make power and make knock; fuel cools it, and too much or too
   little costs power. Knock costs power too, because the computer pulls timing, and every pull or
   race with the engine knocking takes some of its health. The tune stays with the car.
-- **Gearboxes**: a car is a manual or an automatic. An automatic leaves a moment after the
+- **Transmissions**: a car is a manual or an automatic. An automatic leaves a moment after the
   green and shifts itself. A manual is shifted by hand, on the strip and now on the road as
   well: there each gear runs out at the redline, Space or E is the next one and Q the one before.
 - **People**: whoever you are up against can stand by their car, and a place can have a crowd.
@@ -205,25 +206,25 @@ what a pack is made of and fails if the workshop has no place for any of it.
 **Cutting pictures out of a sheet.** Wherever a picture can be dropped there is also "Or cut one
 out of a sheet". Open a sheet of sprites, drag a box round the one you want, and it is cut out,
 its background taken away, trimmed, and used as if you had dropped it. The background is
-whatever runs round the edge of the box, a flat colour or the two greys of a checkerboard, and
-it is taken from the edges inwards, so the same colour inside the picture stays. A slider says
-how alike a colour has to be to count; at 0 nothing is taken away. The sheet stays open for the
+whatever runs round the edge of the box, a flat color or the two grays of a checkerboard, and
+it is taken from the edges inwards, so the same color inside the picture stays. A slider says
+how alike a color has to be to count; at 0 nothing is taken away. The sheet stays open for the
 next cut.
 
 **Cars**
 - Drop in the car's picture from the side, nose to the right. Any PNG will do; one wider than
   the screen is scaled down, and you choose how wide it stands in the game.
-- A PNG with a clear background is best. For one saved on a plain colour, tick the box and the
-  corner's colour is made clear.
-- The red line is where the tyres touch. It starts under the lowest pixel; drag it up if the
+- A PNG with a clear background is best. For one saved on a plain color, tick the box and the
+  corner's color is made clear.
+- The red line is where the tires touch. It starts under the lowest pixel; drag it up if the
   picture has a shadow under the car.
-- Click the bodywork in the picture and everything of about that colour becomes the paint; the
-  car can then be shown in any of the 31 colours. Bright highlights that are nearly white are
+- Click the bodywork in the picture and everything of about that color becomes the paint; the
+  car can then be shown in any of the 31 colors. Bright highlights that are nearly white are
   left as they are.
 - A second picture, the same size, is the car with its headlamps on.
 - Its price in the paper, and under "What makes it go" its torque curve, gears, weight, grip
   and turbo.
-- From the seat: drop in the cabin painting, its night version, the bonnet, the steering wheel
+- From the seat: drop in the cabin painting, its night version, the hood, the steering wheel
   and the car from behind, and say where the dials, shift light and gear gate are. While that
   section is open, the game beside it is seen from the seat.
 - Under its hood: drop in a photo of the engine bay as the car came. Add a place for each part
@@ -232,8 +233,8 @@ next cut.
   part is, and drag each bolt to where it really is.
 
 **Rooms**
-- A room is a picture (320 by 200) or a plain colour. Tick whether your car stands in it and
-  whether rivals pull in, and drag the two crosses to where their tyres meet the floor.
+- A room is a picture (320 by 200) or a plain color. Tick whether your car stands in it and
+  whether rivals pull in, and drag the two crosses to where their tires meet the floor.
 - The things to pick are boxes on the picture: add one, drag it, size it by its corner, and say
   what it is called and what picking it does. A box can be drawn as a button.
 - People standing about: drop or cut a picture, say how tall it is made, and place it by its
@@ -242,8 +243,8 @@ next cut.
 **Maps**
 - A map is painted from above: pick a kind of block and click or drag over the grid. Set how
   many blocks across and down it is.
-- Each kind of block has a colour and a height, or is open ground, and can lead to a room, with
-  the name it goes by on the list in the windscreen.
+- Each kind of block has a color and a height, or is open ground, and can lead to a room, with
+  the name it goes by on the list in the windshield.
 - The game beside it shows the map from the seat, beside the first place there is to go.
 - A room gets a way onto a map from the Rooms tab: a thing to pick that goes "out for a drive".
 - A kind of block can be the way onto a road in place of leading to a room.
@@ -291,7 +292,7 @@ The workshop has no tests of its own in CI; `web/pack.js`, which reads and write
       car.png
       car-lamps.png
 
-`tools/pack.py content/default web/default.pack` matches each PNG to the 1,024 colours, stores it
+`tools/pack.py content/default web/default.pack` matches each PNG to the 1,024 colors, stores it
 run-length as `<name>.pic`, and puts everything in one file. PNGs may be any size up to 320x240;
 transparent pixels stay clear.
 
@@ -306,7 +307,7 @@ workshop keeps a dropped picture fine on its own when the file has the dots for 
 ## Photos
 
 `tools/pixelate.py` turns a photo, or any picture, into a PNG that the engine draws exactly as
-the PNG looks: cut to shape, brought down to size and matched to the 1,024 colours.
+the PNG looks: cut to shape, brought down to size and matched to the 1,024 colors.
 
     tools/pixelate.py bay.jpg --as bay                  # 320 x 176, for under a hood
     tools/pixelate.py garage.jpg --as room --pop 1.2    # 320 x 200, with more punch
@@ -315,7 +316,7 @@ the PNG looks: cut to shape, brought down to size and matched to the 1,024 colou
 
 `--as` is one of bay, room, cockpit, car, rear, wheel. `--fit cover` (the default) fills the
 shape and cuts what hangs over, keeping the `--focus` part; `contain` keeps all of it. `--dither`
-sets how much the colours are stippled, `--sharpen` crispens a shrunken photo, and `--big 3`
+sets how much the colors are stippled, `--sharpen` crispens a shrunken photo, and `--big 3`
 saves a blown-up copy to look at. A picture it has made goes into a pack untouched, by
 `tools/pack.py` or by the workshop. The workshop does the same conversion itself for anything
 dropped into it, so the script is for doing many, or for seeing the result first.
@@ -353,11 +354,11 @@ dropped into it, so the script is for doing many, or for seeing the result first
 - **start**: the cash, place and car a new game begins with. `car` may be left out, and then
   the first thing to do is buy one.
 - **cars**: `side` is the car from the side. `side_lamps` is the same picture with the lamps on,
-  if there is one. `ground` is the row of the picture the tyres stand on. `paint_ramps` names the
-  colour ramps the picture was painted in, and `paint` the ramp the body is shown in, so one
-  picture serves every colour.
+  if there is one. `ground` is the row of the picture the tires stand on. `paint_ramps` names the
+  color ramps the picture was painted in, and `paint` the ramp the body is shown in, so one
+  picture serves every color.
 - **places**: `picture` fills the top 200 rows; without one, `backdrop` names a ramp to fade.
-  `car_at` is where the car stands: x of the picture's left edge, y of the floor under its tyres.
+  `car_at` is where the car stands: x of the picture's left edge, y of the floor under its tires.
 - **spots**: `rect` is x, y, width, height. `needs_car` hides the spot when you have no car.
   An empty `do` only shows the label. Otherwise `do` is one of:
 
@@ -389,7 +390,7 @@ dropped into it, so the script is for doing many, or for seeing the result first
   | `shootout` | enter the shootout, on a day it is held |
   | `charge` | put the battery of the car in the bay on the charger: 5 dollars, two hours |
   | `bodywork` | straighten the body of the car in the bay: 20 dollars and 4 for each point of damage |
-  | `tyres` | a new set of tyres, 80 dollars |
+  | `tires` | a new set of tires, 80 dollars |
   | `sleep` | bed: the rest of today is gone and it is morning |
   | `nitrous` | fill the bottle of the nitrous kit on the car in the bay |
   | `dyno` | the rollers: strap the car down, make a pull, read the sheet, open the laptop |
@@ -437,10 +438,10 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 - **cars**: `price` is what one in fair shape costs; a car with no price never comes up in the
   paper. `drive` is what makes it go: `torque` is pound-feet at the wheels at each engine speed,
   at full boost if it has a turbo; `boost` is the turbo (`from` the rpm it wakes at, `psi`, and
-  `lag`, bigger being lazier) or `null`. A car with no `drive` gets a two-litre turbo four.
+  `lag`, bigger being lazier) or `null`. A car with no `drive` gets a two-liter turbo four.
   Two cars may share a picture.
-- **cars** may have a `hood`: the engine bay, up to 320x176, as the car came, and the places on
-  it where parts sit.
+- **cars** may have a `hood`: the engine bay, 320x176 (or 640x352, kept fine), as the car came,
+  and the places on it where parts sit.
 
   ```json
   "hood": { "picture": "bay.pic", "slots": {
@@ -457,12 +458,31 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   it is then just a stock part that comes off and goes back on, and the car will not run
   without it. Split things as finely as you like: an air filter and an intake pipe can be two
   places, each with its own parts. The floor under the hood shows up to eight loose parts.
+
+  A place can be a shape in place of a box: `"poly": [[x, y], ...]`, its corners in order, up to
+  160 of them. A point is on it if a line from it crosses the outline an odd number of times,
+  so a tire is drawn round its outside, in along a cut, and round its inside backwards: a ring.
+  Two shapes joined out and back along one line are one place (both front axles). Bolts on a
+  shape are best given where they are; `"bolts": 0` is a part held by nothing, as a tire is.
+  `"covered": true` with `behind` says the picture does not show it at all: it cannot be seen
+  or picked until what it is behind is off, and is then drawn plain, with its name (cams under
+  the valve cover, the fuel pump under the trunk's access cover).
+- **cars** may have `areas`: other places on the car worked on as under the hood is, each with
+  an `id`, a `title`, a `picture` and `slots` as a hood has. The default cars have the trunk
+  (`trunk`), underneath on the lift (`under`), a front wheel (`wheels`) and the inside
+  (`inside`). Under the hood and the areas are tabs across the top of the work, and a slot is
+  in at most one of them; one in none of them is done at the bench. `work` opens the first,
+  and `work:<id>` one of them; the bench sends a part to where it goes, held.
+
+  `tools/stand_ins.py` draws the default pack's pictures of the trunk, the underside, the wheel
+  and the inside, and prints where each part is on them. They are stand-ins: drop a photo on
+  one in the workshop and move the shapes to where the parts are on it.
 - **cars** may have a `cockpit`, the view from the seat, and a `rear`, the car from behind for
   when it is ahead of you:
 
   ```json
   "cockpit": {
-    "picture": "cockpit.pic", "night": "cockpit-night.pic", "bonnet": "bonnet.pic", "view_h": 136,
+    "picture": "cockpit.pic", "night": "cockpit-night.pic", "hood": "hood.pic", "view_h": 136,
     "tach": { "at": [95, 170], "r": 17, "max": 9000 },
     "speedo": { "at": [145, 170], "r": 17, "max": 160 },
     "boost": { "at": [27, 96], "r": 9, "max": 30 },
@@ -474,7 +494,7 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   ```
 
   `picture` is the cabin, 320 by 240, with the glass left clear; `view_h` is how far down the
-  view out goes. `bonnet` is drawn under it in the car's paint, using the car's `paint_ramps`.
+  view out goes. `hood` is drawn under it in the car's paint, using the car's `paint_ramps`.
   Each dial is where its needle turns, the needle's length and what it reads at full sweep;
   `minis` are dials that only sit there. The wheel is a square picture turned about `at`.
   Everything but `picture` may be left out.
@@ -497,8 +517,8 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   workshop.
 - **parts**: one part to a `slot`; the slots are whatever the parts name. `torque` is a
   percentage more. A part with `boost` replaces the car's turbo. `"fits": ["umbra"]` keeps a part to those cars.
-  Beyond torque a part can have `grip` (per cent more, for tyres), `weight_lb` (what it adds;
-  less than nothing saves weight), `gears` and `final` (a gearbox in place of the car's own) and
+  Beyond torque a part can have `grip` (per cent more, for tires), `weight_lb` (what it adds;
+  less than nothing saves weight), `gears` and `final` (a transmission in place of the car's own) and
   `redline` (a built engine's). `"curve": [[1000, 120], [4000, 300], [7000, 240]]` is a different
   engine altogether: its torque curve, in place of the car's. `"radar": true` makes it a radar detector for the road.
   `"needs": ["a 4-bolt diff"]` and `"gives": ["a 4-bolt diff"]` tie parts together: a part's
@@ -524,7 +544,7 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   A spare whose `needs` are all met by other spares sells with them as a set, for 15 per cent
   more than apart; with them missing it fetches a fifth less.
   `"wears": 2` is the per cent of itself a pass down the strip takes off it, and four
-  kilometres of road or town the same. Past half it costs a little power; at nothing it is done
+  kilometers of road or town the same. Past half it costs a little power; at nothing it is done
   for and the car will not run. `"takes": ["Valves"]` names slots whose parts are finished with
   it when it wears out in use: a timing belt that lets go bends the valves.
   `"charges": true` makes it a battery: at 15 per cent or less it is flat and the car will not
@@ -535,7 +555,7 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   the clutch holds, every launch over that burns some of it away, and a worn one holds less.
   A pack can hold 120 parts; the paper and the bench turn over a page at a time.
   `"tuner": true` makes it a laptop and a cable, which opens the tune at the rollers.
-  `"auto": true` or `false` on a gearbox part makes the car an automatic or a manual.
+  `"auto": true` or `false` on a transmission part makes the car an automatic or a manual.
   `"nitrous": { "gain": 35, "seconds": 8, "fill": 20 }` makes it a nitrous kit: while N (or
   Shift, or the N2O button on a phone) is held with the throttle down, the engine makes that
   much more, on the strip in gear above 2,500 rpm and on a road. A full bottle lasts that many
@@ -594,10 +614,10 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
 
 Each letter of a row is a block, the top row being the north side; a full stop is grass. There
 is a street between every two blocks and one round the outside, and nothing beyond. A block has
-a `wall` colour and a `height` in metres, or neither for open ground. A block with `to` is
+a `wall` color and a `height` in meters, or neither for open ground. A block with `to` is
 somewhere to go: it gets an awning (or a gold lot, if nothing is built on it), it is on the list
-in the windscreen under `name`, and pulling up beside it and pressing Enter puts you in that
-place. `hills` is how high the ground rolls, in metres, up to 30; left out, the town is flat.
+in the windshield under `name`, and pulling up beside it and pressing Enter puts you in that
+place. `hills` is how high the ground rolls, in meters, up to 30; left out, the town is flat.
 A block with `"water": true` is a pond: blue, flat, and not to be driven on.
 `cops`, `limit` and `ticket` put police at that many corners, with a limit in miles an hour
 and what a ticket costs; with no police there is no limit.
@@ -609,7 +629,7 @@ its edge, each from the street it leaves by, bending and climbing as its stretch
 the places at their ends stand where the roads end. A road that starts at a place starts where
 the road before it ended; one from a place back to the same place is bent round to close as a
 loop. You drive out past the last street and on down the road with no change of view: the same
-car, keys and windscreen, with the road's traffic both ways, rock, trees, rails and water
+car, keys and windshield, with the road's traffic both ways, rock, trees, rails and water
 beside it as its stretches say, and the world from above in the corner. Off the tar it is slow
 going, and into what is solid beside the road is a crash, as in town. Pull up in a place's lot
 and Enter goes in; its `road:` buttons put you back in the car in its lot facing down that road,
@@ -619,7 +639,7 @@ a `rung` turns you round a little way down it until you have climbed that far. A
 sit beside it, its `limit` and `ticket` are the law on it, and out there he can be outrun: well
 over the limit for twenty seconds and he is lost. A loop is turned all the way round, with its
 water on the inside. `roadrace:` and `pokerrun:` are run out on the road too: a race starts side
-by side in the place's lot with a count, the clutch and the gearbox as on the strip (the gearbox
+by side in the place's lot with a count, the clutch and the transmission as on the strip (the transmission
 is worked by hand only in a race), no police, and first to the far end; a run deals a card at
 each sixth of the loop and is settled back where it began. Nitrous works anywhere you drive.
 Racing other people down a road is still on the road view. Left out, each road is driven on a
@@ -646,9 +666,9 @@ a block marked `"road": "<this road>"` is the way onto it and where you come out
 spot that does `road:<road>` takes it. It is the same road both ways: driven from its second end,
 the bends and climbs are turned about.
 
-It is made of stretches (`parts`), first end first. Each has a `len` in metres (12 or more; the
-whole road between 200 metres and 30 kilometres), one `curve` from -1 (hard left) to 1 (hard
-right) that eases in and out, one `hill` in metres climbed (less than nothing falls; 80 at most),
+It is made of stretches (`parts`), first end first. Each has a `len` in meters (12 or more; the
+whole road between 200 meters and 30 kilometers), one `curve` from -1 (hard left) to 1 (hard
+right) that eases in and out, one `hill` in meters climbed (less than nothing falls; 80 at most),
 and what is on its `left` and `right`:
 
 | Beside the road | What it is | Leaving the road there |
@@ -673,14 +693,14 @@ The rules of the road:
   for forty-five seconds, or crash with him behind you, and it is twice the ticket. He takes
   what you have if you do not have it all.
 - A part with `"radar": true` fitted to the car is a detector: it beeps, and the screen says
-  so, when police are within 220 metres ahead.
+  so, when police are within 220 meters ahead.
 - Reaching the far end takes `hours` off the day. Escape turns round and puts you back where you
   set out, unless you are being chased. A town you came to by road has no stepping back out of it:
   pull up somewhere.
-- It burns `gas_per_km` gallons a kilometre. Run dry and you walk home, as in town.
+- It burns `gas_per_km` gallons a kilometer. Run dry and you walk home, as in town.
 - The car is the one in the bay: what its engine makes for what it weighs, with its parts and
-  its health, is how hard it pulls and how fast it will go, and its tyres are how much a bend
-  throws it. The default car with nothing done to it pulls 5 metres a second each second from
+  its health, is how hard it pulls and how fast it will go, and its tires are how much a bend
+  throws it. The default car with nothing done to it pulls 5 meters a second each second from
   rest and runs out at 125 mph.
 
 **Leaving town.** When the block that leads onto a road is at the edge of its map, the street
@@ -749,7 +769,7 @@ up to four minutes at the far end for the other.
 ## The file
 
 `WPK1`, a u32 count, then for each file: u16 name length, the name, u32 length, the bytes. All
-little-endian. A `.pic` is u16 width, u16 height, then (count, colour) pairs; colour `0xFFFF` is
+little-endian. A `.pic` is u16 width, u16 height, then (count, color) pairs; color `0xFFFF` is
 clear.
 
 ## Balance

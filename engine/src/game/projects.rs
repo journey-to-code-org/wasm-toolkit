@@ -163,14 +163,14 @@ impl Game {
         self.save();
     }
 
-    pub(super) fn draw_projects(&self, s: &mut Screen, ink: u16, grey: u16, hover: u16) {
+    pub(super) fn draw_projects(&self, s: &mut Screen, ink: u16, gray: u16, hover: u16) {
         let list = self.projects();
         let over = self.row(8, 312, 54, 62, PROJECTS);
         for (i, p) in list.iter().enumerate() {
             let y = 54 + i as i32 * 62;
-            s.rect(8, y + 61, 304, 1, grey);
+            s.rect(8, y + 61, 304, 1, gray);
             let Some(p) = p else {
-                s.text(12, y + 24, "GONE.", grey);
+                s.text(12, y + 24, "GONE.", gray);
                 continue;
             };
             if over == Some(i) {
@@ -179,20 +179,20 @@ impl Game {
             let car = &self.pack.manifest.cars[&p.owned.car];
             self.draw_car(s, &p.owned.car, p.owned.paint.as_deref(), false, 12, y + 41, true);
             s.text(180, y + 4, &car.name.to_uppercase().chars().take(16).collect::<String>(), ink);
-            s.text(180, y + 14, &format!("IN {}", p.from.to_uppercase()).chars().take(16).collect::<String>(), grey);
+            s.text(180, y + 14, &format!("IN {}", p.from.to_uppercase()).chars().take(16).collect::<String>(), gray);
             s.text(180, y + 24, &format!("${} + ${}", p.price, p.ship), shade(ramp("FOREST"), 12));
             let on = over == Some(i) && self.px >= 248 && (self.py - 54) % 62 >= 30 && (self.py - 54) % 62 < 42;
             if p.days > 0 {
-                s.text(180, y + 34, &format!("{} DAY{}", p.days, if p.days == 1 { "" } else { "S" }), grey);
+                s.text(180, y + 34, &format!("{} DAY{}", p.days, if p.days == 1 { "" } else { "S" }), gray);
             }
-            s.text(256, y + 34, "HAGGLE", if on { shade(ramp("RED"), 20) } else { grey });
+            s.text(256, y + 34, "HAGGLE", if on { shade(ramp("RED"), 20) } else { gray });
             // What the seller has to say for it, as much as there is room for.
             for (n, line) in p.says.iter().take(2).enumerate() {
                 s.text(12, y + 43 + n as i32 * 9, &line.to_uppercase().chars().take(37).collect::<String>(), ink);
             }
         }
         if list.is_empty() {
-            s.text(12, 60, "NOTHING SOLD AS IT STANDS TODAY.", grey);
+            s.text(12, 60, "NOTHING SOLD AS IT STANDS TODAY.", gray);
         }
     }
 }

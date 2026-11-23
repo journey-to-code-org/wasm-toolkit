@@ -1,14 +1,14 @@
 //! A road out of town: two lanes that bend and climb, other cars both ways, and police.
 //!
-//! The road is cut into short lengths, each with a bend and a height. Along it, `z` is metres
-//! from the start; across it, `x` is in half-widths: 0 the centre line, 0.5 the middle of your
+//! The road is cut into short lengths, each with a bend and a height. Along it, `z` is meters
+//! from the start; across it, `x` is in half-widths: 0 the center line, 0.5 the middle of your
 //! lane, 1 the edge, and past that whatever is beside the road.
 
 use crate::pack::{Road, Stretch};
 pub use crate::town::Pedals;
 
 pub const HZ: f64 = 30.0;
-/// The length of one piece of road, and half its width, in metres.
+/// The length of one piece of road, and half its width, in meters.
 pub const SEG: f64 = 6.0;
 pub const HALF: f64 = 5.0;
 pub const MPH: f64 = 2.237;
@@ -67,13 +67,13 @@ pub struct Cop {
     pub done: bool,
 }
 
-/// What the car being driven can do on a road: how hard it pulls, in metres a second each second
-/// from rest; how fast it will go, in metres a second; and how much a bend throws it, 1 being usual.
+/// What the car being driven can do on a road: how hard it pulls, in meters a second each second
+/// from rest; how fast it will go, in meters a second; and how much a bend throws it, 1 being usual.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Pace {
     pub accel: f64,
     pub top: f64,
-    /// How far a bend taken fast throws the car: less with better suspension and stickier tyres.
+    /// How far a bend taken fast throws the car: less with better suspension and stickier tires.
     pub slide: f64,
     /// How hard the brakes stop it, as a share of an ordinary car's.
     pub brakes: f64,
@@ -88,10 +88,10 @@ impl Default for Pace {
     }
 }
 
-/// A gearbox worked by hand: each gear's ratio with the final drive in it, where the engine stops
+/// A transmission worked by hand: each gear's ratio with the final drive in it, where the engine stops
 /// pulling, where it pulls hardest, and the gear it is in and the revs it is at.
 #[derive(Clone, Debug, PartialEq)]
-pub struct Gearbox {
+pub struct Transmission {
     pub ratios: Vec<f64>,
     pub redline: f64,
     pub peak: f64,
@@ -99,7 +99,7 @@ pub struct Gearbox {
     pub rpm: f64,
 }
 
-impl Gearbox {
+impl Transmission {
     pub fn revs(&self, gear: usize, speed: f64) -> f64 {
         (speed / 0.3 * self.ratios[gear] * 60.0 / std::f64::consts::TAU).max(900.0)
     }
@@ -161,14 +161,14 @@ pub struct Trip {
     pub pace: Pace,
     /// Nitrous going in: how much more the car makes just now, as a fraction.
     pub spray: f64,
-    /// The gearbox, if the car has one to work. Without, it changes gear itself.
-    pub gearbox: Option<Gearbox>,
+    /// The transmission, if the car has one to work. Without, it changes gear itself.
+    pub transmission: Option<Transmission>,
     /// A race: who against, and how many ticks until the off.
     pub rival: Option<Rival>,
     pub hold: i32,
     /// A start from the line, in a car with a clutch: the engine speed it launches best from (none
     /// for an automatic), whether the clutch is still in after GO, how the launch went, how long
-    /// the tyres still spin or the engine still bogs, and how many revs over the band it was let
+    /// the tires still spin or the engine still bogs, and how many revs over the band it was let
     /// out at.
     pub best_launch: f64,
     pub held: bool,
@@ -211,7 +211,7 @@ impl Trip {
             y += p.hill;
         }
         let len = segs.len() as f64 * SEG;
-        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, gearbox: None, rival: None, hold: 0, best_launch: 0.0, held: false, start: crate::race::Launch::None, smoke: 0.0, bog: 0.0, abuse: 0.0, clock: 0, rigs: road.rigs.clamp(0.0, 1.0), flow: ((road.limit - 55.0) / 2.237).max(0.0), poker: false, cards: Vec::new(), rng: seed | 1 };
+        let mut trip = Trip { road: id.to_string(), backwards, segs, z: 0.0, x: 0.5, speed: 0.0, steer: 0.0, crash: 0, scrapes: 0, others: Vec::new(), cops: Vec::new(), chase: None, fled: 0, radar: false, pace: Pace::default(), spray: 0.0, transmission: None, rival: None, hold: 0, best_launch: 0.0, held: false, start: crate::race::Launch::None, smoke: 0.0, bog: 0.0, abuse: 0.0, clock: 0, rigs: road.rigs.clamp(0.0, 1.0), flow: ((road.limit - 55.0) / 2.237).max(0.0), poker: false, cards: Vec::new(), rng: seed | 1 };
         for i in 0..road.traffic {
             let z = 80.0 + (trip.rand() % (len - 80.0).max(1.0) as u32) as f64;
             let other = trip.other(z, i);
@@ -261,15 +261,15 @@ impl Trip {
 
     /// On the line in a car with a clutch: the gas revs it freely, up to the limiter.
     fn rev_free(&mut self, gas: bool) {
-        if let Some(b) = self.gearbox.as_mut() {
+        if let Some(b) = self.transmission.as_mut() {
             b.rpm = if gas { (b.rpm + 5200.0 / HZ).min(b.redline - 250.0) } else { (b.rpm - 3600.0 / HZ).max(900.0) };
         }
     }
 
     /// Away from the line at whatever the revs are: within the band of its best launch speed it is
-    /// a good start; well under, it bogs for a moment; over, the tyres spin for a while.
+    /// a good start; well under, it bogs for a moment; over, the tires spin for a while.
     fn away(&mut self) {
-        let Some(b) = self.gearbox.as_mut().filter(|_| self.best_launch > 0.0) else { return };
+        let Some(b) = self.transmission.as_mut().filter(|_| self.best_launch > 0.0) else { return };
         let (band, best) = (crate::race::BAND, self.best_launch);
         let over = b.rpm - (best + band);
         self.start = if b.rpm < best - band * 2.0 { crate::race::Launch::Bogged } else if over > 0.0 { crate::race::Launch::Spun } else { crate::race::Launch::Good };
@@ -283,7 +283,7 @@ impl Trip {
 
     pub fn tick(&mut self, road: &Road, p: Pedals) -> Happened {
         let mut out = Happened::default();
-        let clutch = self.best_launch > 0.0 && self.gearbox.is_some();
+        let clutch = self.best_launch > 0.0 && self.transmission.is_some();
         if self.hold > 0 {
             self.hold -= 1;
             if clutch {
@@ -326,9 +326,9 @@ impl Trip {
             self.crash -= 1;
             return out;
         }
-        // A gearbox: how hard it pulls is the gear it is in and where the revs are, and at the redline it stops pulling.
+        // A transmission: how hard it pulls is the gear it is in and where the revs are, and at the redline it stops pulling.
         let mut pull = 1.0;
-        if let Some(b) = self.gearbox.as_mut() {
+        if let Some(b) = self.transmission.as_mut() {
             if p.up && b.gear + 1 < b.ratios.len() {
                 b.gear += 1;
             }
@@ -339,7 +339,7 @@ impl Trip {
             let last = b.ratios[b.ratios.len() - 1];
             pull = if b.rpm >= b.redline { 0.0 } else { 0.75 * (b.ratios[b.gear] / last).sqrt() * (b.rpm / b.peak).clamp(0.4, 1.0) };
         }
-        // A launch let out too high spins the tyres a while; too low, it bogs.
+        // A launch let out too high spins the tires a while; too low, it bogs.
         let bite = if self.smoke > 0.0 {
             self.smoke -= 1.0 / HZ;
             0.6
@@ -356,7 +356,7 @@ impl Trip {
                 self.x += self.pace.pull * 1.5 * (self.speed / 8.0).min(1.0) / HZ;
             }
             // On the power the driven wheels drag it to one side: hardest low in the gears, going.
-            let low = match self.gearbox.as_ref() { Some(b) => 1.0 / ((b.gear + 1) as f64).powf(1.5), None => (1.0 - self.speed / self.pace.top).max(0.0).powi(2) };
+            let low = match self.transmission.as_ref() { Some(b) => 1.0 / ((b.gear + 1) as f64).powf(1.5), None => (1.0 - self.speed / self.pace.top).max(0.0).powi(2) };
             self.x += self.pace.pull * pull.min(1.0) * low * (self.speed / 12.0).min(1.0) / HZ;
             self.speed += pull * self.pace.accel * (1.0 + self.spray) / HZ * (1.0 - self.speed / (self.pace.top * (1.0 + self.spray * 0.3)));
         } else {

@@ -2,7 +2,7 @@
 
 A toolkit for games that look and run like 1989, and the first game built on it.
 
-`wtk` is one 320x240 screen of palette indices, 1,024 colours in 32 ramps of 32 shades, drawn by the
+`wtk` is one 320x240 screen of palette indices, 1,024 colors in 32 ramps of 32 shades, drawn by the
 game in plain C: boxes, lines, dithered gradients, an 8x8 font, and lit polygons sorted far to near. No libc, no floats, no allocation. It
 builds to WebAssembly with clang and nothing else, and a small page shows the screen, scaled up in
 whole pixels, and plays the PC speaker.
@@ -39,7 +39,7 @@ click a part on the floor to pick it up, and click where it goes to set it down.
 | Path | What it is |
 | --- | --- |
 | `toolkit/wtk.h` | The whole interface, with what each call does |
-| `toolkit/wtk.c` | The screen, drawing, fixed-point maths, 3D, and the door to the host |
+| `toolkit/wtk.c` | The screen, drawing, fixed-point math, 3D, and the door to the host |
 | `toolkit/font.c` | The 8x8 font (public domain, from Daniel Hepper's font8x8) |
 | `art/` | Pictures brought in as they are: `engine-bay.png` is Mikey Nichols's picture of his own engine bay |
 | `tools/paint.py` | Paints the pictures at four times their size, brings them down to 320x240 and the palette with a dither, and writes them as C |

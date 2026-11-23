@@ -15,13 +15,13 @@ const pal = viewer.palette;
 const css = (c) => `rgb(${c & 255},${(c >> 8) & 255},${(c >> 16) & 255})`;
 const nice = (ramp) => ramp[0] + ramp.slice(1).toLowerCase();
 const DOES = [["", "Nothing: only its name shows"], ["say", "Says something"], ["go", "Goes to another room"], ["lamps", "Works the headlamps"], ["paper", "Opens the paper"],
-  ["hood", "Opens the hood"], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
-  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["pokerrun", "A poker run down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a colour"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"], ["shootout", "Enters the shootout"], ["bodywork", "Knocks the dents out"], ["charge", "Charges the battery"], ["tuneup", "The shop tunes it on the factory map"], ["ghosts", "Other people's cars: drive through them, or hit them"], ["setup", "Sets up adjustable suspension: stiff for the strip, soft for the road"], ["tyres", "Fits new tyres"]];
+  ["hood", "Opens the hood"], ["work", "Opens the car to work on: under the hood, the trunk, underneath, the wheels..."], ["parts", "Opens the shelf of parts"], ["yard", "Opens the yard"], ["calendar", "Says what day it is"], ["race", "Races whoever has pulled in"],
+  ["next", "Waves them on"], ["solo", "A pass down the strip alone"], ["drive", "Out for a drive on a map"], ["road", "Takes a road out of town"], ["roadrace", "Races whoever has pulled in down a road"], ["pokerrun", "A poker run down a road"], ["gas", "Fills the tank"], ["online", "The meet: race other people"], ["rebuild", "Rebuilds the engine"], ["paint", "A respray: pick a color"], ["dyno", "The rollers: what the car makes"], ["nitrous", "Fills the nitrous bottle"], ["sleep", "Sleeps until morning"], ["shootout", "Enters the shootout"], ["bodywork", "Knocks the dents out"], ["charge", "Charges the battery"], ["tuneup", "The shop tunes it on the factory map"], ["ghosts", "Other people's cars: drive through them, or hit them"], ["setup", "Sets up adjustable suspension: stiff for the strip, soft for the road"], ["tires", "Fits new tires"]];
 const TABS = [["cars", "Cars"], ["rooms", "Rooms"], ["maps", "Maps"], ["roads", "Roads"], ["parts", "Parts"], ["rivals", "Rivals"], ["game", "The game"]];
 
 let pack = null;
-const at = { tab: "cars", car: null, place: null, spot: -1, slot: null, map: null, brush: ".", road: null, stretch: 0, tall: 44 };
-// The pictures dropped in this visit, by car, so they can be matched to the colours again when a
+const at = { tab: "cars", car: null, place: null, spot: -1, slot: null, area: null, map: null, brush: ".", road: null, stretch: 0, tall: 44 };
+// The pictures dropped in this visit, by car, so they can be matched to the colors again when a
 // setting changes: { side, lamps (ImageBitmaps), width, corner, body: [r, g, b] | null, within }.
 const sources = new Map();
 
@@ -60,7 +60,7 @@ function tick(label, value, set) {
 function list(items, current, pick) {
   return h("ul", { class: "list" }, items.map(([id, words]) => h("li", {}, h("button", { "aria-current": String(id === current), text: words, onclick: () => pick(id) }))));
 }
-const colours = (none) => [...(none ? [["", none]] : []), ...RAMPS.slice(1).map((r) => [r, nice(r)])];
+const colors = (none) => [...(none ? [["", none]] : []), ...RAMPS.slice(1).map((r) => [r, nice(r)])];
 const carChoices = () => Object.entries(pack.manifest.cars).map(([id, c]) => [id, c.name]);
 function freshId(words, taken) {
   let id = slug(words);
@@ -74,7 +74,18 @@ function fail(why) { $("problem").textContent = why; }
 async function start(bytes) {
   pack = parsePack(bytes);
   // A place under a hood may be written as its box alone; here each is given its long form.
-  for (const c of Object.values(pack.manifest.cars)) for (const [name, slot] of Object.entries(c.hood?.slots ?? {})) if (Array.isArray(slot)) c.hood.slots[name] = { rect: slot };
+  for (const c of Object.values(pack.manifest.cars)) {
+    for (const area of areasOf(c)) for (const [name, slot] of Object.entries(area.place.slots ?? {})) {
+      if (Array.isArray(slot)) area.place.slots[name] = { rect: slot };
+      else if (slot.poly?.length >= 3) slot.rect = boundsOf(slot.poly);
+    }
+    // Words a pack once had the British way.
+    if (c.cockpit?.bonnet) { c.cockpit.hood ??= c.cockpit.bonnet; delete c.cockpit.bonnet; }
+  }
+  (function american(v) {
+    if (Array.isArray(v)) v.forEach((x, i) => { if (x === "GREY") v[i] = "GRAY"; else american(x); });
+    else if (v && typeof v === "object") for (const k of Object.keys(v)) { if (v[k] === "GREY") v[k] = "GRAY"; else if (v[k] === "tyres" && k === "do") v[k] = "tires"; else american(v[k]); }
+  })(pack.manifest);
   sources.clear();
   const m = pack.manifest;
   Object.assign(at, { car: m.start.car ?? Object.keys(m.cars)[0] ?? null, place: m.start.place, spot: -1, slot: null });
@@ -288,7 +299,7 @@ function boxes(canvas, scale, items, { selected, select, moved, done }) {
 
 // ---- Cars ----
 
-// Match the dropped pictures to the game's colours again and put them in the pack.
+// Match the dropped pictures to the game's colors again and put them in the pack.
 function convert() {
   const src = sources.get(at.car), c = car();
   if (!src?.side) return;
@@ -385,7 +396,7 @@ function tidy() {
   const m = pack.manifest, used = new Set();
   for (const c of Object.values(m.cars)) {
     for (const p of Object.values(m.parts ?? {})) { used.add(p.picture); used.add(p.side); }
-    for (const name of [c.side, c.side_lamps, c.hood?.picture, c.rear?.picture, c.front?.picture, c.cockpit?.wheel?.night, c.cockpit?.picture, c.cockpit?.night, c.cockpit?.bonnet, c.cockpit?.wheel?.picture, c.cockpit?.wheel?.night]) used.add(name);
+    for (const name of [c.side, c.side_lamps, c.hood?.picture, c.rear?.picture, c.front?.picture, c.cockpit?.wheel?.night, c.cockpit?.picture, c.cockpit?.night, c.cockpit?.hood, c.cockpit?.wheel?.picture, c.cockpit?.wheel?.night]) used.add(name);
   }
   for (const p of Object.values(m.places)) { used.add(p.picture); for (const who of p.people ?? []) used.add(who.picture); }
   for (const r of m.rivals ?? []) used.add(r.figure);
@@ -396,14 +407,14 @@ function tidy() {
 function carsPanel() {
   const m = pack.manifest;
   const out = [h("section", {}, h("h2", { text: "Cars in this pack" }),
-    list(Object.entries(m.cars).map(([id, c]) => [id, c.name + (m.start.car === id ? "  (starts)" : "")]), at.car, (id) => { at.car = id; at.slot = null; render(); }),
+    list(Object.entries(m.cars).map(([id, c]) => [id, c.name + (m.start.car === id ? "  (starts)" : "")]), at.car, (id) => { at.car = id; at.slot = null; at.area = null; render(); }),
     h("div", { class: "row" }, h("button", { text: "Add a car", onclick: addCar }), h("button", { text: "Remove this one", onclick: removeCar, disabled: !at.car })))];
   if (!at.car) return out;
   const c = car(), src = sources.get(at.car), pic = pack.files.get(c.side) && picDecode(pack.files.get(c.side)), canPaint = !!c.paint_ramps?.mid;
   const ground = h("input", { type: "range", min: 1, max: pic ? pic.h : 200, id: "ground" });
   ground.value = c.ground;
   ground.oninput = () => { c.ground = +ground.value; if (src) src.groundSet = true; $("groundOut").textContent = c.ground; drawSide(); touch(); };
-  const paint = h("select", { id: "paint", style: "flex:1", disabled: !canPaint }, colours("As painted").map(([v, w]) => new Option(w, v)));
+  const paint = h("select", { id: "paint", style: "flex:1", disabled: !canPaint }, colors("As painted").map(([v, w]) => new Option(w, v)));
   paint.value = canPaint ? c.paint ?? "" : "";
   paint.onchange = () => { if (paint.value) c.paint = paint.value; else delete c.paint; render(); };
   const within = h("input", { type: "range", min: 5, max: 90, id: "within" });
@@ -427,18 +438,18 @@ function carsPanel() {
     h("p", { class: "hint", text: "Use pictures that are yours to use. They stay in your browser until you save the pack." }),
     src?.side ? h("div", {},
       field("How wide it is in the game, in pixels (the screen is 320)", src.width, () => {}, { type: "number", min: 16, max: 320, id: "width", onchange: (e) => change(() => { src.width = +e.target.value || src.width; src.groundSet = false; }) }),
-      tick("The corner's colour is background: make it clear", src.corner, (v) => change(() => { src.corner = v; }))) : null,
-    h("label", { for: "ground" }, "Where the tyres touch the ground: row ", h("output", { id: "groundOut", text: String(c.ground) })), ground,
+      tick("The corner's color is background: make it clear", src.corner, (v) => change(() => { src.corner = v; }))) : null,
+    h("label", { for: "ground" }, "Where the tires touch the ground: row ", h("output", { id: "groundOut", text: String(c.ground) })), ground,
     h("label", { for: "paint", text: "Its paint" }),
     h("div", { class: "row" }, paint, h("span", { class: "swatch", style: `background:${canPaint && c.paint ? css(pal[RAMPS.indexOf(c.paint) * 32 + 20]) : "transparent"}` })),
     src?.body ? h("div", {}, h("label", { for: "within", text: "How much of the picture counts as paint" }), within) : null,
     h("p", { class: "hint", id: "paintHint", text: canPaint
-      ? src?.body ? `${src.painted} pixels count as paint. Click the picture again to pick a different colour.` : "This picture's paint can be shown in any colour."
-      : src?.side ? "To show this car in other colours, click its bodywork in the picture." : "Drop the picture in again to say which part of it is paint." }),
+      ? src?.body ? `${src.painted} pixels count as paint. Click the picture again to pick a different color.` : "This picture's paint can be shown in any color."
+      : src?.side ? "To show this car in other colors, click its bodywork in the picture." : "Drop the picture in again to say which part of it is paint." }),
     field("What one in fair shape costs in the paper (blank: never for sale)", c.price, (v) => { if (v > 0) c.price = Math.floor(v); else delete c.price; }, { type: "number", min: 1, max: 99999, id: "price" }),
     tick("A new game starts with this car", m.start.car === at.car, (v) => { if (v) m.start.car = at.car; else delete m.start.car; }),
     h("details", { id: "driveBox" }, h("summary", { text: "What makes it go" }),
-      h("p", { class: "hint", text: "Left blank, a car gets a two-litre turbo four and five gears." }),
+      h("p", { class: "hint", text: "Left blank, a car gets a two-liter turbo four and five gears." }),
       h("label", { for: "torque", text: "Torque at the wheels: an engine speed and the pound-feet it makes there, one pair to a line" }), curve,
       h("div", { class: "two" },
         field("Gears, first gear first", (d.gears ?? []).join(" "), (v) => drive("gears")(numbers(v).length ? numbers(v) : null), { id: "gears" }),
@@ -446,7 +457,7 @@ function carsPanel() {
         field("Redline, rpm", d.redline, drive("redline"), { type: "number", step: 100, min: 1000 }),
         field("Revs held on the line", d.launch, drive("launch"), { type: "number", step: 100, min: 1000 }),
         field("Weight, lb", d.weight_lb, drive("weight_lb"), { type: "number", min: 500 }),
-        field("Grip (12 is all four tyres)", d.grip, drive("grip"), { type: "number", step: "0.5", min: 1 })),
+        field("Grip (12 is all four tires)", d.grip, drive("grip"), { type: "number", step: "0.5", min: 1 })),
       tick("It is an automatic: it shifts itself, on the strip and on the road", !!d.auto, (v) => { c.drive ??= {}; if (v) c.drive.auto = true; else delete c.drive.auto; }),
       field("Cylinders (how its engine sounds: 4, 6, 8)", d.cylinders ?? 4, (v) => { c.drive ??= {}; if (v > 0 && v !== 4) c.drive.cylinders = Math.min(16, Math.floor(v)); else delete c.drive.cylinders; }, { type: "number", min: 1, max: 16 }),
       choice("The wheels it drives", d.driven ?? "rear", [["rear", "The back ones: it hardly pulls to a side"], ["front", "The front ones: it pulls hard to a side on the power (torque steer)"], ["all", "All four: it pulls a little"]], (v) => { c.drive ??= {}; if (v && v !== "rear") c.drive.driven = v; else delete c.drive.driven; }),
@@ -456,14 +467,9 @@ function carsPanel() {
         field("Boost, psi", turbo.psi, (v) => { turbo.psi = v ?? 20; }, { type: "number" }),
         field("Lag (6 quick, 10 lazy)", turbo.lag, (v) => { turbo.lag = v ?? 6; }, { type: "number" })) : null),
     seatForm(c),
-    h("details", { id: "hoodForm", open: !!c.hood }, h("summary", { text: "Under its hood" }),
-      h("p", { class: "hint", text: "A picture of the engine bay as the car came, with every stock part on it. A photo will do: it is cut to 320 by 176 and brought into the game's colours. Parts are then taken off and put on there, bolt by bolt." }),
-      dropZone("The engine bay", async (f) => {
-        try { pack.files.set(`${at.car}-bay.pic`, await wholePicture(f, 176)); } catch { return fail("That file is not a picture the browser can read."); }
-        c.hood = { picture: `${at.car}-bay.pic`, slots: c.hood?.slots ?? {} };
-        tidy(); render();
-      }),
-      c.hood ? hoodSlots(c) : null)));
+    h("details", { id: "hoodForm", open: areasOf(c).length > 0 }, h("summary", { text: "Places to work on it" }),
+      h("p", { class: "hint", text: "Each is a picture of part of the car, as it came, with every stock part on it: under the hood, the trunk, underneath on the lift, a wheel, the inside. A photo will do: it is cut to 320 by 176 (or 640 by 352, kept fine) and brought into the game's colors. Parts are taken off and put on there, bolt by bolt." }),
+      areasForm(c))));
   return out;
 }
 
@@ -491,7 +497,7 @@ function seatForm(c) {
     drop("The cabin", `${at.car}-cockpit.pic`, 240, (n) => { c.cockpit = { view_h: 136, ...c.cockpit, picture: n }; }),
     k ? [
       drop("The cabin at night (optional)", `${at.car}-cockpit-night.pic`, 240, (n) => { k.night = n; }),
-      drop("The bonnet through the glass, in the car's paint (optional)", `${at.car}-bonnet.pic`, 240, (n) => { k.bonnet = n; }),
+      drop("The hood through the glass, in the car's paint (optional)", `${at.car}-hood.pic`, 240, (n) => { k.hood = n; }),
       drop("The steering wheel: a square picture, up to 176", `${at.car}-wheel.pic`, 176, (n) => { k.wheel = { at: [120, 216], ...k.wheel, picture: n }; }, "square"),
       k.wheel ? pair("Where the middle of the wheel goes", () => k.wheel.at, (v) => { k.wheel.at = v; }) : null,
       k.wheel ? drop("The steering wheel at night (optional)", `${at.car}-wheel-night.pic`, 176, (n) => { k.wheel.night = n; }, "square") : null,
@@ -515,8 +521,8 @@ function seatForm(c) {
     drop("The car from behind, for when it is ahead of you: the strip, a road, town (up to 96 wide)", `${at.car}-rear.pic`, 96, (n) => { c.rear = { width_m: 1.7, ...c.rear, picture: n }; }, "small"),
     drop("The car from in front, for when it is coming at you: a road, town (up to 96 wide)", `${at.car}-front.pic`, 96, (n) => { c.front = { width_m: 1.7, ...c.front, picture: n }; }, "small"),
     c.rear || c.front ? h("div", { class: "two" },
-      c.rear ? field("How wide it is from behind, metres", c.rear.width_m ?? 1.7, (n) => { c.rear.width_m = Math.max(0.5, Math.min(4, n ?? 1.7)); }, { type: "number", step: "0.05", min: 0.5, max: 4 }) : null,
-      c.front ? field("How wide it is from in front, metres", c.front.width_m ?? 1.7, (n) => { c.front.width_m = Math.max(0.5, Math.min(4, n ?? 1.7)); }, { type: "number", step: "0.05", min: 0.5, max: 4 }) : null) : null,
+      c.rear ? field("How wide it is from behind, meters", c.rear.width_m ?? 1.7, (n) => { c.rear.width_m = Math.max(0.5, Math.min(4, n ?? 1.7)); }, { type: "number", step: "0.05", min: 0.5, max: 4 }) : null,
+      c.front ? field("How wide it is from in front, meters", c.front.width_m ?? 1.7, (n) => { c.front.width_m = Math.max(0.5, Math.min(4, n ?? 1.7)); }, { type: "number", step: "0.05", min: 0.5, max: 4 }) : null) : null,
     h("details", { id: "sheetForm" }, h("summary", { text: "Its build sheet: the parts it left the factory with" }),
       h("p", { class: "hint", text: "A car with a build sheet is made of real parts: each can come off, wear out, break and be sold. One line for each: the slot, an equals sign, and the part that fills it (by the short name it has in the pack). Slots under the hood can be on it too: then what is there is a real part, with no stock one left lying on the floor when it comes off." }),
       (() => {
@@ -532,13 +538,13 @@ function seatForm(c) {
       })(),
       c.stock ? field("The slots it will run without (seats, cruise control), with commas between", (c.optional ?? []).join(", "), (v) => { const n = v.split(",").map((x) => x.trim()).filter((x) => x in c.stock); if (n.length) c.optional = n; else delete c.optional; }) : null,
       h("p", { class: "hint", text: "The parts there are: " + Object.entries(pack.manifest.parts ?? {}).map(([id, p]) => `${id} (${p.slot})`).join(", ") + "." })),
-    c.paint_ramps?.mid ? h("details", {}, h("summary", { text: "Which colours in the pictures are its paint" }),
-      h("p", { class: "hint", text: "A respray moves these colours and leaves the rest. The body's own colour is found when the picture is made; the others are for a picture painted with shadows and shine in colours of their own." }),
+    c.paint_ramps?.mid ? h("details", {}, h("summary", { text: "Which colors in the pictures are its paint" }),
+      h("p", { class: "hint", text: "A respray moves these colors and leaves the rest. The body's own color is found when the picture is made; the others are for a picture painted with shadows and shine in colors of their own." }),
       h("div", { class: "two" },
-        choice("The body", c.paint_ramps.mid, colours(), (v) => { c.paint_ramps.mid = v; }),
-        choice("Its shadows", c.paint_ramps.dark ?? "", colours("The same as the body"), (v) => { if (v) c.paint_ramps.dark = v; else delete c.paint_ramps.dark; }),
-        choice("Its highlights", c.paint_ramps.light ?? "", colours("The same as the body"), (v) => { if (v) c.paint_ramps.light = v; else delete c.paint_ramps.light; }),
-        choice("Its glints", c.paint_ramps.glint ?? "", colours("The same as the body"), (v) => { if (v) c.paint_ramps.glint = v; else delete c.paint_ramps.glint; }))) : null,
+        choice("The body", c.paint_ramps.mid, colors(), (v) => { c.paint_ramps.mid = v; }),
+        choice("Its shadows", c.paint_ramps.dark ?? "", colors("The same as the body"), (v) => { if (v) c.paint_ramps.dark = v; else delete c.paint_ramps.dark; }),
+        choice("Its highlights", c.paint_ramps.light ?? "", colors("The same as the body"), (v) => { if (v) c.paint_ramps.light = v; else delete c.paint_ramps.light; }),
+        choice("Its glints", c.paint_ramps.glint ?? "", colors("The same as the body"), (v) => { if (v) c.paint_ramps.glint = v; else delete c.paint_ramps.glint; }))) : null,
     field("Gallons its tank holds", c.tank ?? 17, (n) => { if (n > 0) c.tank = n; else delete c.tank; }, { type: "number", min: 1 }),
     Object.keys(pack.manifest.maps ?? {}).length ? h("p", { class: "hint", text: "While this is open, the game beside it is seen from this car's seat." }) : null);
 }
@@ -547,31 +553,93 @@ function seatForm(c) {
 // (corners first, then the middles of the sides).
 function boltsOf(slot) {
   if (Array.isArray(slot.bolts) && slot.bolts.length) return slot.bolts.slice(0, 8).map((b) => [...b]);
-  const [x, y, w, hh] = slot.rect, n = Math.max(1, Math.min(8, slot.bolts ?? 4));
+  const [x, y, w, hh] = slot.rect, n = Math.max(0, Math.min(8, slot.bolts ?? 4));
+  if (n === 0) return [];
   const l = x + 5, r = x + w - 6, t = y + 5, b = y + hh - 6, cx = x + (w >> 1), cy = y + (hh >> 1);
   const order = n === 1 ? [[cx, cy]] : n === 2 ? [[l, t], [r, b]] : n === 3 ? [[l, t], [r, t], [cx, b]] : [[l, t], [r, t], [r, b], [l, b], [cx, t], [cx, b], [l, cy], [r, cy]];
   return order.slice(0, n);
 }
 
-function hoodSlots(c) {
-  const slots = c.hood.slots, all = [...new Set(Object.values(pack.manifest.parts ?? {}).map((p) => p.slot))].sort();
-  const free = all.filter((s) => !(s in slots)), slot = slots[at.slot];
+// The places on a car worked on bolt by bolt: under the hood first, then the rest.
+function areasOf(c) {
+  return [...(c.hood ? [{ id: "hood", title: "Under the hood", place: c.hood }] : []), ...(c.areas ?? []).map((a) => ({ id: a.id, title: a.title, place: a }))];
+}
+
+const area = () => { const all = areasOf(car()); return all.find((a) => a.id === at.area) ?? all[0] ?? null; };
+const boundsOf = (pts) => { const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]), x = Math.min(...xs), y = Math.min(...ys); return [x, y, Math.max(1, Math.max(...xs) - x), Math.max(1, Math.max(...ys) - y)]; };
+
+// The places a car can have, each with what it is called and the stand-in picture of it, if
+// the pack has one.
+const PLACES = [["hood", "Under the hood", "bay.pic"], ["trunk", "In the trunk", "trunk.pic"], ["under", "Under the car", "under.pic"], ["wheels", "At the wheels", "wheels.pic"], ["inside", "Inside", "inside.pic"]];
+
+function areasForm(c) {
+  const all = areasOf(c), a = area(), free = PLACES.filter(([id]) => !all.some((x) => x.id === id));
+  const add = (id, title, picture) => {
+    if (id === "hood") c.hood = { picture, slots: {} };
+    else (c.areas ??= []).push({ id, title, picture, slots: {} });
+    at.area = id; at.slot = null; tidy(); render();
+  };
+  const named = h("input", { type: "text", id: "newArea", maxlength: 24, placeholder: "Under the dash", style: "flex:1" });
+  return h("div", {},
+    all.length ? list(all.map((x) => [x.id, x.title]), a?.id, (id) => { at.area = id; at.slot = null; render(); }) : h("p", { class: "hint", text: "None yet: its parts are all put on and taken off at the bench." }),
+    h("div", { class: "row" }, free.map(([id, title, pic]) => pack.files.has(pic)
+      ? h("button", { text: `Add ${title.toLowerCase()}`, onclick: () => add(id, title, pic) })
+      : dropZone(`${title}: drop a picture of it`, async (f) => {
+        const name = `${at.car}-${id}.pic`;
+        try { pack.files.set(name, await wholePicture(f, 176)); } catch { return fail("That file is not a picture the browser can read."); }
+        add(id, title, name);
+      }))),
+    h("label", { for: "newArea", text: "Or a place of your own: its name, then drop its picture" }),
+    h("div", { class: "row" }, named, dropZone("Its picture", async (f) => {
+      const title = named.value.trim();
+      if (!title) return fail("Give it a name first.");
+      const id = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "place";
+      if (all.some((x) => x.id === id)) return fail("There is a place called that already.");
+      const name = `${at.car}-${id}.pic`;
+      try { pack.files.set(name, await wholePicture(f, 176)); } catch { return fail("That file is not a picture the browser can read."); }
+      add(id, title, name);
+    })),
+    a ? h("div", { class: "card" },
+      a.id === "hood" ? null : field("What it is called", a.title, (v) => { a.place.title = v || a.place.title; }, { maxlength: 30, redo: true }),
+      dropZone(`A new picture for ${a.title.toLowerCase()}: replaces the stand-in, and the places stay where they are`, async (f) => {
+        const name = `${at.car}-${a.id === "hood" ? "bay" : a.id}.pic`;
+        try { pack.files.set(name, await wholePicture(f, 176)); } catch { return fail("That file is not a picture the browser can read."); }
+        a.place.picture = name; tidy(); render();
+      }),
+      areaSlots(a.place),
+      h("div", { class: "row", style: "margin-top:10px" }, h("button", { text: `No ${a.title.toLowerCase()} for this car`, onclick: () => {
+        if (a.id === "hood") delete c.hood; else c.areas = c.areas.filter((x) => x !== a.place);
+        if (!c.areas?.length) delete c.areas;
+        at.area = null; at.slot = null; tidy(); render();
+      } }))) : null);
+}
+
+function areaSlots(place) {
+  const slots = place.slots, here = areasOf(car()).flatMap((x) => Object.keys(x.place.slots));
+  const all = [...new Set([...Object.keys(car().stock ?? {}), ...Object.values(pack.manifest.parts ?? {}).map((p) => p.slot)])].sort();
+  const free = all.filter((s) => !here.includes(s)), slot = slots[at.slot];
   const add = (name) => { slots[name] = { rect: [140, 70, 40, 40] }; at.slot = name; render(); };
   const named = h("input", { type: "text", id: "newSlot", maxlength: 14, placeholder: "Air filter", style: "flex:1" });
+  const isShape = slot && slot.poly?.length >= 3;
   return h("div", {},
     h("label", { text: "The places where a part sits" }),
-    list(Object.keys(slots).map((s) => [s, `${s}: ${boltsOf(slots[s]).length} bolt${boltsOf(slots[s]).length === 1 ? "" : "s"}`]), at.slot, (s) => { at.slot = s; render(); }),
-    h("div", { class: "row" }, free.map((name) => h("button", { text: `Add ${name}`, onclick: () => add(name) }))),
-    h("label", { for: "newSlot", text: "Or a place of your own, for a part of the car that only ever comes off and goes back" }),
-    h("div", { class: "row" }, named, h("button", { id: "addSlot", text: "Add it", onclick: () => { const name = named.value.trim(); if (!name) return; if (name in slots) return fail("There is one called that already."); add(name); } })),
+    list(Object.keys(slots).map((s) => [s, `${s}: ${boltsOf(slots[s]).length} bolt${boltsOf(slots[s]).length === 1 ? "" : "s"}${slots[s].poly ? ", a shape" : ""}${slots[s].covered ? ", out of sight" : ""}`]), at.slot, (s) => { at.slot = s; render(); }),
+    free.length ? h("div", { class: "row" }, free.map((name) => h("button", { text: `Add ${name}`, onclick: () => add(name) }))) : null,
+    h("label", { for: "newSlot", text: "Or a place of your own, for a part of the car that only ever comes off and goes back (a cover, a panel)" }),
+    h("div", { class: "row" }, named, h("button", { id: "addSlot", text: "Add it", onclick: () => { const name = named.value.trim(); if (!name) return; if (here.includes(name)) return fail("There is one called that already."); add(name); } })),
     slot ? h("div", { class: "card" },
+      choice("Its shape", isShape ? "shape" : "box", [["box", "A box: drag it, or its corner to size it"], ["shape", "A shape: drag its corners, click its edge for another, double-click a corner to take it away"]], (v) => {
+        if (v === "shape" && !isShape) { const [x, y, w, hh] = slot.rect; slot.poly = [[x, y], [x + w, y], [x + w, y + hh], [x, y + hh]]; }
+        if (v === "box" && isShape) { slot.rect = boundsOf(slot.poly); delete slot.poly; }
+        render();
+      }),
       h("div", { class: "two" },
-        field(`Bolts holding the ${at.slot.toLowerCase()} on (1 to 8)`, boltsOf(slot).length, () => {}, { type: "number", min: 1, max: 8, id: "boltCount", onchange: (e) => { const n = Math.max(1, Math.min(8, Math.floor(+e.target.value) || 4)); if (n === 4) delete slot.bolts; else slot.bolts = n; render(); } }),
+        field(`Bolts holding the ${at.slot.toLowerCase()} on (0 to 8)`, boltsOf(slot).length, () => {}, { type: "number", min: 0, max: 8, id: "boltCount", onchange: (e) => { const n = Math.max(0, Math.min(8, Math.floor(+e.target.value))); if (Number.isNaN(n)) return; if (n === 4) delete slot.bolts; else slot.bolts = n; render(); } }),
         field("What the stock part is called", slot.stock, (v) => { if (v) slot.stock = v; else delete slot.stock; }, { maxlength: 20, placeholder: `Stock ${at.slot.toLowerCase()}` })),
-      choice("It cannot come off until this is off first", slot.behind ?? "", [["", "Nothing is in its way"], ...Object.keys(slots).filter((s) => s !== at.slot).map((s) => [s, s])], (v) => { if (v) slot.behind = v; else delete slot.behind; }),
-      h("p", { class: "hint", text: "On the picture, drag the box to where the part is, and drag each bolt to where it really is." }),
-      h("div", { class: "row" }, h("button", { text: `Take ${at.slot} off the picture`, onclick: () => { for (const other of Object.values(slots)) if (other.behind === at.slot) delete other.behind; delete slots[at.slot]; at.slot = null; render(); } }))) : null,
-    h("div", { class: "row", style: "margin-top:10px" }, h("button", { text: "No hood for this car", onclick: () => { delete c.hood; tidy(); render(); } })));
+      choice("It cannot come off until this is off first", slot.behind ?? "", [["", "Nothing is in its way"], ...Object.keys(slots).filter((s) => s !== at.slot).map((s) => [s, s])], (v) => { if (v) slot.behind = v; else { delete slot.behind; delete slot.covered; } render(); }),
+      slot.behind ? tick(`Out of sight until the ${slot.behind.toLowerCase()} is off: the picture does not show it`, !!slot.covered, (v) => { if (v) slot.covered = true; else delete slot.covered; }) : null,
+      h("p", { class: "hint", text: "On the picture, drag the part to where it is, and drag each bolt to where it really is." }),
+      h("div", { class: "row" }, h("button", { text: `Take ${at.slot} off the picture`, onclick: () => { for (const other of Object.values(slots)) if (other.behind === at.slot) { delete other.behind; delete other.covered; } delete slots[at.slot]; at.slot = null; render(); } }))) : null);
 }
 
 function drawSide() {
@@ -584,34 +652,102 @@ function drawSide() {
   g.putImageData(image, 0, 0);
   g.fillStyle = "#ff4d6a";
   g.fillRect(0, c.ground, pic.w, 1);
-  $("sideHint").textContent = `${pic.w} x ${pic.h}, ${new Set(pic.ix).size - 1} colours. The red line is the ground.`;
+  $("sideHint").textContent = `${pic.w} x ${pic.h}, ${new Set(pic.ix).size - 1} colors. The red line is the ground.`;
 }
 
-function drawHood() {
-  const c = car(), pic = picDecode(pack.files.get(c.hood.picture)), canvas = $("hood"), over = $("hoodOver");
+function drawArea() {
+  const a = area(), pic = picDecode(pack.files.get(a.place.picture)), canvas = $("hood"), over = $("hoodOver");
+  $("hoodTitle").textContent = a.title;
   canvas.width = pic.w; canvas.height = pic.h; canvas.style.width = "100%";
   over.width = pic.pw * 2; over.height = pic.ph * 2;
   const g = canvas.getContext("2d"), image = g.createImageData(pic.w, pic.h), out = new Uint32Array(image.data.buffer);
   pic.ix.forEach((v, i) => { out[i] = v === CLEAR ? 0xff000000 : pal[v]; });
   g.putImageData(image, 0, 0);
-  // The boxes, and the bolts of the one that is chosen, each to drag.
-  const slots = c.hood.slots, names = Object.keys(slots), chosen = slots[at.slot], bolts = chosen ? boltsOf(chosen) : [];
-  let was = chosen ? [...chosen.rect] : null;
-  boxes(over, 2, () => [...names.map((s) => ({ rect: slots[s].rect, name: s })), ...bolts.map((b) => ({ rect: b, name: "", point: true }))], {
-    selected: () => names.indexOf(at.slot), select: (i) => { if (i < names.length) at.slot = names[i] ?? null; },
-    moved: (i) => {
-      if (i >= names.length) chosen.bolts = bolts.map((b) => [...b]);
-      else if (slots[names[i]] === chosen && Array.isArray(chosen.bolts)) {
-        // Bolts that have been put somewhere go with their box.
-        const dx = chosen.rect[0] - was[0], dy = chosen.rect[1] - was[1];
-        for (const b of bolts) { b[0] += dx; b[1] += dy; }
-        chosen.bolts = bolts.map((b) => [...b]);
-        was = [...chosen.rect];
+  shapes(over, 2, a.place.slots);
+}
+
+// The places on the picture, to move and shape: a box by its body and its corner, a shape by
+// its corners, any by its bolts.
+function shapes(canvas, scale, slots) {
+  const g = canvas.getContext("2d");
+  const outline = (s) => s.poly?.length >= 3 ? s.poly : (([x, y, w, hh]) => [[x, y], [x + w, y], [x + w, y + hh], [x, y + hh]])(s.rect);
+  const inside = (pts, x, y) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [ax, ay] = pts[i], [bx, by] = pts[j]; if ((ay > y) !== (by > y) && x < ax + (bx - ax) * (y - ay) / (by - ay)) c = !c; } return c; };
+  const draw = () => {
+    g.clearRect(0, 0, canvas.width, canvas.height);
+    g.font = "bold 11px ui-monospace, monospace";
+    for (const [name, s] of Object.entries(slots)) {
+      const on = name === at.slot, pts = outline(s);
+      g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo : g.moveTo).call(g, x * scale, y * scale)); g.closePath();
+      g.setLineDash(s.covered ? [5, 4] : []);
+      g.fillStyle = on ? "rgba(255,210,74,.2)" : "rgba(106,224,255,.10)"; g.fill("evenodd");
+      g.lineWidth = on ? 3 : 1.5; g.strokeStyle = on ? "#ffd24a" : "#6ae0ff"; g.stroke();
+      g.setLineDash([]);
+      const [x, y] = s.rect;
+      g.fillStyle = "#000"; g.fillText(name, x * scale + 4, y * scale + 13); g.fillStyle = on ? "#ffd24a" : "#fff"; g.fillText(name, x * scale + 3, y * scale + 12);
+      if (!on) continue;
+      if (s.poly?.length >= 3) for (const [px, py] of s.poly) { g.fillStyle = "#ffd24a"; g.fillRect(px * scale - 4, py * scale - 4, 8, 8); g.strokeStyle = "#000"; g.lineWidth = 1; g.strokeRect(px * scale - 4, py * scale - 4, 8, 8); }
+      else { const [bx, by, bw, bh] = s.rect; g.fillStyle = "#ffd24a"; g.fillRect((bx + bw) * scale - 8, (by + bh) * scale - 8, 8, 8); }
+      g.strokeStyle = "#ff6a8a"; g.lineWidth = 2;
+      for (const [bx, by] of boltsOf(s)) { g.beginPath(); g.moveTo(bx * scale - 9, by * scale); g.lineTo(bx * scale + 9, by * scale); g.moveTo(bx * scale, by * scale - 9); g.lineTo(bx * scale, by * scale + 9); g.stroke(); }
+    }
+  };
+  const where = (e) => { const r = canvas.getBoundingClientRect(); return [(e.clientX - r.left) / r.width * canvas.width / scale, (e.clientY - r.top) / r.height * canvas.height / scale]; };
+  const maxW = canvas.width / scale, maxH = canvas.height / scale, clamp = (v, hi) => Math.max(0, Math.min(hi, Math.round(v)));
+  let drag = null;
+  canvas.onpointerdown = (e) => {
+    const [x, y] = where(e), s = slots[at.slot];
+    drag = null;
+    if (s) {
+      const corner = s.poly?.findIndex(([px, py]) => Math.abs(px - x) < 5 && Math.abs(py - y) < 5) ?? -1;
+      const bolt = boltsOf(s).findIndex(([bx, by]) => Math.abs(bx - x) < 6 && Math.abs(by - y) < 6);
+      const [bx, by, bw, bh] = s.rect;
+      if (corner >= 0) drag = { kind: "corner", k: corner };
+      else if (bolt >= 0) { s.bolts = boltsOf(s); drag = { kind: "bolt", k: bolt }; }
+      else if (!s.poly && x >= bx + bw - 6 && x < bx + bw + 2 && y >= by + bh - 6 && y < by + bh + 2) drag = { kind: "size", from: [...s.rect], x, y };
+      else if (s.poly?.length >= 3) {
+        // On an edge: a new corner there, held.
+        for (let i = 0; i < s.poly.length && !drag; i++) {
+          const [ax, ay] = s.poly[i], [cx, cy] = s.poly[(i + 1) % s.poly.length], dx = cx - ax, dy = cy - ay, len2 = dx * dx + dy * dy || 1;
+          const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / len2));
+          if (Math.hypot(ax + dx * t - x, ay + dy * t - y) < 3 && t > 0.05 && t < 0.95 && s.poly.length < 160) { s.poly.splice(i + 1, 0, [Math.round(x), Math.round(y)]); drag = { kind: "corner", k: i + 1 }; }
+        }
       }
-      keep();
-    },
-    done: () => render(),
-  });
+    }
+    if (!drag) {
+      // Pick the smallest place the pointer is in, and move all of it.
+      const under = Object.entries(slots).filter(([, sl]) => inside(outline(sl), x, y)).sort(([, p], [, q]) => p.rect[2] * p.rect[3] - q.rect[2] * q.rect[3])[0];
+      if (!under) { at.slot = null; drag = null; render(); return; }
+      if (at.slot !== under[0]) { at.slot = under[0]; render(); return; }
+      const sl = under[1];
+      drag = { kind: "move", x, y, poly: sl.poly?.map((p) => [...p]), rect: [...sl.rect], bolts: Array.isArray(sl.bolts) ? sl.bolts.map((b) => [...b]) : null };
+    }
+    canvas.setPointerCapture(e.pointerId);
+    draw();
+  };
+  canvas.onpointermove = (e) => {
+    const s = slots[at.slot];
+    if (!drag || !s) return;
+    const [x, y] = where(e);
+    if (drag.kind === "corner") s.poly[drag.k] = [clamp(x, maxW), clamp(y, maxH)];
+    else if (drag.kind === "bolt") s.bolts[drag.k] = [clamp(x, maxW), clamp(y, maxH)];
+    else if (drag.kind === "size") { s.rect[2] = Math.max(6, Math.min(maxW - s.rect[0], drag.from[2] + Math.round(x - drag.x))); s.rect[3] = Math.max(6, Math.min(maxH - s.rect[1], drag.from[3] + Math.round(y - drag.y))); }
+    else {
+      const dx = Math.round(x - drag.x), dy = Math.round(y - drag.y);
+      if (drag.poly) s.poly = drag.poly.map(([px, py]) => [clamp(px + dx, maxW), clamp(py + dy, maxH)]);
+      s.rect = [clamp(drag.rect[0] + dx, maxW - drag.rect[2]), clamp(drag.rect[1] + dy, maxH - drag.rect[3]), drag.rect[2], drag.rect[3]];
+      if (drag.bolts) s.bolts = drag.bolts.map(([bx, by]) => [clamp(bx + dx, maxW), clamp(by + dy, maxH)]);
+    }
+    if (s.poly?.length >= 3) s.rect = boundsOf(s.poly);
+    keep();
+    draw();
+  };
+  canvas.onpointerup = () => { if (drag) { drag = null; render(); } };
+  canvas.ondblclick = (e) => {
+    const [x, y] = where(e), s = slots[at.slot];
+    const k = s?.poly?.findIndex(([px, py]) => Math.abs(px - x) < 5 && Math.abs(py - y) < 5) ?? -1;
+    if (k >= 0 && s.poly.length > 3) { s.poly.splice(k, 1); s.rect = boundsOf(s.poly); render(); }
+  };
+  draw();
 }
 
 $("side").onclick = (e) => {
@@ -654,7 +790,7 @@ function roomsPanel() {
       p.picture = `${at.place}.pic`; render();
     }),
     p.picture ? h("div", { class: "row", style: "margin-top:8px" }, h("button", { text: "Take the picture away", onclick: () => { delete p.picture; p.backdrop ??= "NAVY"; tidy(); render(); } }))
-      : choice("With no picture, its colour", p.backdrop ?? "NAVY", colours(), (v) => { p.backdrop = v; }),
+      : choice("With no picture, its color", p.backdrop ?? "NAVY", colors(), (v) => { p.backdrop = v; }),
     tick("It is out of doors: it gets dark here late in the day", p.outdoors, (v) => { if (v) p.outdoors = true; else delete p.outdoors; }),
     tick("Your car stands here", !!p.car_at, (v) => { if (v) p.car_at = [40, 182]; else delete p.car_at; }),
     tick("Rivals pull in here", !!p.rival_at, (v) => { if (v) p.rival_at = [72, 174]; else { delete p.rival_at; } }),
@@ -673,6 +809,7 @@ function roomsPanel() {
       choice("What picking it does", kind, DOES, (v) => { s.do = v === "say" ? "say:" : v === "go" ? "go:" + (others[0]?.[0] ?? "") : v === "drive" ? "drive:" + (Object.keys(m.maps ?? {})[0] ?? "") : v === "road" || v === "roadrace" || v === "pokerrun" ? v + ":" + (Object.keys(m.roads ?? {})[0] ?? "") : v; }),
       kind === "say" ? field("What it says", arg, (v) => { s.do = "say:" + v; }, { maxlength: 38, id: "spotSays" }) : null,
       kind === "go" ? choice("Where to", arg, others, (v) => { s.do = "go:" + v; }) : null,
+      kind === "work" ? choice("Which place on the car", arg, [["", "Under the hood, or the first there is"], ...[...new Set(Object.values(m.cars).flatMap((c) => areasOf(c).map((x) => x.id)))].map((id) => [id, PLACES.find((pl) => pl[0] === id)?.[1] ?? id])], (v) => { s.do = v ? "work:" + v : "work"; }) : null,
       kind === "drive" ? choice("Which map", arg, Object.entries(m.maps ?? {}).map(([id, mp]) => [id, mp.title]), (v) => { s.do = "drive:" + v; }) : null,
       kind === "road" || kind === "roadrace" || kind === "pokerrun" ? choice("Which road", arg, Object.entries(m.roads ?? {}).map(([id, r]) => [id, r.title]), (v) => { s.do = kind + ":" + v; }) : null,
       field("Draw it as a button with this word on it (blank: the picture shows it)", s.button, (v) => { if (v) s.button = v; else delete s.button; }, { maxlength: 9 }),
@@ -733,9 +870,9 @@ function mapsPanel() {
       field("Police at its corners (0: no limit)", mp.cops ?? 0, (n) => { if (n > 0) mp.cops = Math.min(12, Math.floor(n)); else delete mp.cops; }, { type: "number", min: 0, max: 12 }),
       field("Speed limit, mph", mp.limit ?? 35, (n) => { mp.limit = Math.max(10, n ?? 35); }, { type: "number", min: 10, max: 100 }),
       field("A ticket, dollars (and 2 for every mph over)", mp.ticket ?? 30, (n) => { mp.ticket = Math.max(0, Math.floor(n ?? 30)); }, { type: "number", min: 0 }),
-      field("How high its hills are, metres (0: flat)", mp.hills ?? 0, (n) => { if (n > 0) mp.hills = Math.min(30, n); else delete mp.hills; }, { type: "number", min: 0, max: 30 }),
+      field("How high its hills are, meters (0: flat)", mp.hills ?? 0, (n) => { if (n > 0) mp.hills = Math.min(30, n); else delete mp.hills; }, { type: "number", min: 0, max: 30 }),
       tick("Open world: its roads run on from its last streets, driven there with no change of view", !!mp.open, (v) => { if (v) mp.open = true; else delete mp.open; }),
-      field("Gallons burned a kilometre", mp.gas_per_km ?? 0.4, (n) => { mp.gas_per_km = Math.max(0, n ?? 0.4); }, { type: "number", step: "0.1", min: 0 })),
+      field("Gallons burned a kilometer", mp.gas_per_km ?? 0.4, (n) => { mp.gas_per_km = Math.max(0, n ?? 0.4); }, { type: "number", step: "0.1", min: 0 })),
     h("p", { class: "hint", text: "There is a street between every two blocks and one round the outside. The top of the map is north." })));
   const places = [["", "Nowhere: it is only a building"], ...Object.entries(m.places).map(([id, p]) => [id, p.title])];
   const brush = (ch, words, b) => h("button", { "aria-current": String(at.brush === ch), onclick: () => { at.brush = ch; render(); } },
@@ -753,12 +890,12 @@ function mapsPanel() {
       kind ? h("button", { text: "Remove this kind", onclick: () => { mp.rows = mp.rows.map((r) => r.replaceAll(at.brush, ".")); delete mp.blocks[at.brush]; at.brush = "."; render(); } }) : null),
     kind ? h("div", { class: "card" },
       h("div", { class: "two" },
-        choice("Built of", kind.wall ?? "CONCRETE", colours(), (v) => { kind.wall = v; }),
-        field("How tall, in metres (0: open ground)", kind.height ?? 0, (n) => { kind.height = Math.max(0, n ?? 0); }, { type: "number", min: 0, max: 80, redo: true })),
+        choice("Built of", kind.wall ?? "CONCRETE", colors(), (v) => { kind.wall = v; }),
+        field("How tall, in meters (0: open ground)", kind.height ?? 0, (n) => { kind.height = Math.max(0, n ?? 0); }, { type: "number", min: 0, max: 80, redo: true })),
       choice("Pulling up beside it takes you to", kind.to ?? "", places, (v) => { if (v) { kind.to = v; delete kind.road; } else { delete kind.to; delete kind.name; } }),
       tick("It is water: a pond, which cannot be driven on", !!kind.water, (v) => { if (v) { kind.water = true; delete kind.to; delete kind.road; delete kind.wall; delete kind.height; } else delete kind.water; }),
       choice("Or it is the way onto a road", kind.road ?? "", [["", "No"], ...Object.entries(m.roads ?? {}).filter(([, r]) => r.ends.includes("map:" + at.map)).map(([id, r]) => [id, r.title])], (v) => { if (v) { kind.road = v; delete kind.to; kind.name ??= m.roads[v].title.slice(0, 16); } else delete kind.road; }),
-      kind.to || kind.road ? field("What it is called on the list in the windscreen", kind.name, (v) => { if (v) kind.name = v; else delete kind.name; }, { maxlength: 16, redo: true }) : null) : null));
+      kind.to || kind.road ? field("What it is called on the list in the windshield", kind.name, (v) => { if (v) kind.name = v; else delete kind.name; }, { maxlength: 16, redo: true }) : null) : null));
   return out;
 }
 
@@ -846,9 +983,9 @@ function roadsPanel() {
       field("Trucks towing cars, as a share of the traffic (0 to 1)", r.rigs ?? 0, (n) => { if (n > 0) r.rigs = Math.min(1, n); else delete r.rigs; }, { type: "number", min: 0, max: 1, step: "0.05" }),
       field("Rivals to beat before it opens from its first end", r.rung ?? 0, (n) => { if (n > 0) r.rung = Math.floor(n); else delete r.rung; }, { type: "number", min: 0 }),
       field("Hours the trip takes", r.hours ?? 2, (n) => { r.hours = Math.max(0, Math.floor(n ?? 2)); }, { type: "number", min: 0, max: 12 }),
-      field("Gallons burned a kilometre", r.gas_per_km ?? 0.25, (n) => { r.gas_per_km = Math.max(0, n ?? 0.25); }, { type: "number", step: "0.05", min: 0 }),
-      choice("The sky", r.sky ?? "", colours("Blue sky"), (v) => { if (v) r.sky = v; else delete r.sky; }),
-      choice("The country", r.ground ?? "", colours("Grass"), (v) => { if (v) r.ground = v; else delete r.ground; }))));
+      field("Gallons burned a kilometer", r.gas_per_km ?? 0.25, (n) => { r.gas_per_km = Math.max(0, n ?? 0.25); }, { type: "number", step: "0.05", min: 0 }),
+      choice("The sky", r.sky ?? "", colors("Blue sky"), (v) => { if (v) r.sky = v; else delete r.sky; }),
+      choice("The country", r.ground ?? "", colors("Grass"), (v) => { if (v) r.ground = v; else delete r.ground; }))));
   const move = (i, j) => { [r.parts[i], r.parts[j]] = [r.parts[j], r.parts[i]]; at.stretch = j; render(); };
   out.push(h("section", {}, h("h2", { text: `Its stretches, first end first: ${(total / 1000).toFixed(1)} km` }),
     h("p", { class: "hint", text: "Each stretch has one bend and one climb. A bend of 1 is as hard as they come; at speed the car is thrown to the outside of it." }),
@@ -876,7 +1013,7 @@ function drawRoad() {
   const g = canvas.getContext("2d"), W = canvas.width, H = canvas.height, PLAN = H - 110;
   const tint = { trees: "#3f8a45", rock: "#8d8a84", drop: "#5b8fd6", fields: "#c8aa78", posts: "#e8e8ec", water: "#2f5fd0" };
   g.fillStyle = "#1d2a1f"; g.fillRect(0, 0, W, H);
-  // Six metres at a time, each piece turned a little from the last: the same sums as the engine does.
+  // Six meters at a time, each piece turned a little from the last: the same sums as the engine does.
   const pts = [];
   let x = 0, z = 0, hd = 0, y = 0;
   r.parts.forEach((p, i) => {
@@ -923,7 +1060,7 @@ function partsPanel() {
   m.parts ??= {};
   const cars = carChoices();
   return [h("section", {}, h("h2", { text: "Parts in the paper" }),
-    h("p", { class: "hint", text: "One part to a slot on a car. The slots are whatever the parts name: Intake, Turbo, Tyres. The paper has room for 14." }),
+    h("p", { class: "hint", text: "One part to a slot on a car. The slots are whatever the parts name: Intake, Turbo, Tires. The paper has room for 14." }),
     Object.entries(m.parts).map(([id, p]) => h("div", { class: "card" },
       h("div", { class: "two" },
         field("Its name", p.name, (v) => { p.name = v; }, { maxlength: 20 }),
@@ -933,9 +1070,9 @@ function partsPanel() {
       field("What the ad says", p.pitch, (v) => { p.pitch = v; }, { maxlength: 24 }),
       h("details", { id: `more-${id}` }, h("summary", { text: "What else it changes" }),
         h("div", { class: "two" },
-          field("More grip, per cent (tyres)", p.grip, (v) => { if (v) p.grip = Math.floor(v); else delete p.grip; }, { type: "number" }),
+          field("More grip, per cent (tires)", p.grip, (v) => { if (v) p.grip = Math.floor(v); else delete p.grip; }, { type: "number" }),
           field("Weight it adds, lb (less than 0 saves some)", p.weight_lb, (v) => { if (v) p.weight_lb = v; else delete p.weight_lb; }, { type: "number" }),
-          field("A gearbox: its ratios, first gear first", (p.gears ?? []).join(" "), (v) => { const n = v.split(/[\s,]+/).map(Number).filter((x) => x > 0); if (n.length) p.gears = n; else delete p.gears; }),
+          field("A transmission: its ratios, first gear first", (p.gears ?? []).join(" "), (v) => { const n = v.split(/[\s,]+/).map(Number).filter((x) => x > 0); if (n.length) p.gears = n; else delete p.gears; }),
           field("A final drive", p.final, (v) => { if (v > 0) p.final = v; else delete p.final; }, { type: "number", step: "0.01" }),
           field("A different engine: its torque curve, as rpm:torque pairs", (p.curve ?? []).map((c) => c.join(":")).join(" "), (v) => { const c = v.split(/[\s,]+/).map((x) => x.split(":").map(Number)).filter((x) => x.length === 2 && x[0] > 0 && x[1] > 0).sort((a, b) => a[0] - b[0]); if (c.length > 1) p.curve = c; else delete p.curve; }, { placeholder: "1000:120 3000:260 5000:300 7000:240" }),
           field("A redline, rpm (a built engine)", p.redline, (v) => { if (v > 0) p.redline = v; else delete p.redline; }, { type: "number", step: 100 }))),
@@ -963,7 +1100,7 @@ function partsPanel() {
       tick("It is a battery: run down it is flat, and a charge brings it back", !!p.charges, (v) => { if (v) p.charges = true; else delete p.charges; }),
       tick("It is a clutch: over what it holds it slips and wears, and does not snap", !!p.slips, (v) => { if (v) p.slips = true; else delete p.slips; }),
       tick("It is a laptop and a cable: the car can be tuned at the rollers", !!p.tuner, (v) => { if (v) p.tuner = true; else delete p.tuner; }),
-      choice("If it is a gearbox, what kind", p.auto == null ? "" : p.auto ? "auto" : "manual", [["", "Not a gearbox, or the same kind as the car's"], ["manual", "A manual: shifted by hand, on the strip and on the road"], ["auto", "An automatic: it shifts itself"]], (v) => { if (v) p.auto = v === "auto"; else delete p.auto; }),
+      choice("If it is a transmission, what kind", p.auto == null ? "" : p.auto ? "auto" : "manual", [["", "Not a transmission, or the same kind as the car's"], ["manual", "A manual: shifted by hand, on the strip and on the road"], ["auto", "An automatic: it shifts itself"]], (v) => { if (v) p.auto = v === "auto"; else delete p.auto; }),
       tick("It is a radar detector: it beeps when police are ahead on a road", !!p.radar, (v) => { if (v) p.radar = true; else delete p.radar; }),
       tick("It is a turbo, and replaces the car's own", !!p.boost, (v) => { if (v) p.boost = { from: 3000, psi: 27, lag: 10 }; else delete p.boost; }),
       p.boost ? h("div", { class: "three" },
@@ -972,7 +1109,7 @@ function partsPanel() {
         field("Lag", p.boost.lag, (v) => { p.boost.lag = v ?? 10; }, { type: "number" })) : null,
       dropZone(p.picture ? "How it looks bolted on under the hood (it has a picture; drop another to change it)" : "How it looks bolted on under the hood: a picture of just this part (optional)", async (f) => {
         // Made the size of its place under the first hood that has one.
-        const place = Object.values(m.cars).map((c) => c.hood?.slots?.[p.slot]).find(Boolean);
+        const place = Object.values(m.cars).flatMap((c) => areasOf(c)).map((a) => a.place.slots?.[p.slot]).find(Boolean);
         if (!place) return fail(`No car has a place for the ${p.slot.toLowerCase()} under its hood yet. Add one under Cars first.`);
         try { pack.files.set(`${id}-on.pic`, await sizedPicture(f, place.rect[2], place.rect[3])); } catch { return fail("That file is not a picture the browser can read."); }
         p.picture = `${id}-on.pic`; render();
@@ -1010,7 +1147,7 @@ function rivalsPanel() {
         field(`${i + 1}. Name`, r.name, (v) => { r.name = v; }, { maxlength: 20 }),
         field("Quarter mile, seconds", r.et, (v) => { r.et = v ?? 0; }, { type: "number", step: "0.05", min: 5 }),
         choice("Drives", r.car, cars, (v) => { r.car = v; }),
-        choice("In", r.paint ?? "", colours("Its own paint"), (v) => { if (v) r.paint = v; else delete r.paint; }),
+        choice("In", r.paint ?? "", colors("Its own paint"), (v) => { if (v) r.paint = v; else delete r.paint; }),
         field("Most money they will race for", r.limit, (v) => { r.limit = Math.max(0, Math.floor(v ?? 0)); }, { type: "number", min: 0 })),
       field("What they say", r.says, (v) => { r.says = v; }, { maxlength: 38 }),
       dropZone(r.figure ? "A picture of them, standing by their car (they have one; drop another to change it)" : "A picture of them, to stand by their car (optional)", async (f) => {
@@ -1086,11 +1223,11 @@ function gamePanel() {
       h("div", {}, field("Pays", j.pay, (n) => { j.pay = Math.max(1, Math.floor(n ?? 1)); }, { type: "number", min: 1 }),
         h("button", { text: "Remove", style: "margin-top:4px", onclick: () => { m.jobs.splice(i, 1); if (!m.jobs.length) delete m.jobs; render(); } })))),
     (m.jobs ?? []).length < 6 ? h("div", { class: "row" }, h("button", { id: "addJob", text: "Add a job", onclick: () => { (m.jobs ??= []).push({ name: "Sweep the shop", hours: 4, pay: 30 }); render(); } })) : null,
-    field("The colours cars come in and can be sprayed, by name (blank: the usual eight; up to 12)", (m.paints ?? []).join(" "), (v) => {
+    field("The colors cars come in and can be sprayed, by name (blank: the usual eight; up to 12)", (m.paints ?? []).join(" "), (v) => {
       const picked = v.toUpperCase().split(/[\s,]+/).filter((x) => RAMPS.includes(x) && x !== RAMPS[0]).slice(0, 12);
       if (picked.length) m.paints = [...new Set(picked)]; else delete m.paints;
     }, { id: "paints", placeholder: RAMPS.slice(1, 9).join(" "), redo: true }),
-    h("p", { class: "hint", text: "The colours there are: " + RAMPS.slice(1).map(nice).join(", ") + "." }),
+    h("p", { class: "hint", text: "The colors there are: " + RAMPS.slice(1).map(nice).join(", ") + "." }),
     h("div", { class: "two" },
       field("A poker run costs to ride", m.poker?.entry ?? 20, (n) => { m.poker = { riders: 5, ...m.poker, entry: Math.max(0, Math.floor(n ?? 20)) }; }, { type: "number", min: 0 }),
       field("And this many others ride", m.poker?.riders ?? 5, (n) => { m.poker = { entry: 20, ...m.poker, riders: Math.max(1, Math.min(9, Math.floor(n ?? 5))) }; }, { type: "number", min: 1, max: 9 })),
@@ -1125,12 +1262,12 @@ function render() {
   $("roadBox").hidden = !(at.tab === "roads" && road());
   if (at.tab === "roads" && road()) drawRoad();
   $("sideBox").hidden = !cars;
-  $("hoodBox").hidden = !(cars && car().hood);
+  $("hoodBox").hidden = !(cars && area());
   $("lampsBox").hidden = !cars;
   $("viewOver").hidden = !rooms;
   $("viewTitle").textContent = rooms ? place().title : maps ? "From the seat, in the south-west corner or beside the first place to go" : at.tab === "roads" && road() ? "From the seat, a little way into the stretch that is picked" : "In the game";
-  $("viewHint").textContent = rooms ? "The crosses are where the tyres of your car and the rival's meet the floor: drag them." : "";
-  if (cars) { drawSide(); if (car().hood) drawHood(); }
+  $("viewHint").textContent = rooms ? "The crosses are where the tires of your car and the rival's meet the floor: drag them." : "";
+  if (cars) { drawSide(); if (area()) drawArea(); }
   redraw = rooms ? boxes($("viewOver"), 2, roomItems, {
     selected: () => at.spot, select: (i) => { at.spot = i < place().spots.length ? i : -1; },
     moved: () => touch(), done: () => render(),

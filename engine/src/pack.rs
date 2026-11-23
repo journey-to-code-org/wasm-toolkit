@@ -19,7 +19,7 @@ pub struct Start {
     pub car: Option<String>,
 }
 
-/// Which of the picture's ramps are the paint, so a car can be drawn in any colour.
+/// Which of the picture's ramps are the paint, so a car can be drawn in any color.
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct PaintRamps {
     /// The paint's mid tones, its shadows, its highlights and its glints: the ramps the picture uses for each.
@@ -185,13 +185,13 @@ fn six() -> f64 {
     6.0
 }
 
-/// What makes a car go. Left out, a car gets a two-litre turbo four and five gears.
+/// What makes a car go. Left out, a car gets a two-liter turbo four and five gears.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(default)]
 pub struct Drive {
     /// Torque at the wheels, in pound-feet, at each engine speed: pairs of rpm and torque, rising.
     pub torque: Vec<[f64; 2]>,
-    /// The gearbox, first gear first, and the final drive behind it.
+    /// The transmission, first gear first, and the final drive behind it.
     pub gears: Vec<f64>,
     #[serde(rename = "final")]
     pub final_drive: f64,
@@ -199,7 +199,7 @@ pub struct Drive {
     /// The engine speed it holds on the line with your foot down.
     pub launch: f64,
     pub weight_lb: f64,
-    /// The hardest the tyres can push it, in metres a second, each second.
+    /// The hardest the tires can push it, in meters a second, each second.
     pub grip: f64,
     pub boost: Option<Boost>,
     /// An automatic: it changes gear itself, on the strip and on the road.
@@ -222,7 +222,7 @@ pub enum Driven {
 }
 
 impl Driven {
-    /// How hard a full-grip launch in first pulls the car sideways, in metres a second each second.
+    /// How hard a full-grip launch in first pulls the car sideways, in meters a second each second.
     pub fn torque_steer(self) -> f64 {
         match self {
             Driven::Front => 3.2,
@@ -269,13 +269,13 @@ pub struct Part {
     /// The cars it goes on. Left out, it goes on any.
     #[serde(default)]
     pub fits: Vec<String>,
-    /// How much more the tyres can push, as a percentage: for tyres, a differential, anything that puts it down.
+    /// How much more the tires can push, as a percentage: for tires, a differential, anything that puts it down.
     #[serde(default)]
     pub grip: i32,
     /// What it adds to the car's weight, in pounds. Less than nothing for a part that saves some.
     #[serde(default)]
     pub weight_lb: f64,
-    /// A gearbox: its ratios, first gear first, in place of the car's own. And a final drive.
+    /// A transmission: its ratios, first gear first, in place of the car's own. And a final drive.
     #[serde(default)]
     pub gears: Vec<f64>,
     #[serde(default, rename = "final")]
@@ -322,7 +322,7 @@ pub struct Part {
     /// build sheet that have it in place of the stock one. It is never in the paper new.
     #[serde(default)]
     pub rare: u32,
-    /// How fast it wears: the per cent of itself a pass down the strip takes, and four kilometres
+    /// How fast it wears: the per cent of itself a pass down the strip takes, and four kilometers
     /// of road the same. Under half it costs power; at nothing it is done for.
     #[serde(default)]
     pub wears: f64,
@@ -335,7 +335,7 @@ pub struct Part {
     /// A laptop and a cable: with it the car's fuel, timing and boost can be changed at the rollers.
     #[serde(default)]
     pub tuner: bool,
-    /// For a part that is a gearbox: whether it is an automatic. Left out, the car's own kind stays.
+    /// For a part that is a transmission: whether it is an automatic. Left out, the car's own kind stays.
     #[serde(default)]
     pub auto: Option<bool>,
     /// A nitrous kit: how much more the engine makes while it sprays, as a percentage, and how
@@ -391,12 +391,21 @@ pub struct Rival {
 ///
 /// In a pack it is the box alone, `[56, 98, 42, 52]`, which has a bolt at each corner; or
 /// `{ "rect": [...], "bolts": 2 }` for some other number, laid out for you; or
-/// `{ "rect": [...], "bolts": [[60, 100], [90, 140]] }` to say where each bolt is. One to eight.
+/// `{ "rect": [...], "bolts": [[60, 100], [90, 140]] }` to say where each bolt is. None to eight.
+///
+/// Or its shape, corner by corner, for a part that is no box: `{ "poly": [[x, y], ...] }`. A
+/// point is inside it if a line from it crosses the outline an odd number of times, so a ring is
+/// drawn as its outside, a cut in to the inside, and its inside the other way round.
 #[derive(Deserialize, Clone, Debug)]
 #[serde(from = "SlotIn")]
 pub struct Slot {
+    /// Its box: the shape's bounds, when it has a shape.
     pub rect: [i32; 4],
+    pub poly: Vec<[i32; 2]>,
     pub bolts: Vec<[i32; 2]>,
+    /// Out of sight until what it is behind is off: the picture does not show it, so it is
+    /// drawn plain, with its name, once uncovered.
+    pub covered: bool,
     pub stock: Option<String>,
     /// The place this one is behind: its part cannot be lifted until that one's is off, and that
     /// one's cannot go back on until this one's is.
@@ -415,13 +424,18 @@ enum BoltsIn {
 enum SlotIn {
     Rect([i32; 4]),
     Full {
-        rect: [i32; 4],
+        #[serde(default)]
+        rect: Option<[i32; 4]>,
+        #[serde(default)]
+        poly: Vec<[i32; 2]>,
         #[serde(default)]
         bolts: Option<BoltsIn>,
         #[serde(default)]
         stock: Option<String>,
         #[serde(default)]
         behind: Option<String>,
+        #[serde(default)]
+        covered: bool,
     },
 }
 
@@ -435,21 +449,58 @@ pub fn bolts_round(rect: [i32; 4], n: usize) -> Vec<[i32; 2]> {
         3 => &[[l, t], [r, t], [cx, b]],
         _ => &[[l, t], [r, t], [r, b], [l, b], [cx, t], [cx, b], [l, cy], [r, cy]],
     };
-    order.iter().copied().take(n.clamp(1, 8)).collect()
+    order.iter().copied().take(n.min(8)).collect()
+}
+
+impl Slot {
+    /// Whether a point on the picture is on this part.
+    pub fn contains(&self, x: i32, y: i32) -> bool {
+        if self.poly.len() < 3 {
+            let [rx, ry, w, h] = self.rect;
+            return x >= rx && x < rx + w && y >= ry && y < ry + h;
+        }
+        let (px, py) = (x as f64 + 0.5, y as f64 + 0.5);
+        let mut inside = false;
+        let n = self.poly.len();
+        for i in 0..n {
+            let ([ax, ay], [bx, by]) = (self.poly[i], self.poly[(i + 1) % n]);
+            let (ax, ay, bx, by) = (ax as f64, ay as f64, bx as f64, by as f64);
+            if (ay > py) != (by > py) && px < ax + (bx - ax) * (py - ay) / (by - ay) {
+                inside = !inside;
+            }
+        }
+        inside
+    }
+
+    /// Where its middle is, for a tag on it.
+    pub fn middle(&self) -> (i32, i32) {
+        let [x, y, w, h] = self.rect;
+        (x + w / 2, y + h / 2)
+    }
+}
+
+/// The box round some points.
+pub fn bounds(pts: &[[i32; 2]]) -> [i32; 4] {
+    let (x0, y0) = (pts.iter().map(|p| p[0]).min().unwrap_or(0), pts.iter().map(|p| p[1]).min().unwrap_or(0));
+    let (x1, y1) = (pts.iter().map(|p| p[0]).max().unwrap_or(0), pts.iter().map(|p| p[1]).max().unwrap_or(0));
+    [x0, y0, (x1 - x0).max(1), (y1 - y0).max(1)]
 }
 
 impl From<SlotIn> for Slot {
     fn from(s: SlotIn) -> Slot {
-        let (rect, bolts, stock, behind) = match s {
-            SlotIn::Rect(rect) => (rect, None, None, None),
-            SlotIn::Full { rect, bolts, stock, behind } => (rect, bolts, stock, behind),
+        let (rect, poly, bolts, stock, behind, covered) = match s {
+            SlotIn::Rect(rect) => (rect, Vec::new(), None, None, None, false),
+            SlotIn::Full { rect, poly, bolts, stock, behind, covered } => {
+                let poly: Vec<[i32; 2]> = if poly.len() >= 3 { poly.into_iter().take(160).collect() } else { Vec::new() };
+                (if poly.is_empty() { rect.unwrap_or([0, 0, 1, 1]) } else { bounds(&poly) }, poly, bolts, stock, behind.clone(), covered && behind.is_some())
+            }
         };
         let bolts = match bolts {
             Some(BoltsIn::At(at)) if !at.is_empty() => at.into_iter().take(8).collect(),
             Some(BoltsIn::Count(n)) => bolts_round(rect, n),
             _ => bolts_round(rect, 4),
         };
-        Slot { rect, bolts, stock, behind }
+        Slot { rect, poly, bolts, stock, behind, covered }
     }
 }
 
@@ -460,6 +511,30 @@ impl From<SlotIn> for Slot {
 pub struct Hood {
     pub picture: String,
     pub slots: BTreeMap<String, Slot>,
+}
+
+/// Somewhere else on the car that is worked on as under the hood is: the trunk, underneath it on
+/// the lift, a wheel, the inside. Its own picture and its own places, and a name for its tab.
+#[derive(Deserialize, Clone, Debug, Default)]
+pub struct Area {
+    pub id: String,
+    pub title: String,
+    pub picture: String,
+    pub slots: BTreeMap<String, Slot>,
+}
+
+impl Car {
+    /// Every part of the car that is worked on bolt by bolt: under the hood first, then the
+    /// rest in the pack's order. Each as its id, its name, and its picture and places.
+    pub fn areas(&self) -> Vec<(&str, &str, &str, &BTreeMap<String, Slot>)> {
+        let hood = self.hood.iter().map(|h| ("hood", "Under the hood", h.picture.as_str(), &h.slots));
+        hood.chain(self.areas.iter().map(|a| (a.id.as_str(), a.title.as_str(), a.picture.as_str(), &a.slots))).collect()
+    }
+
+    /// Which of them a slot is worked on in.
+    pub fn area_of(&self, slot: &str) -> Option<usize> {
+        self.areas().iter().position(|a| a.3.contains_key(slot))
+    }
 }
 
 /// A dial on the dash: where its needle turns, how long the needle is, and what it reads at full sweep.
@@ -494,9 +569,9 @@ pub struct Cockpit {
     /// The same at night, the cabin dark and the dials lit.
     #[serde(default)]
     pub night: Option<String>,
-    /// The bonnet as seen through the glass, drawn under the painting in the car's paint.
-    #[serde(default)]
-    pub bonnet: Option<String>,
+    /// The hood as seen through the glass, drawn under the painting in the car's paint.
+    #[serde(default, alias = "bonnet")]
+    pub hood: Option<String>,
     /// How much of the screen, from the top, is the view out; the horizon sits partway down it.
     #[serde(default = "view_h")]
     pub view_h: i32,
@@ -525,7 +600,7 @@ fn view_h() -> i32 {
     136
 }
 
-/// The car from behind, for when it is ahead of you on the road, and how wide it is in metres.
+/// The car from behind, for when it is ahead of you on the road, and how wide it is in meters.
 #[derive(Deserialize, Clone, Debug)]
 pub struct Rear {
     pub picture: String,
@@ -544,9 +619,9 @@ pub struct Car {
     pub side: String,
     #[serde(default)]
     pub side_lamps: Option<String>,
-    /// How far down the side picture the tyres touch the ground.
+    /// How far down the side picture the tires touch the ground.
     pub ground: i32,
-    /// The colour it comes in, as a ramp name.
+    /// The color it comes in, as a ramp name.
     #[serde(default)]
     pub paint: Option<String>,
     #[serde(default)]
@@ -558,6 +633,9 @@ pub struct Car {
     pub drive: Drive,
     #[serde(default)]
     pub hood: Option<Hood>,
+    /// The other places on it worked on as under the hood is.
+    #[serde(default)]
+    pub areas: Vec<Area>,
     /// How many gallons the tank holds.
     #[serde(default = "tank")]
     pub tank: f64,
@@ -632,7 +710,7 @@ pub const MOST_PEOPLE: usize = 12;
 /// What stands on a block of a map.
 #[derive(Deserialize, Clone, Debug, Default)]
 pub struct Block {
-    /// What it is built of, as a colour, and how tall it is in metres. With neither it is grass.
+    /// What it is built of, as a color, and how tall it is in meters. With neither it is grass.
     #[serde(default)]
     pub wall: Option<String>,
     #[serde(default)]
@@ -664,7 +742,7 @@ pub struct Map {
     pub open: bool,
     #[serde(default)]
     pub blocks: BTreeMap<String, Block>,
-    /// Metres from one street to the next, and half the width of a street.
+    /// Meters from one street to the next, and half the width of a street.
     #[serde(default = "pitch")]
     pub pitch: f64,
     #[serde(default = "road")]
@@ -674,7 +752,7 @@ pub struct Map {
     pub traffic: usize,
     #[serde(default = "gas_per_km")]
     pub gas_per_km: f64,
-    /// How hilly the ground is: the height of the hills, in metres. Left out, it is flat.
+    /// How hilly the ground is: the height of the hills, in meters. Left out, it is flat.
     #[serde(default)]
     pub hills: f64,
     /// The law in town: how many police sit at its corners, the limit in miles an hour, and what
@@ -762,7 +840,7 @@ impl Map {
 }
 
 /// A stretch of a road: how long, how it bends (-1 hard left to 1 hard right), how much it
-/// climbs in metres, and what is beside it: "trees", "rock", "drop", "fields" or "posts".
+/// climbs in meters, and what is beside it: "trees", "rock", "drop", "fields" or "posts".
 #[derive(Deserialize, Clone, Debug)]
 pub struct Stretch {
     pub len: f64,
@@ -860,7 +938,7 @@ pub struct Manifest {
     pub parts: BTreeMap<String, Part>,
     #[serde(default)]
     pub rivals: Vec<Rival>,
-    /// The colours cars in the paper come in. Left out, eight ordinary ones.
+    /// The colors cars in the paper come in. Left out, eight ordinary ones.
     #[serde(default)]
     pub paints: Vec<String>,
     /// What it costs to have a tired or blown engine rebuilt, and how healthy it comes back, as a percentage.
@@ -909,7 +987,7 @@ pub struct Job {
 pub const MOST_JOBS: usize = 6;
 
 /// What a spot can do. Anything else in a pack is a mistake, and is said to be.
-pub const ACTIONS: [&str; 24] = ["", "lamps", "paper", "parts", "hood", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tyres", "charge", "tuneup", "ghosts", "setup"];
+pub const ACTIONS: [&str; 25] = ["", "lamps", "paper", "parts", "hood", "work", "yard", "calendar", "race", "next", "solo", "gas", "online", "rebuild", "paint", "dyno", "nitrous", "sleep", "shootout", "bodywork", "tires", "charge", "tuneup", "ghosts", "setup"];
 /// The most parts the paper has room to list.
 pub const MOST_PARTS: usize = 120;
 
@@ -982,9 +1060,9 @@ impl Pack {
                 return Err(format!("the game starts with the car {car}, which is not in the pack"));
             }
         }
-        let colour = |what: &str, name: &Option<String>| -> Result<(), String> {
+        let color = |what: &str, name: &Option<String>| -> Result<(), String> {
             match name {
-                Some(n) if !RAMPS.iter().skip(1).any(|r| r.eq_ignore_ascii_case(n)) => Err(format!("{what} is in the colour {n}, which is not one of the engine's")),
+                Some(n) if !RAMPS.iter().skip(1).any(|r| r.eq_ignore_ascii_case(n)) && !n.eq_ignore_ascii_case("GREY") => Err(format!("{what} is in the color {n}, which is not one of the engine's")),
                 _ => Ok(()),
             }
         };
@@ -1035,13 +1113,13 @@ impl Pack {
         }
         for (id, road) in &m.roads {
             if road.parts.is_empty() || road.parts.iter().any(|p| p.len < 12.0 || !p.len.is_finite()) || road.len() < 200.0 || road.len() > 30000.0 {
-                return Err(format!("the road {id} needs stretches of 12 metres or more, adding up to between 200 metres and 30 kilometres"));
+                return Err(format!("the road {id} needs stretches of 12 meters or more, adding up to between 200 meters and 30 kilometers"));
             }
             if let Some(p) = road.parts.iter().find(|p| !SIDES.contains(&p.left.as_str()) || !SIDES.contains(&p.right.as_str())) {
                 return Err(format!("the road {id} has \"{}\" and \"{}\" beside it; what can be beside a road is {}", p.left, p.right, SIDES.join(", ")));
             }
             if road.parts.iter().any(|p| p.curve.abs() > 1.0 || p.hill.abs() > 80.0) {
-                return Err(format!("the road {id} bends more than 1 or climbs more than 80 metres in one stretch"));
+                return Err(format!("the road {id} bends more than 1 or climbs more than 80 meters in one stretch"));
             }
             for end in &road.ends {
                 let there = match end.strip_prefix("map:") {
@@ -1052,21 +1130,21 @@ impl Pack {
                     return Err(format!("the road {id} ends at {end}, which is not a place, or a map with a block marked for this road"));
                 }
             }
-            colour(&format!("the sky over the road {id}"), &road.sky)?;
-            colour(&format!("the ground beside the road {id}"), &road.ground)?;
+            color(&format!("the sky over the road {id}"), &road.sky)?;
+            color(&format!("the ground beside the road {id}"), &road.ground)?;
         }
         for (id, map) in &m.maps {
             if map.rows.is_empty() || map.cols() == 0 || map.rows.iter().any(|r| r.chars().count() as i32 != map.cols()) {
                 return Err(format!("the map {id} needs rows of blocks, all the same length"));
             }
             if map.pitch < map.road * 2.0 + 16.0 || map.road < 4.0 {
-                return Err(format!("the map {id} needs streets at least 8 metres wide and blocks at least 16 across"));
+                return Err(format!("the map {id} needs streets at least 8 meters wide and blocks at least 16 across"));
             }
             if let Some(ch) = map.rows.iter().flat_map(|r| r.chars()).find(|ch| *ch != '.' && !map.blocks.contains_key(&ch.to_string())) {
                 return Err(format!("the map {id} has a block marked {ch}, which its blocks do not explain"));
             }
             for (ch, b) in &map.blocks {
-                colour(&format!("block {ch} of the map {id}"), &b.wall)?;
+                color(&format!("block {ch} of the map {id}"), &b.wall)?;
                 if let Some(to) = b.to.as_ref().filter(|to| !m.places.contains_key(*to)) {
                     return Err(format!("block {ch} of the map {id} leads to {to}, which is not a place"));
                 }
@@ -1076,13 +1154,13 @@ impl Pack {
             }
         }
         for p in &m.paints {
-            colour("a car in the paper", &Some(p.clone()))?;
+            color("a car in the paper", &Some(p.clone()))?;
         }
         for (i, r) in m.rivals.iter().enumerate() {
             if !m.cars.contains_key(&r.car) {
                 return Err(format!("{} drives the car {}, which is not in the pack", r.name, r.car));
             }
-            colour(&format!("{}'s car", r.name), &r.paint)?;
+            color(&format!("{}'s car", r.name), &r.paint)?;
             if r.et <= 0.0 {
                 return Err(format!("{} needs a time for the quarter mile", r.name));
             }
@@ -1091,9 +1169,9 @@ impl Pack {
             }
         }
         for (id, car) in &m.cars {
-            colour(&format!("the car {id}"), &car.paint)?;
+            color(&format!("the car {id}"), &car.paint)?;
             for r in [&car.paint_ramps.mid, &car.paint_ramps.dark, &car.paint_ramps.light, &car.paint_ramps.glint] {
-                colour(&format!("part of the car {id}'s picture"), r)?;
+                color(&format!("part of the car {id}'s picture"), r)?;
             }
             let d = &car.drive;
             if d.torque.is_empty() || d.gears.is_empty() || d.weight_lb <= 0.0 || d.final_drive <= 0.0 {
@@ -1103,7 +1181,7 @@ impl Pack {
             let seat = format!("the cockpit of the car {id}");
             if let Some(c) = &car.cockpit {
                 need(&seat, &c.picture)?;
-                for name in [&c.night, &c.bonnet, &c.wheel.as_ref().map(|w| w.picture.clone()), &c.wheel.as_ref().and_then(|w| w.night.clone())].into_iter().flatten() {
+                for name in [&c.night, &c.hood, &c.wheel.as_ref().map(|w| w.picture.clone()), &c.wheel.as_ref().and_then(|w| w.night.clone())].into_iter().flatten() {
                     need(&seat, name)?;
                 }
                 if let Some(w) = &c.wheel {
@@ -1128,13 +1206,20 @@ impl Pack {
             if let Some(r) = &car.front {
                 need(&format!("the front of the car {id}"), &r.picture)?;
             }
-            if let Some(hood) = &car.hood {
-                for (name, place) in &hood.slots {
-                    if let Some(front) = place.behind.as_ref().filter(|f| !hood.slots.contains_key(*f) || *f == name) {
-                        return Err(format!("under the hood of the car {id}, the {name} is behind the {front}, which is not a place there"));
+            let mut seen = std::collections::BTreeSet::new();
+            for (k, (area, title, picture, slots)) in car.areas().into_iter().enumerate() {
+                if area.is_empty() || car.areas().iter().take(k).any(|a| a.0 == area) {
+                    return Err(format!("the car {id} has two places to work on called {area:?}"));
+                }
+                for (name, place) in slots {
+                    if !seen.insert(name.clone()) {
+                        return Err(format!("the car {id} has its {name} in two places to work on"));
+                    }
+                    if let Some(front) = place.behind.as_ref().filter(|f| !slots.contains_key(*f) || *f == name) {
+                        return Err(format!("{} on the car {id}, the {name} is behind the {front}, which is not a place there", title.to_lowercase()));
                     }
                 }
-                need(&format!("under the hood of the car {id}"), &hood.picture)?;
+                need(&format!("{} on the car {id}", title.to_lowercase()), picture)?;
             }
             if let Some(l) = &car.side_lamps {
                 need(&format!("the car {id}"), l)?;
@@ -1144,7 +1229,7 @@ impl Pack {
             if let Some(p) = &place.picture {
                 need(&format!("the place {id}"), p)?;
             }
-            colour(&format!("the place {id}"), &place.backdrop)?;
+            color(&format!("the place {id}"), &place.backdrop)?;
             for spot in &place.spots {
                 if let Some(to) = spot.action.strip_prefix("go:") {
                     if !m.places.contains_key(to) {
@@ -1169,7 +1254,7 @@ impl Pack {
                     if !m.maps.contains_key(map) {
                         return Err(format!("in {id}, \"{}\" drives round {map}, which is not a map", spot.label));
                     }
-                } else if !spot.action.starts_with("say:") && !ACTIONS.contains(&spot.action.as_str()) {
+                } else if !spot.action.starts_with("say:") && !ACTIONS.contains(&spot.action.as_str()) && spot.action != "tyres" && !spot.action.starts_with("work:") {
                     return Err(format!("in {id}, \"{}\" does \"{}\", which the engine does not know how to do", spot.label, spot.action));
                 } else if ["race", "next", "solo"].contains(&spot.action.as_str()) && (place.rival_at.is_none() || m.rivals.is_empty()) {
                     return Err(format!("in {id}, \"{}\" needs rivals in the pack and a rival_at in the place", spot.label));

@@ -217,7 +217,7 @@ fn what_arrives_is_not_trusted() {
     click(&mut a, 100, 10);
     click(&mut b, 100, 10);
     room.join(&mut [&mut a, &mut b]);
-    // Rubbish, a stranger, a stake nobody offered, a paint that is not a colour.
+    // Rubbish, a stranger, a stake nobody offered, a paint that is not a color.
     for text in ["", "{", "[1,2]", r#"{"t":5}"#, r#"{"t":"dare","from":77,"stake":10}"#, r#"{"t":"ok","from":2}"#, r#"{"t":"slip","from":2,"rt":1,"et":1}"#] {
         a.net_in(text);
     }
@@ -281,7 +281,7 @@ fn cruise(g: &mut Game, mph: f64) {
     let mut keys = if t.speed * 2.237 < mph { KEY_UP } else { 0 };
     if t.x > 0.55 { keys |= 4 } else if t.x < 0.45 { keys |= 8 }
     // Up a gear short of the redline, on every other tick so that each is a fresh press.
-    if t.gearbox.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && t.clock % 2 == 0 { keys |= KEY_X }
+    if t.transmission.as_ref().is_some_and(|b| b.rpm > b.redline - 600.0) && t.clock % 2 == 0 { keys |= KEY_X }
     g.tick(keys, 300, 100);
 }
 
@@ -450,7 +450,7 @@ fn other_cars_glide_between_what_they_say() {
     for _ in 0..4 { a.tick(0, 0, 0); b.tick(0, 0, 0); room.pump(&mut [&mut a, &mut b]); }
     let map = format!("map:{}", b.town.as_ref().unwrap().map);
     let x0 = b.others_at(&map)[0].1.x;
-    // A says it is ten metres on: B's picture of A gets there over a few ticks, never past it.
+    // A says it is ten meters on: B's picture of A gets there over a few ticks, never past it.
     { let t = a.town.as_mut().unwrap(); t.x += 10.0; }
     a.tick(0, 0, 0);
     room.pump(&mut [&mut a, &mut b]);
@@ -458,7 +458,7 @@ fn other_cars_glide_between_what_they_say() {
     for _ in 0..12 { b.tick(0, 0, 0); xs.push(b.others_at(&map)[0].1.x); }
     assert!(xs[0] > x0 && xs[0] < x0 + 6.0, "{x0} {xs:?}");
     assert!(xs.windows(2).all(|w| w[1] >= w[0] - 1e-9) && (xs[11] - (x0 + 10.0)).abs() < 0.5, "{xs:?}");
-    // Thirty metres in one go is a jump, not a glide.
+    // Thirty meters in one go is a jump, not a glide.
     { let t = a.town.as_mut().unwrap(); t.x += 30.0; }
     a.tick(0, 0, 0);
     room.pump(&mut [&mut a, &mut b]);

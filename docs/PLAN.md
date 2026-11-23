@@ -8,7 +8,7 @@ it is those games' design, not their files.
 
 These are the rules the toolkit enforces or the game keeps.
 
-- **320x240, 1,024 colours.** A palette of 32 ramps of 32 shades. Rooms are painted in dithered
+- **320x240, 1,024 colors.** A palette of 32 ramps of 32 shades. Rooms are painted in dithered
   gradients; nothing is smoothed or blended, and the screen is scaled up in whole pixels.
 - **Painted pictures, with the moving parts drawn over them.** A room, a dash, an engine bay is
   a painting (`tools/paint.py` renders it large and dithers it down to the palette); needles,
@@ -23,7 +23,7 @@ These are the rules the toolkit enforces or the game keeps.
 ## The cars
 
 The cars are our own: their own shapes, their own names, no maker's badge. What is true to life is
-the engineering. The game is built round one engine family, a turbo two-litre four, and every kind
+the engineering. The game is built round one engine family, a turbo two-liter four, and every kind
 of car an engine like it went into through the nineties: liftback coupes in four generations, front
 drive and all-wheel drive, with and without the turbo; the sedans; a small pickup; and a rally
 sedan in ten generations. Parts interchange across the family, which is what makes a parts car
@@ -53,7 +53,7 @@ where it is written down, and whether ours has it.
 
 ## Done
 
-- [x] The toolkit: screen, drawing, dither, font, fixed-point maths, 3D with near clipping and
+- [x] The toolkit: screen, drawing, dither, font, fixed-point math, 3D with near clipping and
       depth sort, input, tones, a native test build and a scripted play-through.
 - [x] A title, a garage with a pointer and named things, and a hood that opens.
 - [x] Cars as lit 3D models from cross-sections: a coupe, a sedan, a wagon and a pickup so far.
@@ -71,15 +71,15 @@ where it is written down, and whether ours has it.
 - [x] The paper on the bench sells the better parts for cash; a clean pass at the strip pays a
       little, and a new best pays more. What is bolted on changes what the engine makes.
 - [x] Two generations of the coupe: a wedge with pop-up headlamps, and the rounder one after it.
-- [x] A dash that wraps round the driver: hooded cluster, centre stack, shifter gate, the wheel.
+- [x] A dash that wraps round the driver: hooded cluster, center stack, shifter gate, the wheel.
       It is a painting now, by day and by night, with the needles and the wheel live over it.
 
 ## Next, in order
 
 Work down `SPEC.md`. The order, by how much of the game each one opens up:
 
-1. Street Rod's parts model: engines, transmissions, tyres, by make and grade, with wear; changing
-   tyres and the transmission; tuning by ear; blowing an engine.
+1. Street Rod's parts model: engines, transmissions, tires, by make and grade, with wear; changing
+   tires and the transmission; tuning by ear; blowing an engine.
 2. Street Rod's looks: paint, stickers, bumpers, the roof, car info, more than one model of car.
 3. The road race, with the police, fines and jail; the cruise to the lot, driven.
 4. Test Drive's road: stages, a cliff and a drop, the radar detector, the gas stop, the mirror.
@@ -102,7 +102,7 @@ The cockpit is painted; these are still drawn from boxes at run time and look it
 - [x] The paper: classifieds for cars and for parts, bought with cash, a new paper each day.
 - [ ] Parts are things: bought, carried home, on the floor until fitted.
 - [ ] The rest of what is under the hood: cam, plugs, oil, the head; and wrenches you have to own.
-- [ ] Under the car: transmission, tyres, with the jack.
+- [ ] Under the car: transmission, tires, with the jack.
 - [ ] Tuning by hand: timing and mixture, with the engine telling you when it is wrong.
 - [ ] Paint, stickers, chopping the top.
 - [ ] Fuel, and a pump.
@@ -127,13 +127,13 @@ They are whole-number and deterministic, so they port to C line for line. Port, 
 - [ ] A real drivetrain behind the dash: gears, revs, redline, a shifter you can miss.
 - [ ] The road out of town: hills, cliffs, oncoming traffic, a radar detector, the police.
 - [ ] Gas stations as the stops between stages.
-- [ ] The windscreen cracks.
+- [ ] The windshield cracks.
 
 ### 4. The city (Vette!)
 
 - [ ] A drawn town in place of the endless grid: districts, landmarks, a bridge, the strip, Rix
       Racing, the way to Morgantown.
-- [ ] Traffic that obeys lights and turns at corners; pedestrians on the pavements.
+- [ ] Traffic that obeys lights and turns at corners; pedestrians on the sidewalks.
 - [ ] A map, and outside views of the car.
 - [ ] Police who chase, pull you over, and ask questions.
 - [ ] Races across town by any route.

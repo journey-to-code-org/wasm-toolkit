@@ -5,7 +5,7 @@ A pack is everything the engine plays, in one file. The folder holds `pack.json`
 the cars and the places, and the pictures it names, as ordinary PNG files of any size up to the
 screen's. A picture named `name@2x.png`, up to 640x480 and even each way, is painted fine: it
 goes in as `name.pic` standing half its size in dots, and the screen, which has two dots to each
-place it is laid out by, shows every dot of it. Each picture is matched to the engine's 1,024 colours with a dither and stored
+place it is laid out by, shows every dot of it. Each picture is matched to the engine's 1,024 colors with a dither and stored
 run-length; `garage.png` goes in as `garage.pic`, which is the name `pack.json` uses for it.
 
 Usage: tools/pack.py content/default web/default.pack
@@ -30,7 +30,7 @@ def picture(path, fine=False):
         raise SystemExit(f"{path.name} is {img.width}x{img.height}; the most it can be is {most[0]}x{most[1]}")
     if fine and (img.width % 2 or img.height % 2):
         raise SystemExit(f"{path.name} is {img.width}x{img.height}; a fine picture is even each way")
-    # A picture already in the engine's own colours (tools/pixelate.py makes them) goes in as it is.
+    # A picture already in the engine's own colors (tools/pixelate.py makes them) goes in as it is.
     a = np.asarray(img)
     seen = np.unique(a[a[..., 3] >= 128][:, :3].astype(np.uint32) @ np.array([65536, 256, 1], np.uint32))
     ours = np.asarray(PAL[32:], np.float32).round().astype(np.uint32) @ np.array([65536, 256, 1], np.uint32)

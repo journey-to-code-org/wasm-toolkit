@@ -25,6 +25,20 @@ fn shot(g: &Game, name: &str) {
     std::fs::write(format!("/tmp/{name}.raw"), out).unwrap();
 }
 
+/// Buys a part from the paper's parts page, under HOOD or wherever it is, by the pointer.
+fn buy(g: &mut Game, id: &str) {
+    let all = g.shop_page();
+    let group = all.iter().position(|(k, _)| k.as_str() == id).map(|_| 0).unwrap();
+    assert_eq!(group, 0);
+    let i = g.shop_page().iter().position(|(k, _)| k.as_str() == id).unwrap();
+    let top = if g.shop_groups().is_empty() { 56 } else { 66 };
+    while i >= g.turned[2] + 11 {
+        click(g, 100, top + 11 * 10 + 2);
+    }
+    let row = top + (i - g.turned[2]) as i32 * 10 + 4;
+    click(g, 100, row);
+}
+
 /// A new game in the default pack with the first car in the paper bought.
 fn with_a_car() -> Option<Game> {
     let bytes = std::fs::read("../web/default.pack").ok()?;
@@ -51,6 +65,22 @@ fn the_garage_has_buttons_for_the_shelf_and_the_hood() {
     g.tick(0, 0, 0);
     click(&mut g, 295, 10);
     assert_eq!(g.scene, Scene::Hood);
+    // Across the top, the other places on the car; and back in the garage, a spot for each.
+    let areas: Vec<String> = g.car().unwrap().areas().iter().map(|a| a.0.to_string()).collect();
+    assert_eq!(areas, ["hood", "trunk", "under", "wheels", "inside"]);
+    let w = (316 / 5).min(80);
+    click(&mut g, 2 + 3 * w + 10, 6);
+    assert_eq!(g.area_here().unwrap().0, "wheels");
+    shot(&g, "a-wheels");
+    for (k, name) in ["trunk", "under", "inside"].iter().enumerate() {
+        click(&mut g, 2 + [1, 2, 4][k] * w + 10, 6);
+        assert_eq!(g.area_here().unwrap().0, *name);
+        shot(&g, &format!("a-{name}"));
+    }
+    g.tick(ESC, 0, 0);
+    g.tick(0, 0, 0);
+    click(&mut g, 60, 140);
+    assert_eq!((g.scene, g.area_here().unwrap().0), (Scene::Hood, "trunk"));
 }
 
 #[test]
@@ -67,17 +97,11 @@ fn a_part_from_the_paper_goes_on_under_the_hood() {
     let Some(mut g) = with_a_car() else { return };
     click(&mut g, 285, 42);
     assert_eq!(g.scene, Scene::Paper(1));
-    let i = g.shop().iter().position(|(id, _)| id.as_str() == "cone-filter").unwrap();
-    // Down the pages to it, and buy it.
-    while i >= g.turned[2] + 11 {
-        click(&mut g, 100, 56 + 11 * 10 + 2);
-    }
-    let row = 56 + (i - g.turned[2]) as i32 * 10 + 4;
-    click(&mut g, 100, row);
+    buy(&mut g, "cone-filter");
     assert_eq!(g.state.spares, ["cone-filter"], "{:?}", g.note);
     shot(&g, "f1-bought");
     // FIT PARTS goes to the bench, and the filter on the shelf goes under the hood, held.
-    click(&mut g, 260, 188);
+    click(&mut g, 260, 190);
     assert_eq!(g.scene, Scene::Bench);
     click(&mut g, 230, 37);
     assert_eq!(g.scene, Scene::Hood, "{:?}", g.note);
@@ -110,4 +134,117 @@ fn a_part_from_the_paper_goes_on_under_the_hood() {
     click(&mut g, 50, 108);
     click(&mut g, 285, 42);
     shot(&g, "f6-paper");
+}
+
+/// Picks a bolt or a part on the picture, by the pointer.
+fn pick_at(g: &mut Game, x: i32, y: i32) {
+    click(g, x, y);
+}
+
+fn slot(g: &Game, name: &str) -> engine::pack::Slot {
+    g.car().unwrap().areas().iter().find_map(|a| a.3.get(name).cloned()).unwrap()
+}
+
+#[test]
+fn new_tires_go_on_at_the_wheel() {
+    let Some(mut g) = with_a_car() else { return };
+    g.state.cash = 5000;
+    click(&mut g, 285, 42);
+    let tires = g.shop_page().iter().find(|(_, p)| p.slot == "Tires" && !p.name.starts_with("All")).map(|(k, _)| k.to_string()).unwrap();
+    buy(&mut g, &tires);
+    assert!(g.state.spares.contains(&tires), "{:?}", g.note);
+    // At the bench, the tires go to the wheel, held.
+    g.tick(ESC, 0, 0);
+    g.tick(0, 0, 0);
+    click(&mut g, 250, 10);
+    click(&mut g, 230, 37);
+    assert_eq!((g.scene, g.area_here().unwrap().0), (Scene::Hood, "wheels"));
+    // The tire will not come off with the wheel on: the lug nuts, then the wheel, then the tire.
+    let (rims, tire) = (slot(&g, "Rims"), slot(&g, "Tires"));
+    let (rx, ry) = rims.middle();
+    let on_tire = (rx + 60, ry);
+    assert!(tire.contains(on_tire.0, on_tire.1) && !tire.contains(rx, ry) && !tire.contains(rx + 30, ry), "a ring");
+    pick_at(&mut g, on_tire.0, on_tire.1);
+    assert!(g.note.as_deref().is_some_and(|n| n.contains("rims") || n.contains("in the way")), "{:?}", g.note);
+    for &[x, y] in &rims.bolts {
+        pick_at(&mut g, x, y);
+    }
+    pick_at(&mut g, rx + 30, ry + 30);
+    assert!(g.owned().unwrap().off.contains(&"Rims".to_string()), "{:?}", g.note);
+    shot(&g, "w1-rim-off");
+    // The brakes are out of sight no more.
+    assert!(g.in_view(g.area_here().unwrap().3, "Brakes"));
+    pick_at(&mut g, on_tire.0, on_tire.1);
+    assert!(g.owned().unwrap().off.contains(&"Tires".to_string()), "{:?}", g.note);
+    pick_at(&mut g, on_tire.0, on_tire.1);
+    assert_eq!(g.owned().unwrap().fitted.get("Tires").map(String::as_str), Some(tires.as_str()), "{:?}", g.note);
+    // The old ones are on the floor; the wheel goes back on and its nuts are done up.
+    assert!(g.floor().iter().any(|l| matches!(l, engine::game::Loose::Part(p) if p.starts_with("s-tyres"))), "{:?}", g.floor());
+    let rim_back = g.floor().into_iter().position(|l| matches!(&l, engine::game::Loose::Part(p) if p.starts_with("s-rims"))).unwrap();
+    pick_at(&mut g, 4 + (rim_back as i32 % 4) * 79 + 20, 178 + (rim_back as i32 / 4) * 11 + 4);
+    pick_at(&mut g, rx + 30, ry + 30);
+    for &[x, y] in &rims.bolts {
+        pick_at(&mut g, x, y);
+    }
+    assert_eq!(g.note.as_deref(), Some("Done up tight. It is on."));
+    assert_eq!(g.wont_run(), None);
+    shot(&g, "w2-done");
+}
+
+#[test]
+fn what_is_behind_a_cover_is_out_of_sight_until_it_is_off() {
+    let Some(mut g) = with_a_car() else { return };
+    click(&mut g, 250, 10);
+    g.tick(ESC, 0, 0);
+    g.tick(0, 0, 0);
+    click(&mut g, 295, 10);
+    assert_eq!(g.area_here().unwrap().0, "hood");
+    let slots = g.area_here().unwrap().3.clone();
+    assert!(!g.in_view(&slots, "Camshafts") && !g.in_view(&slots, "Spark plugs") && g.in_view(&slots, "Valve cover"));
+    // Plug wires off (no bolts), and the plugs show; the valve cover off, and the cams do.
+    let (px, py) = slot(&g, "Plug wires").middle();
+    pick_at(&mut g, px, py);
+    assert!(g.owned().unwrap().off.contains(&"Plug wires".to_string()), "{:?}", g.note);
+    assert!(g.in_view(&slots, "Spark plugs") && !g.in_view(&slots, "Camshafts"));
+    let cover = slot(&g, "Valve cover");
+    for &[x, y] in &cover.bolts {
+        pick_at(&mut g, x, y);
+    }
+    pick_at(&mut g, 200, 99);
+    assert!(g.owned().unwrap().off.contains(&"Valve cover".to_string()), "{:?}", g.note);
+    assert!(g.in_view(&slots, "Camshafts") && !g.in_view(&slots, "Valve springs"));
+    // With it off it will not run.
+    assert!(g.wont_run().is_some());
+    shot(&g, "c1-cams");
+}
+
+#[test]
+fn a_game_saved_with_the_old_names_comes_back() {
+    let Some(g) = with_a_car() else { return };
+    let mut s = g.state.clone();
+    let o = &mut s.cars[0];
+    let t = o.fitted.remove("Tires").unwrap();
+    o.fitted.insert("Tyres".into(), t.clone());
+    let b = o.fitted.remove("Transmission").unwrap();
+    o.fitted.insert("Gearbox".into(), b.clone());
+    o.off.push("Gearbox".into());
+    g.settle_hood(&mut s);
+    let o = &s.cars[0];
+    assert_eq!((o.fitted.get("Tires"), o.fitted.get("Transmission")), (Some(&t), Some(&b)));
+    assert!(o.off.contains(&"Transmission".to_string()) && !o.fitted.contains_key("Tyres"));
+    // And the old words in a save are read too.
+    let json = serde_json::to_string(&s).unwrap().replace("\"tires\"", "\"tyres\"");
+    assert!(json.contains("\"tyres\""));
+    let back: engine::game::State = serde_json::from_str(&json).unwrap();
+    assert_eq!(back.cars[0].tires, s.cars[0].tires);
+}
+
+#[test]
+fn the_default_pack_is_in_american_english() {
+    let text = std::fs::read_to_string("../content/default/pack.json").unwrap().to_lowercase();
+    for word in ["colour", "tyre", "metre", "litre", "centre", "gearbox", "bonnet", "windscreen", "grey", "kerb", "petrol"] {
+        // Part ids are kept as they were, so that saved games find them.
+        let n = text.matches(word).count() - text.matches(&format!("s-{word}")).count() - text.matches(&format!("sticky-{word}")).count();
+        assert_eq!(n, 0, "{word}");
+    }
 }

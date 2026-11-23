@@ -4,9 +4,9 @@
 
 export const W = 320, H = 240, CLEAR = 0xffff;
 
-// The colour ramps, in the engine's order (engine/src/gfx.rs). A colour is ramp * 32 + shade.
+// The color ramps, in the engine's order (engine/src/gfx.rs). A color is ramp * 32 + shade.
 export const RAMPS = [
-  "SYSTEM", "GREY", "RED", "ORANGE", "YELLOW", "LIME", "GREEN", "TEAL", "CYAN", "SKY", "BLUE", "INDIGO", "VIOLET", "MAGENTA", "PINK", "BROWN",
+  "SYSTEM", "GRAY", "RED", "ORANGE", "YELLOW", "LIME", "GREEN", "TEAL", "CYAN", "SKY", "BLUE", "INDIGO", "VIOLET", "MAGENTA", "PINK", "BROWN",
   "TAN", "BRICK", "CONCRETE", "ASPHALT", "GRASS", "GLASS", "CHROME", "RUBBER", "WOOD", "CREAM", "NAVY", "MAROON", "FOREST", "GOLD", "SILVER", "WHITE",
 ];
 
@@ -51,7 +51,7 @@ export function buildPack({ manifest, files }) {
   return out;
 }
 
-// A .pic: width, height, then runs of (count, colour), all 16-bit.
+// A .pic: width, height, then runs of (count, color), all 16-bit.
 // A picture: `w` by `h` dots in `ix`. One painted fine (`s` is 2) has two dots to each place on
 // the screen each way, so it stands `pw` by `ph` places; an ordinary one, a dot to a place.
 export function picDecode(bytes) {
@@ -75,8 +75,8 @@ export function picEncode(w, h, ix, fine = false) {
 
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5].map((v) => v / 16 - 0.5);
 
-// The nearest of the palette's colours to r, g, b, among the ramps from..to. `pal` is the
-// engine's palette: 1,024 colours with red in the low byte.
+// The nearest of the palette's colors to r, g, b, among the ramps from..to. `pal` is the
+// engine's palette: 1,024 colors with red in the low byte.
 function nearest(pal, r, g, b, from, to) {
   let best = from * 32, bestD = Infinity;
   for (let i = from * 32; i < to * 32; i++) {
@@ -87,27 +87,27 @@ function nearest(pal, r, g, b, from, to) {
   return best;
 }
 
-// The ramp a colour belongs to.
+// The ramp a color belongs to.
 export function rampOf(pal, [r, g, b]) {
   return nearest(pal, r, g, b, 1, 32) >> 5;
 }
 
-// How unlike two colours are with their brightness taken out, 0 for the same hue.
+// How unlike two colors are with their brightness taken out, 0 for the same hue.
 function hueApart(r, g, b, to) {
   const m = Math.max(r, g, b, 1), n = Math.max(to[0], to[1], to[2], 1);
   return Math.hypot(r / m - to[0] / n, g / m - to[1] / n, b / m - to[2] / n);
 }
 
-// An RGBA picture as the engine's colours, dithered. Clear pixels stay clear; with `clear` set,
-// that colour is clear too (for pictures saved on a plain background).
+// An RGBA picture as the engine's colors, dithered. Clear pixels stay clear; with `clear` set,
+// that color is clear too (for pictures saved on a plain background).
 //
 // `body` says which part is paint: { rgb, within }. Pixels of about that hue are all put on one
-// ramp, whatever their brightness, so the engine can show the car in another colour by swapping
+// ramp, whatever their brightness, so the engine can show the car in another color by swapping
 // that ramp. The ramp used comes back as `ramp`.
 export function toIndices(rgba, w, h, pal, { dither = 8, clear = null, body = null } = {}) {
   const ix = new Uint16Array(w * h).fill(CLEAR);
   const ramp = body ? rampOf(pal, body.rgb) : 0;
-  // A picture already in the engine's own colours (tools/pixelate.py makes them) is left as it is.
+  // A picture already in the engine's own colors (tools/pixelate.py makes them) is left as it is.
   const ours = new Set(Array.from(pal.subarray(32), (c) => c & 0xffffff));
   let exact = true;
   for (let i = 0; i < w * h && exact; i++) if (rgba[i * 4 + 3] >= 128 && !ours.has(rgba[i * 4] | (rgba[i * 4 + 1] << 8) | (rgba[i * 4 + 2] << 16))) exact = false;
@@ -133,7 +133,7 @@ export function toIndices(rgba, w, h, pal, { dither = 8, clear = null, body = nu
   return { ix, ramp, painted };
 }
 
-// The lowest row with anything on it, plus one: where a car's tyres meet the ground.
+// The lowest row with anything on it, plus one: where a car's tires meet the ground.
 export function groundOf(w, h, ix) {
   for (let y = h - 1; y >= 0; y--) for (let x = 0; x < w; x++) if (ix[y * w + x] !== CLEAR) return y + 1;
   return h;
@@ -141,9 +141,9 @@ export function groundOf(w, h, ix) {
 
 // A name fit for a file or an id: lower case, digits and dashes.
 // What is left of a box on the sheet once its background is taken away: the pixels, trimmed to
-// what is not background. The background is whatever colours run round the edge of the box
-// (a flat colour, or the two greys of a checkerboard), and it is taken from the edges inwards,
-// so the same grey inside the picture stays.
+// what is not background. The background is whatever colors run round the edge of the box
+// (a flat color, or the two grays of a checkerboard), and it is taken from the edges inwards,
+// so the same gray inside the picture stays.
 export function knockOut(rgba, w, h, within) {
   const out = new Uint8ClampedArray(rgba), at = (x, y) => (y * w + x) * 4;
   if (within > 0) {

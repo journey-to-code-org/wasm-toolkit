@@ -353,7 +353,7 @@ impl Game {
         r.cops = 0;
         let mut trip = crate::road::Trip::new(road, &r, false, seed);
         trip.pace = self.pace();
-        trip.gearbox = self.gearbox();
+        trip.transmission = self.transmission();
         trip.best_launch = self.launch_speed();
         if self.raining() {
             // It may not be raining where they are: at the meet the road is always dry.
@@ -377,7 +377,7 @@ impl Game {
     /// A thirtieth of a second of a race down a road with someone.
     pub(super) fn versus_road_tick(&mut self, keys: u32, hit: u32) {
         // An automatic picks its own gear from how fast it was going.
-        if let Some(speed) = self.trip.as_ref().filter(|t| t.gearbox.is_none()).map(|t| t.speed) {
+        if let Some(speed) = self.trip.as_ref().filter(|t| t.transmission.is_none()).map(|t| t.speed) {
             self.shift_auto(speed, keys & KEY_UP != 0);
         }
         let Some((trip, vs)) = self.trip.as_mut().zip(self.net.versus.as_mut()) else { return };
@@ -411,7 +411,7 @@ impl Game {
                     tone(880, 250);
                 }
             } else if trip.crash == 0 && counting == 0 {
-                let hz = (trip.gearbox.as_ref().map_or(self.auto.1, |b| b.rpm) / 40.0) as i32;
+                let hz = (trip.transmission.as_ref().map_or(self.auto.1, |b| b.rpm) / 40.0) as i32;
                 if !self.voiced {
                     tone(hz, 60);
                 }
@@ -469,7 +469,7 @@ impl Game {
         }
     }
 
-    /// What is said across the windscreen in a race down a road with someone.
+    /// What is said across the windshield in a race down a road with someone.
     pub(super) fn versus_road_says(&self) -> Option<&'static str> {
         let (vs, trip) = self.net.versus.as_ref().zip(self.trip.as_ref())?;
         vs.road.as_ref()?;
@@ -701,7 +701,7 @@ impl Game {
                     }
                     let car = p.car.as_ref().map(|id| self.pack.manifest.cars.get(id).map_or("SOMETHING OF THEIR OWN".to_string(), |c| c.name.to_uppercase()));
                     s.rect(10, y - 1, 12, 9, BLACK);
-                    s.vgrad(11, y, 10, 7, ramp(p.paint.as_deref().unwrap_or("GREY")), 27, 16);
+                    s.vgrad(11, y, 10, 7, ramp(p.paint.as_deref().unwrap_or("GRAY")), 27, 16);
                     s.text_sh(28, y, &p.name.to_uppercase(), WHITE, BLACK);
                     s.text(164, y, &car.unwrap_or_else(|| "PULLING IN".into()).chars().take(18).collect::<String>(), dim);
                 }

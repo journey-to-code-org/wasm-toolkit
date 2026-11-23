@@ -1,4 +1,4 @@
-//! An engine for driving games of the old kind: a 320x240 screen in 1,024 colours, a pointer, and
+//! An engine for driving games of the old kind: a 320x240 screen in 1,024 colors, a pointer, and
 //! places made of pictures. It plays whatever content pack it is given (`pack`), and has no cars,
 //! rooms or words of its own.
 //!
@@ -156,8 +156,8 @@ pub extern "C" fn wtk_mode() -> i32 {
 #[no_mangle]
 pub extern "C" fn wtk_flags() -> i32 {
     let g = &engine().game;
-    // And 2 if it is on a road with a gearbox to work.
-    g.owned().is_some_and(|o| g.kit(o).is_some()) as i32 | if g.scene == game::Scene::Road && g.trip.as_ref().is_some_and(|t| t.gearbox.is_some()) || g.scene == game::Scene::Drive && g.town.as_ref().is_some_and(|t| t.gearbox.is_some()) { 2 } else { 0 }
+    // And 2 if it is on a road with a transmission to work.
+    g.owned().is_some_and(|o| g.kit(o).is_some()) as i32 | if g.scene == game::Scene::Road && g.trip.as_ref().is_some_and(|t| t.transmission.is_some()) || g.scene == game::Scene::Drive && g.town.as_ref().is_some_and(|t| t.transmission.is_some()) { 2 } else { 0 }
 }
 
 /// How many dots the screen is across and down. A page that is not told shows 320 by 240.
@@ -176,7 +176,7 @@ pub extern "C" fn wtk_screen() -> *const u16 {
     engine().screen.fb.as_ptr()
 }
 
-/// What is to be heard after the last step: engine speed, load, boost, cylinders, tyre squeal,
+/// What is to be heard after the last step: engine speed, load, boost, cylinders, tire squeal,
 /// the blow-off count, the siren, the wind, what the parts make of the exhaust (loud, deep, rasp),
 /// the intake and the turbo's whistle, and nitrous spraying: fourteen floats. See `game::sound`.
 #[no_mangle]

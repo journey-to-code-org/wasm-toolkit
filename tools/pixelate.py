@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Turns a photo or any picture into one the engine will draw exactly as you see it.
 
-The engine has 1,024 colours and a 320 by 240 screen. This cuts a picture to the right shape,
-brings it down to size, matches it to those colours, and saves a PNG. What the PNG shows is what
+The engine has 1,024 colors and a 320 by 240 screen. This cuts a picture to the right shape,
+brings it down to size, matches it to those colors, and saves a PNG. What the PNG shows is what
 the game shows: drop it into a pack folder (tools/pack.py) or into the workshop.
 
     tools/pixelate.py bay.jpg --as bay                 ->  bay.pixel.png, 320 x 176
@@ -15,9 +15,9 @@ the game shows: drop it into a pack folder (tools/pack.py) or into the workshop.
   --width    for car and rear: how wide, keeping the picture's shape
   --fit      how to make the shape: cover (fill it and cut what hangs over, the default),
              contain (all of the picture, with clear bars), stretch
-  --focus    with cover, which part to keep: centre (default), top, bottom, left, right
-  --dither   0 to 16: how much the colours are stippled into one another (default 6; 0 is flat)
-  --pop      1.0 leaves the colours alone; 1.2 or so gives a photo the punch of painted art
+  --focus    with cover, which part to keep: center (default), top, bottom, left, right
+  --dither   0 to 16: how much the colors are stippled into one another (default 6; 0 is flat)
+  --pop      1.0 leaves the colors alone; 1.2 or so gives a photo the punch of painted art
   --sharpen  crispen edges after shrinking a photo
   --big N    also save <name>.xN.png, blown up N times, to look at
 """
@@ -56,7 +56,7 @@ def main():
     ap.add_argument("--size")
     ap.add_argument("--width", type=int)
     ap.add_argument("--fit", choices=["cover", "contain", "stretch"], default="cover")
-    ap.add_argument("--focus", choices=["centre", "top", "bottom", "left", "right"], default="centre")
+    ap.add_argument("--focus", choices=["center", "centre", "top", "bottom", "left", "right"], default="center")
     ap.add_argument("--dither", type=float, default=6)
     ap.add_argument("--pop", type=float, default=1.0)
     ap.add_argument("--sharpen", action="store_true")
@@ -94,7 +94,7 @@ def main():
     out = a.out or os.path.splitext(a.picture)[0] + ".pixel.png"
     done = Image.fromarray(rgba, "RGBA")
     done.save(out)
-    print(f"{out}: {done.width} x {done.height}, {len(np.unique(ix[~clear]))} of the engine's colours")
+    print(f"{out}: {done.width} x {done.height}, {len(np.unique(ix[~clear]))} of the engine's colors")
     if a.big > 1:
         big = os.path.splitext(out)[0] + f".x{a.big}.png"
         done.resize((done.width * a.big, done.height * a.big), Image.NEAREST).save(big)

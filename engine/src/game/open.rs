@@ -168,9 +168,9 @@ impl Game {
         let quick = 14.0 / r.et.clamp(8.0, 30.0);
         let wet = if self.raining() { 0.93 } else { 1.0 };
         let them = Runner { s: 12.0, across: -HALF / 2.0, speed: 0.0, top: (56.0 * quick.powf(1.3)).clamp(30.0, 76.0) * wet, accel: (5.0 * quick * quick).clamp(2.5, 9.0), paint: r.paint.clone().unwrap_or_else(|| "RED".into()) };
-        let (gearbox, best, pull) = (self.gearbox(), self.launch_speed(), self.pace().pull);
+        let (transmission, best, pull) = (self.transmission(), self.launch_speed(), self.pace().pull);
         if let Some(t) = self.town.as_mut() {
-            (t.gearbox, t.best_launch, t.pull, t.hold) = (gearbox, best, pull, 90);
+            (t.transmission, t.best_launch, t.pull, t.hold) = (transmission, best, pull, 90);
         }
         self.dash = Some(Dash { lane, back, rival: Some(them), poker: false, cards: Vec::new(), far: 12.0 });
     }
@@ -404,7 +404,7 @@ impl Game {
                         match side {
                             Side::Rock => {
                                 // A cutting: the hill it was blasted through, close and tall.
-                                scene.lit(&[at(&a, sign * HALF * 1.5, 0.0), at(&b, sign * HALF * 1.5, 0.0), at(&b, sign * HALF * 2.2, 9.0 + (i % 3) as f64), at(&a, sign * HALF * 2.2, 9.0 + ((i + 2) % 3) as f64)], ramp(if i % 2 == 0 { "CONCRETE" } else { "GREY" }), 0.0);
+                                scene.lit(&[at(&a, sign * HALF * 1.5, 0.0), at(&b, sign * HALF * 1.5, 0.0), at(&b, sign * HALF * 2.2, 9.0 + (i % 3) as f64), at(&a, sign * HALF * 2.2, 9.0 + ((i + 2) % 3) as f64)], ramp(if i % 2 == 0 { "CONCRETE" } else { "GRAY" }), 0.0);
                             }
                             Side::Drop => {
                                 // A rail, on posts, and the valley past it.
@@ -472,16 +472,16 @@ impl Game {
         let (ox, oz) = ((x0 + x1) / 2.0, (z0 + z1) / 2.0);
         let to = |x: f64, z: f64| (bx + size / 2 + ((x - ox) * scale) as i32, by + size / 2 - ((z - oz) * scale) as i32);
         s.rect(bx, by, size, size, BLACK);
-        s.frame(bx, by, size, size, shade(ramp("GREY"), 12));
+        s.frame(bx, by, size, size, shade(ramp("GRAY"), 12));
         for lane in &w.lanes {
             for k in (0..lane.pts.len()).step_by(12) {
                 let (a, b) = (lane.pts[k], lane.pts[(k + 12).min(lane.pts.len() - 1)]);
                 let (p, q) = (to(a.x, a.z), to(b.x, b.z));
-                s.line(p.0, p.1, q.0, q.1, shade(ramp("GREY"), 20));
+                s.line(p.0, p.1, q.0, q.1, shade(ramp("GRAY"), 20));
             }
         }
         let (t0, t1) = (to(0.0, map.depth() as f64 * map.pitch), to(map.cols() as f64 * map.pitch, 0.0));
-        s.rect(t0.0, t0.1, (t1.0 - t0.0).max(2), (t1.1 - t0.1).max(2), shade(ramp("GREY"), 10));
+        s.rect(t0.0, t0.1, (t1.0 - t0.0).max(2), (t1.1 - t0.1).max(2), shade(ramp("GRAY"), 10));
         for site in &w.sites {
             let p = to(site.x, site.z);
             s.rect(p.0 - 1, p.1 - 1, 3, 3, shade(ramp("GOLD"), 27));

@@ -1,7 +1,7 @@
 //! Things with depth: a camera, and flat shapes in space drawn far to near. Enough for a road, the
 //! walls beside it and what stands on it.
 //!
-//! x is to the right, y is up, z is ahead; lengths are metres and angles are radians.
+//! x is to the right, y is up, z is ahead; lengths are meters and angles are radians.
 
 use crate::gfx::{shade, Screen, PH, PW, S, W};
 
@@ -14,7 +14,7 @@ pub struct Cam {
     pub pos: V3,
     pub yaw: f64,
     pub pitch: f64,
-    /// How many pixels a metre is, a metre away.
+    /// How many pixels a meter is, a meter away.
     pub focal: f64,
     /// Where on the screen straight ahead is.
     pub cx: i32,
@@ -31,7 +31,7 @@ struct Poly {
 pub struct Scene3 {
     pub cam: Cam,
     /// The dark: how many shades everything is taken down, and how far ahead the car's lamps reach,
-    /// in metres. What is nearer than that is lit, and it fades to the dark from there.
+    /// in meters. What is nearer than that is lit, and it fades to the dark from there.
     pub dim: i32,
     pub lamps: f64,
     polys: Vec<Poly>,
@@ -85,7 +85,7 @@ impl Scene3 {
         })
     }
 
-    /// A flat shape, in two colours chequered. `bias` pushes it back (negative) or forward in the
+    /// A flat shape, in two colors chequered. `bias` pushes it back (negative) or forward in the
     /// drawing order, for things that lie on one another.
     pub fn poly(&mut self, pts: &[V3], a: u16, b: u16, bias: f64) {
         self.poly_at(pts, a, b, bias, None);
@@ -160,7 +160,7 @@ impl Scene3 {
         self.end_with(s, |_, _, _| {})
     }
 
-    /// A picture `width` metres wide and `aspect` times as tall, standing with the middle of its
+    /// A picture `width` meters wide and `aspect` times as tall, standing with the middle of its
     /// foot at `feet`, drawn in its turn by whoever ends the scene. False if it cannot be seen.
     pub fn sprite(&mut self, feet: V3, width: f64, aspect: f64, id: usize, key: f64) -> bool {
         let c = self.to_cam(feet);

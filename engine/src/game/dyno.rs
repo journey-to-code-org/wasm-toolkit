@@ -221,7 +221,7 @@ impl Game {
     /// The laptop: the log of the last pull down the left, and the tune down the right.
     pub(super) fn draw_laptop(&self, s: &mut Screen) {
         let (green, dim, red, white) = (shade(ramp("LIME"), 24), shade(ramp("FOREST"), 16), shade(ramp("RED"), 27), shade(ramp("WHITE"), 26));
-        s.vgrad(0, 0, 320, 200, ramp("GREY"), 6, 3);
+        s.vgrad(0, 0, 320, 200, ramp("GRAY"), 6, 3);
         s.rect(4, 4, 312, 190, BLACK);
         s.frame(4, 4, 312, 190, shade(ramp("CHROME"), 14));
         s.text(10, 9, "DATALOG: THE LAST PULL", green);
@@ -289,8 +289,8 @@ impl Game {
 
     /// The bay with the rollers in the floor: the car on them, its straps, and the screen on the wall.
     fn draw_bay(&self, s: &mut Screen) {
-        let (gold, white, dim) = (shade(ramp("GOLD"), 27), shade(ramp("WHITE"), 26), shade(ramp("GREY"), 12));
-        s.vgrad(0, 0, 320, 150, ramp("GREY"), 7, 11);
+        let (gold, white, dim) = (shade(ramp("GOLD"), 27), shade(ramp("WHITE"), 26), shade(ramp("GRAY"), 12));
+        s.vgrad(0, 0, 320, 150, ramp("GRAY"), 7, 11);
         s.vgrad(0, 150, 320, 50, ramp("CONCRETE"), 14, 9);
         let r = &self.rollers;
         let rings = self.rings();
@@ -345,7 +345,7 @@ impl Game {
             return self.draw_bay(s);
         }
         s.vgrad(0, 0, 320, 200, ramp("NAVY"), 3, 9);
-        let (cream, grey, gold, red, dim) = (shade(ramp("CREAM"), 26), shade(ramp("GREY"), 14), shade(ramp("GOLD"), 27), shade(ramp("RED"), 26), shade(ramp("NAVY"), 14));
+        let (cream, gray, gold, red, dim) = (shade(ramp("CREAM"), 26), shade(ramp("GRAY"), 14), shade(ramp("GOLD"), 27), shade(ramp("RED"), 26), shade(ramp("NAVY"), 14));
         s.text_sh(8, 6, "THE ROLLERS", WHITE, BLACK);
         let Some((sheet, car)) = self.sheet.as_ref().zip(self.car()) else { return };
         s.text_sh(112, 6, &car.name.to_uppercase().chars().take(25).collect::<String>(), gold, BLACK);
@@ -359,7 +359,7 @@ impl Game {
             let y = y0 + h - (v / top * h as f64) as i32;
             s.rect(x0, y.min(y0 + h - 1), w, 1, dim);
             if (v as i32) % 100 == 0 {
-                s.text(2, y - 4, &format!("{:3}", v as i32), grey);
+                s.text(2, y - 4, &format!("{:3}", v as i32), gray);
             }
             v += 50.0;
         }
@@ -367,7 +367,7 @@ impl Game {
         while k <= revs {
             let x = x0 + (k / revs * w as f64) as i32;
             s.rect(x.min(x0 + w - 1), y0, 1, h, dim);
-            s.text(x - 3, y0 + h + 3, &format!("{}", (k / 1000.0) as i32), grey);
+            s.text(x - 3, y0 + h + 3, &format!("{}", (k / 1000.0) as i32), gray);
             k += 1000.0;
         }
         let at = |rpm: f64, v: f64| (x0 + (rpm / revs * w as f64) as i32, y0 + h - (v / top * h as f64) as i32);
@@ -377,13 +377,13 @@ impl Game {
                 s.line(p[0].0, p[0].1 + 1, p[1].0, p[1].1 + 1, c);
             }
         };
-        plot(sheet.stock.iter().map(|p| at(p.0, p.1)).collect(), grey);
+        plot(sheet.stock.iter().map(|p| at(p.0, p.1)).collect(), gray);
         plot(sheet.curve.iter().map(|p| at(p.0, p.1)).collect(), gold);
         plot(sheet.curve.iter().map(|p| at(p.0, p.2)).collect(), red);
         s.frame(x0, y0, w, h, shade(ramp("CHROME"), 16));
         s.text(x0 + 4, y0 + 4, "POWER", red);
         s.text(x0 + 52, y0 + 4, "TORQUE", gold);
-        s.text(x0 + 108, y0 + 4, "STOCK", grey);
+        s.text(x0 + 108, y0 + 4, "STOCK", gray);
         // And the numbers.
         let o = self.owned();
         let lines = [
@@ -398,17 +398,17 @@ impl Game {
             ("ENGINE", o.map_or(String::new(), |o| format!("{}%", o.cond))),
             ("WORTH", o.map_or(String::new(), |o| format!("${}", self.value(o)))),
             ("BODY", o.map_or(String::new(), |o| format!("{}%", 100 - o.body))),
-            ("TYRES", o.map_or(String::new(), |o| format!("{:.0}%", 100.0 - o.tyres))),
+            ("TIRES", o.map_or(String::new(), |o| format!("{:.0}%", 100.0 - o.tires))),
             ("BRAKES", o.map_or(String::new(), |o| format!("{:.0}%", self.chassis(o).0 * 100.0))),
             ("HANDLING", o.map_or(String::new(), |o| format!("{:.0}%", self.chassis(o).1 * 100.0))),
         ];
         for (i, (name, value)) in lines.iter().enumerate() {
             let y = 26 + i as i32 * 11;
-            s.text(208, y, name, grey);
+            s.text(208, y, name, gray);
             s.text(320 - 4 - value.len() as i32 * 8, y, value, cream);
         }
         self.buttons(s, &["PULL AGAIN".to_string(), "LAPTOP".to_string(), "DONE".to_string()]);
         let line = if self.owned().is_some_and(|o| o.untuned) { "New parts, old tune: it needs a tune." } else { "What it makes, and what that is worth." };
-        self.panel(s, "The rollers", self.note.as_deref().unwrap_or(line), "Grey: as it left the factory. Escape.");
+        self.panel(s, "The rollers", self.note.as_deref().unwrap_or(line), "Gray: as it left the factory. Escape.");
     }
 }
