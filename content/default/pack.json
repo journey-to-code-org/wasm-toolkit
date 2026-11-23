@@ -541,6 +541,30 @@
           "do": "setup",
           "button": "Coilovers",
           "needs_car": true
+        },
+        {
+          "rect": [
+            228,
+            3,
+            46,
+            16
+          ],
+          "label": "The shelf: put parts on, take them off",
+          "do": "parts",
+          "button": "Parts",
+          "needs_car": true
+        },
+        {
+          "rect": [
+            276,
+            3,
+            40,
+            16
+          ],
+          "label": "Pop the hood",
+          "do": "hood",
+          "button": "Hood",
+          "needs_car": true
         }
       ]
     },

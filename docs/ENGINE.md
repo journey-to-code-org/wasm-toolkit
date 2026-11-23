@@ -37,7 +37,12 @@ All five steps are in the engine. The engine plays a season out of a pack:
   engine lets go. The race is lost, and it runs badly until it is rebuilt, which costs money and
   four hours.
 - **The bench**: the shelf of spare parts, which are sold from here. For a car with no hood in
-  the pack, or a slot its hood does not show, parts go on and off here with one pick.
+  the pack, or a slot its hood does not show, parts go on and off here with one pick. A part
+  that goes under the hood takes you there holding it: where it goes blinks, and so do the
+  bolts to undo, then the bolts to do up once it is in.
+- **Parts in the paper**: with a car in the bay, only what fits it, each with its slot and,
+  pointed at, what it does. Bought from the garage, FIT PARTS goes straight to the bench. The
+  default garage has Parts and Hood buttons as well as its spots.
 - **The yard**: up to sixteen cars; bring one into the bay or sell it to the dealer.
 - **Rivals**: they pull in one at a time, in the pack's order. Race for kicks, for money up to
   what each will take, or for cars. Beating one for money or better brings out the next.
