@@ -472,10 +472,14 @@ Ramp names: see `RAMPS` in `engine/src/gfx.rs`.
   (`trunk`), underneath on the lift (`under`), a front wheel (`wheels`) and the inside
   (`inside`). Under the hood and the areas are tabs across the top of the work, and a slot is
   in at most one of them; one in none of them is done at the bench. `work` opens the first,
-  and `work:<id>` one of them; the bench sends a part to where it goes, held.
+  and `work:<id>` one of them; the bench sends a part to where it goes, held. The default cars
+  also have the engine out on a stand (`engine`): head, pistons, crank behind the oil pan, and
+  the block, which comes out last. Work there is counted in minutes: three a bolt, ten to lift a
+  part off or set one in, and every whole hour of it is spent; a swap at the bench is an hour.
+  What is in the way is said before what is still bolted.
 
-  `tools/stand_ins.py` draws the default pack's pictures of the trunk, the underside, the wheel
-  and the inside, and prints where each part is on them. They are stand-ins: drop a photo on
+  `tools/stand_ins.py` draws the default pack's pictures of the trunk, the underside, the wheel,
+  the inside and the engine stand, and prints where each part is on them. They are stand-ins: drop a photo on
   one in the workshop and move the shapes to where the parts are on it.
 - **cars** may have a `cockpit`, the view from the seat, and a `rear`, the car from behind for
   when it is ahead of you:

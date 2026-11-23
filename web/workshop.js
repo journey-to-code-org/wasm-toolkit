@@ -570,7 +570,7 @@ const boundsOf = (pts) => { const xs = pts.map((p) => p[0]), ys = pts.map((p) =>
 
 // The places a car can have, each with what it is called and the stand-in picture of it, if
 // the pack has one.
-const PLACES = [["hood", "Under the hood", "bay.pic"], ["trunk", "In the trunk", "trunk.pic"], ["under", "Under the car", "under.pic"], ["wheels", "At the wheels", "wheels.pic"], ["inside", "Inside", "inside.pic"]];
+const PLACES = [["hood", "Under the hood", "bay.pic"], ["trunk", "In the trunk", "trunk.pic"], ["under", "Under the car", "under.pic"], ["wheels", "At the wheels", "wheels.pic"], ["inside", "Inside", "inside.pic"], ["engine", "On the engine stand", "engine.pic"]];
 
 function areasForm(c) {
   const all = areasOf(c), a = area(), free = PLACES.filter(([id]) => !all.some((x) => x.id === id));
@@ -682,7 +682,8 @@ function shapes(canvas, scale, slots) {
       g.fillStyle = on ? "rgba(255,210,74,.2)" : "rgba(106,224,255,.10)"; g.fill("evenodd");
       g.lineWidth = on ? 3 : 1.5; g.strokeStyle = on ? "#ffd24a" : "#6ae0ff"; g.stroke();
       g.setLineDash([]);
-      const [x, y] = s.rect;
+      // Its name at the middle of its corners, or at its box's corner for a box.
+      const [x, y] = s.poly?.length >= 3 ? [s.poly.reduce((t, p) => t + p[0], 0) / s.poly.length - name.length * 1.6, s.poly.reduce((t, p) => t + p[1], 0) / s.poly.length - 4] : s.rect;
       g.fillStyle = "#000"; g.fillText(name, x * scale + 4, y * scale + 13); g.fillStyle = on ? "#ffd24a" : "#fff"; g.fillText(name, x * scale + 3, y * scale + 12);
       if (!on) continue;
       if (s.poly?.length >= 3) for (const [px, py] of s.poly) { g.fillStyle = "#ffd24a"; g.fillRect(px * scale - 4, py * scale - 4, 8, 8); g.strokeStyle = "#000"; g.lineWidth = 1; g.strokeRect(px * scale - 4, py * scale - 4, 8, 8); }

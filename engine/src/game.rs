@@ -44,7 +44,20 @@ pub const KEY_H: u32 = 512;
 pub const KEY_SPACE: u32 = 1024;
 /// How many lines of a list fit a column at the bench, and a page of the paper.
 const LINES: usize = 12;
+/// Every bolt of a part with `n` of them, tight.
+fn all_bolts(n: usize) -> u8 {
+    ((1u16 << n.min(8)) - 1) as u8
+}
+
+/// Whether a slot's name is one thing or several: the plug wires are, the battery is.
+fn is_are(slot: &str) -> &'static str {
+    if slot.ends_with('s') && !slot.ends_with("ss") { "are" } else { "is" }
+}
+
 const PAGE: usize = 11;
+/// Minutes to undo or do up one bolt, and to lift a part off or set one in.
+const BOLT: f64 = 3.0;
+const LIFT: f64 = 10.0;
 
 /// The most cars you can keep.
 pub const MOST_CARS: usize = 16;
@@ -863,7 +876,7 @@ impl Game {
             }
         }
         if shop.iter().any(|(_, p)| self.group_of(p) == car.areas().len() + 1) {
-            out.push("ENGINE".to_string());
+            out.push("OTHER".to_string());
         }
         out
     }
@@ -1031,9 +1044,9 @@ impl Game {
         car.areas().into_iter().flat_map(|a| a.3.iter()).find_map(|(slot, place)| {
             let n = place.bolts.len();
             if o.off.contains(slot) {
-                Some(format!("The {} is off. It will not run.", slot.to_lowercase()))
+                Some(format!("The {} {} off. It will not run.", slot.to_lowercase(), is_are(slot)))
             } else if o.tight(slot, n).count_ones() as usize != n {
-                Some(format!("The {} is not bolted down.", slot.to_lowercase()))
+                Some(format!("The {} {} not bolted down.", slot.to_lowercase(), is_are(slot)))
             } else {
                 None
             }
@@ -1127,6 +1140,15 @@ impl Game {
     // ---- Time and endings ----
 
     /// Everything takes time. When the days run out, or there is no way to get a car, it is over.
+    /// Minutes of work on the car: they add up, and every whole hour of them is spent.
+    pub(super) fn labor(&mut self, minutes: f64) {
+        self.clock += minutes / 60.0;
+        while self.clock >= 1.0 {
+            self.clock -= 1.0;
+            self.spend(1);
+        }
+    }
+
     pub fn spend(&mut self, hours: i32) {
         let before = self.day();
         self.state.hours += hours;
@@ -2414,9 +2436,10 @@ impl Game {
             return None;
         }
         let seen: Vec<(&String, &Slot)> = slots.iter().filter(|(s, _)| self.in_view(slots, s)).collect();
-        let on_bolt = |p: &Slot| p.bolts.iter().any(|b| (self.px - b[0]).abs() <= 5 && (self.py - b[1]).abs() <= 5);
+        let off = |name: &str| self.owned().is_some_and(|o| o.off.iter().any(|s| s == name));
+        let on_bolt = |name: &str, p: &Slot| !off(name) && p.bolts.iter().any(|b| (self.px - b[0]).abs() <= 5 && (self.py - b[1]).abs() <= 5);
         // What is uncovered lies in front of what covered it: the smaller first.
-        let found = seen.iter().find(|(_, p)| on_bolt(p)).or_else(|| seen.iter().filter(|(_, p)| p.contains(self.px, self.py)).min_by_key(|(_, p)| p.rect[2] * p.rect[3]));
+        let found = seen.iter().find(|(name, p)| on_bolt(name, p)).or_else(|| seen.iter().filter(|(_, p)| p.contains(self.px, self.py)).min_by_key(|(_, p)| p.rect[2] * p.rect[3]));
         found.map(|(s, p)| ((*s).clone(), (*p).clone()))
     }
 
@@ -2498,7 +2521,8 @@ impl Game {
                         self.state.cars[cur].bolts.insert(slot.clone(), now);
                         tone(if now & (1 << b) != 0 { 700 } else { 400 }, 50);
                         self.note = None;
-                        if now == (1 << place.bolts.len()) - 1 && self.state.cars[cur].fitted.contains_key(&slot) {
+                        self.labor(BOLT);
+                        if now == all_bolts(place.bolts.len()) && self.state.cars[cur].fitted.contains_key(&slot) {
                             self.say("Done up tight. It is on.");
                             self.save();
                         } else if now == 0 && self.carrying.is_some() {
@@ -2507,12 +2531,12 @@ impl Game {
                         return;
                     }
                 }
+                // Something in front of it has to come off first; then its own bolts.
+                if let Some(front) = place.behind.as_ref().filter(|f| !self.state.cars[cur].off.contains(*f)) {
+                    return self.no(&format!("The {} {} in the way.", front.to_lowercase(), is_are(front)));
+                }
                 if tight != 0 {
                     return self.no("It is bolted on. Undo the bolts first.");
-                }
-                // Something in front of it has to come off first.
-                if let Some(front) = place.behind.as_ref().filter(|f| !self.state.cars[cur].off.contains(*f)) {
-                    return self.no(&format!("The {} is in the way.", front.to_lowercase()));
                 }
                 let o = &mut self.state.cars[cur];
                 if let Some(part) = o.fitted.remove(&slot) {
@@ -2523,7 +2547,7 @@ impl Game {
                 let goes_here = self.carrying.as_ref().is_some_and(|l| self.loose_slot(l) == slot);
                 self.say(if goes_here { "Off. Now set the new one on." } else { "It is off, and on the floor." });
                 tone(260, 90);
-                self.spend(1);
+                self.labor(LIFT);
             }
             (true, Some(l)) => {
                 if self.loose_slot(&l) != slot {
@@ -2532,7 +2556,7 @@ impl Game {
                 // And what it sits in front of has to be on before it is.
                 let waits = self.area_here().and_then(|a| a.3.iter().find(|(name, p)| p.behind.as_deref() == Some(slot.as_str()) && self.state.cars[cur].off.contains(*name)).map(|(name, _)| name.clone()));
                 if let Some(first) = waits {
-                    return self.no(&format!("The {} goes on first.", first.to_lowercase()));
+                    return self.no(&format!("The {} {} on first.", first.to_lowercase(), if is_are(&first) == "are" { "go" } else { "goes" }));
                 }
                 let o = &mut self.state.cars[cur];
                 o.off.retain(|s| *s != slot);
@@ -2543,7 +2567,8 @@ impl Game {
                     self.state.cars[cur].fitted.insert(slot, id);
                 }
                 self.carrying = None;
-                self.say("It is on. Now do up the bolts.");
+                self.labor(LIFT);
+                self.say(if place.bolts.is_empty() { "It is on." } else { "It is on. Now do up the bolts." });
                 tone(300, 90);
             }
             (true, None) => self.say("Nothing on it. Pick a part up off the floor."),
@@ -3119,7 +3144,7 @@ impl Game {
                 }
             }
             // Holding a part, or with one on loose: where the work is, blinking.
-            let loose = !empty && tight != (1 << place.bolts.len()) - 1 && self.carrying.is_none();
+            let loose = !empty && tight != all_bolts(place.bolts.len()) && self.carrying.is_none();
             let target = self.carrying.as_ref().is_some_and(|l| self.loose_slot(l) == *slot) || loose;
             if target && blink {
                 s.outline(&pts, shade(ramp("LIME"), 28));

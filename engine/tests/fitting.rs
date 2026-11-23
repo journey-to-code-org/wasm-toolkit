@@ -67,8 +67,8 @@ fn the_garage_has_buttons_for_the_shelf_and_the_hood() {
     assert_eq!(g.scene, Scene::Hood);
     // Across the top, the other places on the car; and back in the garage, a spot for each.
     let areas: Vec<String> = g.car().unwrap().areas().iter().map(|a| a.0.to_string()).collect();
-    assert_eq!(areas, ["hood", "trunk", "under", "wheels", "inside"]);
-    let w = (316 / 5).min(80);
+    assert_eq!(areas, ["hood", "trunk", "under", "wheels", "inside", "engine"]);
+    let w = (316 / 6).min(80);
     click(&mut g, 2 + 3 * w + 10, 6);
     assert_eq!(g.area_here().unwrap().0, "wheels");
     shot(&g, "a-wheels");
@@ -210,7 +210,7 @@ fn what_is_behind_a_cover_is_out_of_sight_until_it_is_off() {
     for &[x, y] in &cover.bolts {
         pick_at(&mut g, x, y);
     }
-    pick_at(&mut g, 200, 99);
+    pick_at(&mut g, 180, 98);
     assert!(g.owned().unwrap().off.contains(&"Valve cover".to_string()), "{:?}", g.note);
     assert!(g.in_view(&slots, "Camshafts") && !g.in_view(&slots, "Valve springs"));
     // With it off it will not run.
@@ -246,5 +246,65 @@ fn the_default_pack_is_in_american_english() {
         // Part ids are kept as they were, so that saved games find them.
         let n = text.matches(word).count() - text.matches(&format!("s-{word}")).count() - text.matches(&format!("sticky-{word}")).count();
         assert_eq!(n, 0, "{word}");
+    }
+}
+
+#[test]
+fn the_engine_comes_apart_on_the_stand_and_work_is_counted_in_minutes() {
+    let Some(mut g) = with_a_car() else { return };
+    g.tick(ESC, 0, 0);
+    g.tick(0, 0, 0);
+    click(&mut g, 295, 10);
+    let w = (316 / 6).min(80);
+    click(&mut g, 2 + 5 * w + 10, 6);
+    assert_eq!(g.area_here().unwrap().0, "engine");
+    let slots = g.area_here().unwrap().3.clone();
+    assert!(!g.in_view(&slots, "Bottom end") && !g.in_view(&slots, "Crankshaft"));
+    // Eight head bolts and a lift: about thirty-four minutes, not hours.
+    let (hours, head) = (g.state.hours, slot(&g, "Cylinder head"));
+    for &[x, y] in &head.bolts {
+        pick_at(&mut g, x, y);
+    }
+    pick_at(&mut g, 160, 50);
+    assert!(g.owned().unwrap().off.contains(&"Cylinder head".to_string()), "{:?}", g.note);
+    assert!(g.in_view(&slots, "Bottom end") && g.state.hours - hours <= 1);
+    // The block will not come out with the crank in it.
+    pick_at(&mut g, 160, 100);
+    assert!(g.note.as_deref().is_some_and(|n| n.contains("crankshaft") && n.contains("in the way")), "{:?}", g.note);
+    assert_eq!(g.wont_run().as_deref(), Some("It has no cylinder head."));
+    shot(&g, "e1-engine");
+}
+
+#[test]
+fn no_two_bolts_that_can_be_seen_together_are_within_reach_of_one_pointer() {
+    let Some(bytes) = std::fs::read("../web/default.pack").ok() else { return };
+    let pack = Pack::parse(&bytes).unwrap();
+    for (id, car) in &pack.manifest.cars {
+        for (area, _, _, slots) in car.areas() {
+            // Whether one is out of sight for as long as the other is on.
+            let hidden_by = |a: &str, b: &str| {
+                let mut at = a;
+                for _ in 0..8 {
+                    match slots.get(at).filter(|s| s.covered).and_then(|s| s.behind.as_deref()) {
+                        Some(f) if f == b => return true,
+                        Some(f) => at = f,
+                        None => return false,
+                    }
+                }
+                false
+            };
+            for (n1, s1) in slots {
+                for (n2, s2) in slots.iter().filter(|(n2, _)| *n2 > n1) {
+                    if hidden_by(n1, n2) || hidden_by(n2, n1) {
+                        continue;
+                    }
+                    for b1 in &s1.bolts {
+                        for b2 in &s2.bolts {
+                            assert!((b1[0] - b2[0]).abs() > 5 || (b1[1] - b2[1]).abs() > 5, "{id} {area}: {n1} {b1:?} and {n2} {b2:?}");
+                        }
+                    }
+                }
+            }
+        }
     }
 }
