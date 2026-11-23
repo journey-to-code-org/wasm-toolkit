@@ -280,6 +280,8 @@ pub struct Game {
     pub carrying: Option<Loose>,
     /// Which part of the car is being worked on: under the hood, the trunk, underneath...
     pub area: usize,
+    /// Which page of the floor is in reach, when there is more on it than fits.
+    pub floor_page: usize,
     /// The car in the yard whose ways to get rid of it are being shown.
     pub parting: Option<usize>,
     saved: bool,
@@ -324,7 +326,7 @@ impl Game {
         };
         let mut g = Game {
             pack, problem, scene: Scene::Title, state: State::default(), lamps: false, note: None, px: 160, py: 100,
-            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], shop_group: 0, rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, area: 0, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, auto: (0, 900.0), spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0, land: None, clock: 0.0, dash: None,
+            who: 0, bet: 0, race: None, town: None, trip: None, trip_from: None, town_by_road: false, road_race: None, sheet: None, bracket: None, turned: [0; 3], shop_group: 0, rolling: 0.0, rollers: dyno::Rollers::default(), net: Net::default(), selling: false, carrying: None, area: 0, floor_page: 0, parting: None, saved: false, hints: false, sure: false, rng: 1, last_under: None, last_keys: 0, voiced: false, auto: (0, 900.0), spooled: 0.0, blowoffs: 0, last_mouse: (160, 100), ticks: 0, land: None, clock: 0.0, dash: None,
         };
         g.land = crate::land::World::build(&g.pack.manifest);
         g.state = g.fresh();
@@ -853,7 +855,8 @@ impl Game {
         let car = self.owned().map(|o| o.car.clone());
         let mut all: Vec<(&String, &Part)> = self.pack.manifest.parts.iter().filter(|(_, p)| p.rare == 0 && car.as_ref().is_none_or(|c| p.goes_on(c))).collect();
         // Grouped by where on the car they go, and cheapest first in each.
-        all.sort_by_key(|(_, p)| (self.group_of(p), p.price));
+        let car_has = |id: &str| self.owned().is_some_and(|o| o.fitted.values().any(|p| base(p) == id));
+        all.sort_by_key(|(id, p)| (self.group_of(p), car_has(id), p.price));
         all
     }
 
@@ -882,21 +885,38 @@ impl Game {
     }
 
     /// What the parts page shows: all of them, or one group.
+    /// The group the parts page is showing.
+    fn group_now(&self) -> usize {
+        let groups = self.shop_groups();
+        if groups.get(self.shop_group).is_some_and(|w| !w.is_empty()) { self.shop_group } else { 0 }
+    }
+
     pub fn shop_page(&self) -> Vec<(&String, &Part)> {
-        let g = self.shop_group;
+        // A group that the car in the bay has nothing in (or no groups at all) shows everything.
+        let g = self.group_now();
         self.shop().into_iter().filter(|(_, p)| g == 0 || self.group_of(p) == g).collect()
     }
 
     /// Where the list on the parts page starts: lower when the groups are across the top.
-    fn shop_top(&self) -> i32 {
-        if self.shop_groups().is_empty() { 56 } else { 66 }
+    pub fn shop_top(&self) -> i32 {
+        match self.group_chips().iter().map(|c| c.1).max() {
+            None => 56,
+            Some(y) => y + 14,
+        }
+    }
+
+    /// How many parts the parts page has room for, under its groups.
+    pub fn shop_lines(&self) -> usize {
+        ((Self::FIT_BUTTON[1] - 10 - self.shop_top()) / 10).clamp(6, PAGE as i32) as usize
     }
 
     /// The group buttons: (x, width, words, group), leaving out groups with nothing in them.
-    fn group_chips(&self) -> Vec<(i32, i32, String, usize)> {
+    /// Each as (x, y, width, words, group): one row, or two when they will not fit in one.
+    fn group_chips(&self) -> Vec<(i32, i32, i32, String, usize)> {
         let groups: Vec<(usize, String)> = self.shop_groups().into_iter().enumerate().filter(|(_, w)| !w.is_empty()).collect();
-        let w = 304 / groups.len().max(1) as i32;
-        groups.into_iter().enumerate().map(|(k, (g, words))| (8 + k as i32 * w, w - 2, words, g)).collect()
+        let per = if groups.len() > 5 { groups.len().div_ceil(2) } else { groups.len().max(1) };
+        let w = 304 / per as i32;
+        groups.into_iter().enumerate().map(|(k, (g, words))| (8 + (k % per) as i32 * w, 52 + (k / per) as i32 * 10, w - 2, words, g)).collect()
     }
 
     /// What a part does, in a few words, for the paper.
@@ -1199,7 +1219,7 @@ impl Game {
 
     // ---- Places ----
 
-    fn here(&self) -> Option<&Place> {
+    pub fn here(&self) -> Option<&Place> {
         self.pack.manifest.places.get(&self.state.place)
     }
 
@@ -1918,14 +1938,15 @@ impl Game {
                         }
                     } else {
                         let (len, top) = (self.shop_page().len(), self.shop_top());
-                        let chip = self.group_chips().into_iter().find(|(x, w, _, _)| self.py >= 52 && self.py < 62 && self.px >= *x && self.px < x + w);
-                        if let Some((_, _, _, g)) = chip {
+                        let chip = self.group_chips().into_iter().find(|(x, y, w, _, _)| self.py >= *y && self.py < y + 10 && self.px >= *x && self.px < x + w);
+                        if let Some((_, _, _, _, g)) = chip {
                             self.shop_group = g;
                             self.turned[2] = 0;
                             self.note = None;
-                        } else if len > PAGE && self.row(8, 312, top + PAGE as i32 * 10, 10, 1).is_some() {
-                            self.turned[2] = if self.turned[2] + PAGE >= len { 0 } else { self.turned[2] + PAGE };
-                        } else if let Some(i) = self.row(8, 312, top, 10, (len - self.turned[2].min(len)).min(PAGE)) {
+                        } else if len > self.shop_lines() && self.row(8, 312, top + self.shop_lines() as i32 * 10, 10, 1).is_some() {
+                            let lines = self.shop_lines();
+                            self.turned[2] = if self.turned[2] + lines >= len { 0 } else { self.turned[2] + lines };
+                        } else if let Some(i) = self.row(8, 312, top, 10, (len - self.turned[2].min(len)).min(self.shop_lines())) {
                             self.buy_part(i + self.turned[2]);
                         }
                     }
@@ -2452,7 +2473,22 @@ impl Game {
         // On a car with a build sheet, what it came with there is a real part, on the shelf when it is off.
         let stock = slots.keys().filter(|s| !(o.sheet && car.stock.contains_key(*s))).filter(|s| o.off.contains(*s) || o.fitted.contains_key(*s)).map(|s| Loose::Stock(s.clone()));
         let spares = self.state.spares.iter().filter(|id| self.part(id).is_some_and(|p| slots.contains_key(&p.slot) && p.goes_on(&o.car))).map(|id| Loose::Part(id.clone()));
-        stock.chain(spares).filter(|l| !held(l)).take(8).collect()
+        let mut all: Vec<Loose> = stock.chain(spares).filter(|l| !held(l)).collect();
+        // What goes on an empty place first: that is what is wanted.
+        all.sort_by_key(|l| !o.off.contains(&self.loose_slot(l)));
+        all
+    }
+
+    /// What of the floor is in reach: a page of it, with the last chip turning the page when
+    /// there is more than one page. Each with its place among the chips.
+    pub fn floor_shown(&self) -> (Vec<(usize, Loose)>, bool) {
+        let all = self.floor();
+        if all.len() <= 8 {
+            return (all.into_iter().enumerate().collect(), false);
+        }
+        let pages = all.len().div_ceil(7);
+        let page = self.floor_page % pages;
+        (all.into_iter().skip(page * 7).take(7).enumerate().collect(), true)
     }
 
     fn loose_slot(&self, l: &Loose) -> String {
@@ -2496,7 +2532,13 @@ impl Game {
             if self.carrying.take().is_some() {
                 return self.say("Down it goes.");
             }
-            let under = self.floor().into_iter().enumerate().find(|(n, _)| {
+            let (shown, more) = self.floor_shown();
+            let (mx, my) = Self::chip_at(7);
+            if more && self.px >= mx && self.px < mx + 76 && self.py >= my && self.py < my + 10 {
+                self.floor_page += 1;
+                return tone(480, 30);
+            }
+            let under = shown.into_iter().find(|(n, _)| {
                 let (x, y) = Self::chip_at(*n);
                 self.px >= x && self.px < x + 76 && self.py >= y && self.py < y + 10
             });
@@ -2976,17 +3018,18 @@ impl Game {
             let parts = self.shop_page();
             let (top, y0) = (self.turned[2].min(parts.len().saturating_sub(1)), self.shop_top());
             // Where on the car: one button each, and one for all of them.
-            for (x, w, words, g) in self.group_chips() {
-                let (on, under) = (g == self.shop_group, self.py >= 52 && self.py < 62 && self.px >= x && self.px < x + w);
-                s.rect(x, 52, w, 10, if on { ink } else if under { hover } else { shade(cream, 24) });
-                s.frame(x, 52, w, 10, ink);
-                s.text(x + w / 2 - words.len() as i32 * 4, 53, &words, if on { shade(cream, 28) } else { ink });
+            for (x, y, w, words, g) in self.group_chips() {
+                let (on, under) = (g == self.group_now(), self.py >= y && self.py < y + 10 && self.px >= x && self.px < x + w);
+                s.rect(x, y, w, 10, if on { ink } else if under { hover } else { shade(cream, 24) });
+                s.frame(x, y, w, 10, ink);
+                s.text(x + w / 2 - words.len() as i32 * 4, y + 1, &words, if on { shade(cream, 28) } else { ink });
             }
-            let over = self.row(8, 312, y0, 10, (parts.len() - top.min(parts.len())).min(PAGE)).map(|i| i + top);
-            if parts.len() > PAGE {
-                s.text(12, y0 + PAGE as i32 * 10, &format!("MORE: {} TO {} OF {}", top + 1, (top + PAGE).min(parts.len()), parts.len()), shade(ramp("BLUE"), 14));
+            let lines = self.shop_lines();
+            let over = self.row(8, 312, y0, 10, (parts.len() - top.min(parts.len())).min(lines)).map(|i| i + top);
+            if parts.len() > lines {
+                s.text(12, y0 + lines as i32 * 10, &format!("MORE: {} TO {} OF {}", top + 1, (top + lines).min(parts.len()), parts.len()), shade(ramp("BLUE"), 14));
             }
-            for (i, &(id, p)) in parts.iter().enumerate().skip(top).take(PAGE) {
+            for (i, &(id, p)) in parts.iter().enumerate().skip(top).take(lines) {
                 let y = y0 + (i - top) as i32 * 10;
                 if over == Some(i) {
                     s.rect(8, y - 1, 304, 10, hover);
@@ -3188,14 +3231,22 @@ impl Game {
         // The floor in front of the car, and what is lying on it.
         s.vgrad(0, 176, 320, 24, ramp("CONCRETE"), 18, 22);
         s.rect(0, 176, 320, 1, shade(dark, 2));
-        let floor = self.floor();
+        let (floor, more) = self.floor_shown();
         let mut chip_over = None;
-        for (n, l) in floor.iter().enumerate() {
-            let (x, y) = Self::chip_at(n);
+        for (n, l) in &floor {
+            let (x, y) = Self::chip_at(*n);
             self.chip(s, x, y, l);
             if self.px >= x && self.px < x + 76 && self.py >= y && self.py < y + 10 {
                 chip_over = Some(l);
             }
+        }
+        if more {
+            // The last chip: the rest of what is on the floor.
+            let (x, y) = Self::chip_at(7);
+            let pages = self.floor().len().div_ceil(7);
+            s.rect(x, y, 76, 10, shade(ramp("NAVY"), 10));
+            s.frame(x, y, 76, 10, shade(ramp("CHROME"), 20));
+            s.text(x + 4, y + 1, &format!("MORE {}/{}", self.floor_page % pages + 1, pages), WHITE);
         }
         if floor.is_empty() && self.carrying.is_none() {
             s.text(8, 184, "NOTHING ON THE FLOOR.", shade(ramp("CONCRETE"), 8));
@@ -3428,8 +3479,8 @@ impl Game {
             Phase::Stage if versus.is_some() => versus.as_ref().unwrap().0,
             Phase::Stage => "ENTER TO STAGE",
             Phase::Tree if r.held => "REVS IN THE GREEN. LET IT OUT ON GO.",
-            Phase::Tree if r.gear == 0 && r.manual() => "DOWN: CLUTCH. SPACE: FIRST GEAR.",
-            Phase::Tree if r.gear == 0 => "HOLD UP FOR REVS. SPACE ON THE GREEN.",
+            Phase::Tree if r.gear == 0 && r.manual() => "HOLD THE CLUTCH. SHIFT UP: FIRST GEAR.",
+            Phase::Tree if r.gear == 0 => "HOLD GAS FOR REVS. SHIFT UP ON GREEN.",
             _ if started && !r.red && r.start == crate::race::Launch::Bogged => "BOGGED IT",
             _ if started && !r.red && r.start == crate::race::Launch::Spun => "TOO MANY REVS: WHEELSPIN",
             Phase::Run if r.lean != 0.0 && r.gear == 1 && r.pos < 40.0 && !r.red => "LEFT AND RIGHT: HOLD YOUR LANE",

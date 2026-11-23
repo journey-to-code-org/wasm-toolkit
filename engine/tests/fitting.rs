@@ -31,9 +31,9 @@ fn buy(g: &mut Game, id: &str) {
     let group = all.iter().position(|(k, _)| k.as_str() == id).map(|_| 0).unwrap();
     assert_eq!(group, 0);
     let i = g.shop_page().iter().position(|(k, _)| k.as_str() == id).unwrap();
-    let top = if g.shop_groups().is_empty() { 56 } else { 66 };
-    while i >= g.turned[2] + 11 {
-        click(g, 100, top + 11 * 10 + 2);
+    let (top, lines) = (g.shop_top(), g.shop_lines());
+    while i >= g.turned[2] + lines {
+        click(g, 100, top + lines as i32 * 10 + 2);
     }
     let row = top + (i - g.turned[2]) as i32 * 10 + 4;
     click(g, 100, row);

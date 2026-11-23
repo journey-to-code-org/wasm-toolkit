@@ -1,7 +1,7 @@
 {
   "name": "Road to the Shootout",
   "start": {
-    "cash": 750,
+    "cash": 900,
     "place": "garage"
   },
   "cars": {
@@ -2042,7 +2042,7 @@
       "says": "My mama's car. Don't scratch it.",
       "car": "umbra-base",
       "paint": "TAN",
-      "et": 19.4,
+      "et": 18.6,
       "limit": 25,
       "pinks": false
     },
@@ -2051,7 +2051,7 @@
       "says": "Pulled it out of a field Tuesday.",
       "car": "umbra-base",
       "paint": "GREEN",
-      "et": 19.0,
+      "et": 18.1,
       "limit": 25,
       "pinks": false
     },
@@ -2060,7 +2060,7 @@
       "says": "It's got a tape deck.",
       "car": "umbra-base",
       "paint": "SILVER",
-      "et": 18.6,
+      "et": 17.6,
       "limit": 25,
       "pinks": false
     },
@@ -2069,7 +2069,7 @@
       "says": "You look lost, honey.",
       "car": "umbra-base",
       "paint": "VIOLET",
-      "et": 18.2,
+      "et": 17.1,
       "limit": 25,
       "pinks": false
     },
@@ -2078,7 +2078,7 @@
       "says": "She smokes a little. So what.",
       "car": "umbra-base",
       "paint": "BROWN",
-      "et": 17.6,
+      "et": 16.6,
       "limit": 100,
       "pinks": false
     },
@@ -2087,7 +2087,7 @@
       "says": "I got work in the morning.",
       "car": "umbra-base",
       "paint": "TEAL",
-      "et": 17.0,
+      "et": 16.2,
       "limit": 100,
       "pinks": false
     },
@@ -2096,7 +2096,7 @@
       "says": "Ten bucks says you miss a shift.",
       "car": "umbra-base",
       "paint": "RED",
-      "et": 16.4,
+      "et": 15.88,
       "limit": 100,
       "pinks": false
     },
@@ -2105,7 +2105,7 @@
       "says": "I built this one between oil changes.",
       "car": "umbra",
       "paint": "ORANGE",
-      "et": 15.8,
+      "et": 15.65,
       "limit": 100,
       "pinks": false
     },
@@ -2114,7 +2114,7 @@
       "says": "My ex paid for the turbo.",
       "car": "umbra",
       "paint": "PINK",
-      "et": 15.3,
+      "et": 15.4,
       "limit": 100,
       "pinks": false
     },
@@ -2123,7 +2123,7 @@
       "says": "Don't lean on the paint.",
       "car": "umbra",
       "paint": "NAVY",
-      "et": 14.9,
+      "et": 15.22,
       "limit": 100,
       "pinks": true
     },
@@ -2132,7 +2132,7 @@
       "says": "We take turns driving.",
       "car": "umbra",
       "paint": "LIME",
-      "et": 14.6,
+      "et": 14.95,
       "limit": 100,
       "pinks": true
     },
