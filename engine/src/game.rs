@@ -814,8 +814,78 @@ impl Game {
     }
 
     /// The parts the paper sells new: all but the rare factory ones.
+    /// The parts in the paper: those that go on the car in the bay, or all of them with no car.
     pub fn shop(&self) -> Vec<(&String, &Part)> {
-        self.pack.manifest.parts.iter().filter(|(_, p)| p.rare == 0).collect()
+        let car = self.owned().map(|o| o.car.clone());
+        self.pack.manifest.parts.iter().filter(|(_, p)| p.rare == 0 && car.as_ref().is_none_or(|c| p.goes_on(c))).collect()
+    }
+
+    /// What a part does, in a few words, for the paper.
+    fn does(&self, p: &Part) -> String {
+        let mut said = Vec::new();
+        if p.torque != 0 {
+            said.push(format!("{:+}% power", p.torque));
+        }
+        if p.boost.is_some() {
+            said.push("boost".to_string());
+        }
+        if !p.curve.is_empty() {
+            said.push("a new engine".to_string());
+        }
+        if p.grip != 0 {
+            said.push(format!("{:+}% grip", p.grip));
+        }
+        if let Some(b) = p.brakes {
+            said.push(format!("{:+}% braking", b));
+        }
+        if let Some(h) = p.handling {
+            said.push(format!("{:+}% handling", h));
+        }
+        if !p.gears.is_empty() {
+            said.push(format!("{} speeds", p.gears.len()));
+        }
+        if let Some(r) = p.redline {
+            said.push(format!("{} redline", r as i32));
+        }
+        if p.weight_lb.abs() >= 5.0 {
+            said.push(format!("{:+} lb", p.weight_lb as i32));
+        }
+        if p.nitrous.is_some() {
+            said.push("nitrous".to_string());
+        }
+        if p.tuner {
+            said.push("tune at the rollers".to_string());
+        }
+        if p.radar {
+            said.push("warns of police".to_string());
+        }
+        let hood = if self.under_hood(&p.slot) { " Under the hood." } else { "" };
+        if said.is_empty() {
+            format!("{}.{hood}", p.slot)
+        } else {
+            format!("{}: {}.{hood}", p.slot, said.join(", "))
+        }
+    }
+
+    /// Whether a part is on the car in the bay, or on the shelf.
+    fn part_where(&self, id: &str) -> Option<&'static str> {
+        let on = |p: &String| base(p) == id;
+        if self.owned().is_some_and(|o| o.fitted.values().any(on)) {
+            Some("ON CAR")
+        } else if self.state.spares.iter().any(on) {
+            Some("SHELF")
+        } else if self.state.cars.iter().any(|c| c.fitted.values().any(on)) {
+            Some("OWNED")
+        } else {
+            None
+        }
+    }
+
+    /// The button on the paper's parts page that goes to the bench, when there is something to fit.
+    const FIT_BUTTON: [i32; 4] = [220, 182, 92, 14];
+
+    fn fit_button_shown(&self) -> bool {
+        self.owned().is_some() && !self.state.spares.is_empty() && self.state.place == "garage"
     }
 
     /// Today's cars in the paper: three, picked by the day from the cars that have a price.
@@ -1729,6 +1799,13 @@ impl Game {
                                 self.buy_project(i);
                             }
                         }
+                    } else if page == 1 && self.fit_button_shown() && {
+                        let [x, y, w, h] = Self::FIT_BUTTON;
+                        self.px >= x && self.px < x + w && self.py >= y && self.py < y + h
+                    } {
+                        self.scene = Scene::Bench;
+                        self.selling = false;
+                        self.note = None;
                     } else if page == 2 {
                         if let Some(i) = self.row(8, 312, 56, 20, self.jobs().len()) {
                             self.work(i);
@@ -2108,7 +2185,7 @@ impl Game {
         }
         self.state.cash -= part.price;
         self.state.spares.push(id);
-        self.say("Bought. It is on the shelf.");
+        self.say(if self.fit_button_shown() { "Bought. FIT PARTS puts it on." } else { "Bought. It is on the shelf in the garage." });
         tone(880, 80);
         self.save();
     }
@@ -2155,7 +2232,11 @@ impl Game {
                 return self.no("That does not fit this car.");
             }
             if self.under_hood(&slot) {
-                return self.say("Pop the hood to bolt that one on.");
+                // Under the hood, holding it: the place it goes is marked, and so are its bolts.
+                self.scene = Scene::Hood;
+                self.carrying = Some(Loose::Part(id));
+                let bolted = !self.state.cars[cur].off.contains(&slot);
+                return self.say(&if bolted { "Undo its ringed bolts, then lift it.".to_string() } else { format!("Set it on the {}.", slot.to_lowercase()) });
             }
             let was = self.state.cars[cur].untuned;
             self.state.spares.remove(i);
@@ -2271,15 +2352,24 @@ impl Game {
         }
         let Some((slot, place)) = self.hood_slot_under() else { return };
         let empty = self.state.cars[cur].off.contains(&slot);
-        match (empty, self.carrying.clone()) {
+        // Holding the new part, the old one can still be undone and lifted off where it goes.
+        let holding_for = |l: &Loose| self.loose_slot(l) == slot;
+        let carry = self.carrying.clone().filter(|l| !(!empty && holding_for(l)));
+        match (empty, carry) {
             (false, None) => {
                 let tight = self.state.cars[cur].tight(&slot, place.bolts.len());
                 for (b, &[x, y]) in place.bolts.iter().enumerate() {
                     if (self.px - x).abs() <= 5 && (self.py - y).abs() <= 5 {
                         let now = tight ^ (1 << b);
-                        self.state.cars[cur].bolts.insert(slot, now);
+                        self.state.cars[cur].bolts.insert(slot.clone(), now);
                         tone(if now & (1 << b) != 0 { 700 } else { 400 }, 50);
                         self.note = None;
+                        if now == (1 << place.bolts.len()) - 1 && self.state.cars[cur].fitted.contains_key(&slot) {
+                            self.say("Done up tight. It is on.");
+                            self.save();
+                        } else if now == 0 && self.carrying.is_some() {
+                            self.say("Bolts out. Pick it to lift it off.");
+                        }
                         return;
                     }
                 }
@@ -2296,7 +2386,7 @@ impl Game {
                     self.state.spares.push(part);
                 }
                 self.state.cars[cur].off.push(slot);
-                self.say("It is off, and on the floor.");
+                self.say(if self.carrying.is_some() { "Off. Now set the new one on." } else { "It is off, and on the floor." });
                 tone(260, 90);
                 self.spend(1);
             }
@@ -2735,8 +2825,9 @@ impl Game {
                     s.rect(8, y - 1, 304, 10, hover);
                 }
                 s.text(12, y, &p.name.to_uppercase().chars().take(20).collect::<String>(), ink);
-                if self.has_part(id) {
-                    s.text(272, y, "SOLD", shade(ramp("RED"), 20));
+                s.text(180, y, &p.slot.to_uppercase().chars().take(9).collect::<String>(), grey);
+                if let Some(at) = self.part_where(id) {
+                    s.text(308 - at.len() as i32 * 8, y, at, shade(ramp(if at == "ON CAR" { "FOREST" } else { "BLUE" }), 14));
                 } else {
                     let price = format!("${}", p.price);
                     s.text(308 - price.len() as i32 * 8, y, &price, shade(ramp("FOREST"), 12));
@@ -2745,8 +2836,15 @@ impl Game {
             if parts.is_empty() {
                 s.text(12, 60, "NO PARTS FOR SALE.", grey);
             }
-            let pitch = over.and_then(|i| parts.get(i).map(|(_, p)| *p)).map(|p| format!("{}: {}", p.slot, p.pitch));
-            self.panel(s, "The paper", self.note.as_deref().or(pitch.as_deref()).unwrap_or("Pick a part to buy it."), "Escape puts it down.");
+            if self.fit_button_shown() {
+                let [x, y, w, h] = Self::FIT_BUTTON;
+                let on = self.px >= x && self.px < x + w && self.py >= y && self.py < y + h;
+                s.rect(x, y, w, h, if on { shade(ramp("GOLD"), 24) } else { ink });
+                s.text(x + w / 2 - 36, y + 3, "FIT PARTS", if on { ink } else { shade(cream, 28) });
+            }
+            let pitch = over.and_then(|i| parts.get(i).map(|(_, p)| *p)).map(|p| format!("{} {}", self.does(p), p.pitch));
+            let title = if self.owned().is_some() { "Parts that fit" } else { "The paper" };
+            self.panel(s, title, self.note.as_deref().or(pitch.as_deref()).unwrap_or("Pick a part to buy it."), "Escape puts it down.");
         }
     }
 
@@ -2853,11 +2951,24 @@ impl Game {
                 s.frame(x + w / 2 - 9, y + h / 2 - 5, 19, 10, shade(dark, 2));
                 s.text(x + w / 2 - 7, y + h / 2 - 4, "+1", shade(dark, 2));
             }
+            // Holding a part, or with one on loose: where the work is, blinking.
+            let blink = self.ticks / 10 % 2 == 0;
+            let loose = !empty && tight != (1 << place.bolts.len()) - 1 && self.carrying.is_none();
+            let target = self.carrying.as_ref().is_some_and(|l| self.loose_slot(l) == *slot) || loose;
+            if target && blink {
+                s.frame(x - 2, y - 2, w + 4, h + 4, shade(ramp("LIME"), 28));
+                s.frame(x - 3, y - 3, w + 6, h + 6, shade(dark, 1));
+            }
             if over.as_ref() == Some(slot) {
                 s.frame(x - 1, y - 1, w + 2, h + 2, shade(gold, 28));
                 s.frame(x - 2, y - 2, w + 4, h + 4, shade(dark, 1));
             }
             for (b, &[bx, by]) in place.bolts.iter().enumerate() {
+                // The bolts to undo, or to do up, ringed while they want doing.
+                let todo = target && !empty && (self.carrying.is_some() == (tight & (1 << b) != 0));
+                if todo && !blink {
+                    s.disc(bx, by, 5, shade(ramp("LIME"), 28));
+                }
                 if !empty && tight & (1 << b) != 0 {
                     s.disc(bx, by, 3, shade(dark, 2));
                     s.disc(bx, by, 2, shade(chrome, 27));
@@ -2896,7 +3007,15 @@ impl Game {
                 (slot.clone(), name, foot)
             }
             (None, Some(l), _) => (self.loose_name(l), "Pick it up.".to_string(), "Enter to pick. Escape shuts the hood.".to_string()),
-            (None, None, Some(l)) => ("Under the hood".to_string(), self.loose_name(l), "Set it on the empty place it goes.".to_string()),
+            (None, None, Some(l)) => {
+                let slot = self.loose_slot(l);
+                let step = match hood.slots.get(&slot) {
+                    Some(p) if !o.off.contains(&slot) && o.tight(&slot, p.bolts.len()) != 0 => format!("Undo the ringed bolts on the {}.", slot.to_lowercase()),
+                    Some(_) if !o.off.contains(&slot) => format!("Pick the {} to lift it off.", slot.to_lowercase()),
+                    _ => format!("Set it on the {}, marked.", slot.to_lowercase()),
+                };
+                ("Holding".to_string(), self.loose_name(l), step)
+            }
             _ => ("Under the hood".to_string(), "Point at a part.".to_string(), "Enter to pick. Escape shuts the hood.".to_string()),
         };
         self.panel(s, &title, &line, self.note.as_deref().unwrap_or(&foot));
